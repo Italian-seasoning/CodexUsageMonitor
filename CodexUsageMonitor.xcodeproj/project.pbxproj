@@ -20,6 +20,7 @@
 		100000000000000000000111 /* CursorGlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000013 /* CursorGlow.swift */; };
 		100000000000000000000112 /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000014 /* AppUpdater.swift */; };
 		100000000000000000000113 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000A02 /* Sparkle */; };
+		100000000000000000000114 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000016 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -51,6 +52,7 @@
 		100000000000000000000013 /* CursorGlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorGlow.swift; sourceTree = "<group>"; };
 		100000000000000000000014 /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		100000000000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		100000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -95,6 +97,7 @@
 				100000000000000000000013 /* CursorGlow.swift */,
 				100000000000000000000014 /* AppUpdater.swift */,
 				100000000000000000000015 /* Info.plist */,
+				100000000000000000000016 /* Assets.xcassets */,
 			);
 			path = CodexUsageMonitor;
 			sourceTree = "<group>";
@@ -136,6 +139,7 @@
 			buildPhases = (
 				100000000000000000000601 /* Sources */,
 				100000000000000000000202 /* Frameworks */,
+				100000000000000000000604 /* Resources */,
 				100000000000000000000201 /* Embed App Extensions */,
 			);
 			buildRules = (
@@ -207,6 +211,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		100000000000000000000604 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				100000000000000000000114 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		100000000000000000000601 /* Sources */ = {

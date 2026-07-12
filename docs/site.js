@@ -11,6 +11,14 @@ const observer = new IntersectionObserver((entries) => {
 
 document.querySelectorAll('.reveal').forEach((element) => observer.observe(element));
 
+document.querySelectorAll('.download-glow').forEach((button) => {
+  button.addEventListener('pointermove', (event) => {
+    const bounds = button.getBoundingClientRect();
+    button.style.setProperty('--glow-x', `${event.clientX - bounds.left}px`);
+    button.style.setProperty('--glow-y', `${event.clientY - bounds.top}px`);
+  });
+});
+
 if (!reduceMotion) {
   const stage = document.querySelector('.product-stage');
   const windowPreview = document.querySelector('.app-window');

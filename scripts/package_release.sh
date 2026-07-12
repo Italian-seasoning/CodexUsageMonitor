@@ -12,9 +12,12 @@ WIDGET="$APP/Contents/PlugIns/CodexUsageWidget.appex"
 ARCHIVE="$DIST/CodexUsageMonitor-macOS.zip"
 DMG_ROOT="$DIST/dmg-root"
 DMG="$DIST/CodexUsageMonitor-macOS.dmg"
+DMG_RW="$DIST/CodexUsageMonitor-macOS-rw.dmg"
+DMG_VOLUME="Codex Usage Monitor"
+DMG_BACKGROUND="$ROOT/scripts/assets/dmg-background.png"
 
 rm -rf "$DERIVED_DATA" "$DIST"
-mkdir -p "$STAGE" "$DMG_ROOT"
+mkdir -p "$STAGE" "$DMG_ROOT/.background"
 
 xcodebuild \
   -project "$ROOT/CodexUsageMonitor.xcodeproj" \
@@ -72,8 +75,41 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 ditto -c -k --norsrc --keepParent "$APP" "$ARCHIVE"
 ditto "$APP" "$DMG_ROOT/CodexUsageMonitor.app"
 ln -s /Applications "$DMG_ROOT/Applications"
-cp "$ROOT/DISTRIBUTION.md" "$DMG_ROOT/Read Me.md"
-hdiutil create -quiet -volname "Codex Usage Monitor" -srcfolder "$DMG_ROOT" -ov -format UDZO "$DMG"
+cp "$DMG_BACKGROUND" "$DMG_ROOT/.background/dmg-background.png"
+chflags hidden "$DMG_ROOT/.background"
+
+hdiutil detach "/Volumes/$DMG_VOLUME" -force >/dev/null 2>&1 || true
+hdiutil create -quiet -volname "$DMG_VOLUME" -srcfolder "$DMG_ROOT" -ov -format UDRW "$DMG_RW"
+DEVICE="$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_RW" | awk '/Apple_HFS|Apple_APFS/ { print $1; exit }')"
+
+osascript <<APPLESCRIPT
+tell application "Finder"
+  tell disk "$DMG_VOLUME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set pathbar visible of container window to false
+    set bounds of container window to {120, 120, 840, 600}
+    set theViewOptions to icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 112
+    set text size of theViewOptions to 13
+    set label position of theViewOptions to bottom
+    set background picture of theViewOptions to file ".background:dmg-background.png"
+    set position of item "CodexUsageMonitor.app" of container window to {185, 220}
+    set position of item "Applications" of container window to {535, 220}
+    update without registering applications
+    delay 2
+    close container window
+  end tell
+end tell
+APPLESCRIPT
+
+sync
+hdiutil detach "$DEVICE" -quiet
+hdiutil convert "$DMG_RW" -quiet -format UDZO -o "$DMG"
+rm -f "$DMG_RW"
 
 if [[ "$IDENTITY" != "-" && -n "${NOTARY_PROFILE:-}" ]]; then
   xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait

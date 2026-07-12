@@ -8,6 +8,8 @@
   <meta property="og:title" content="Codex Usage Monitor">
   <meta property="og:description" content="See what Codex is doing, directly from your Mac.">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://italian-seasoning.github.io/CodexUsageMonitor/assets/site-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
   <title>Codex Usage Monitor</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -25,21 +27,21 @@
       <a href="#inside">What it tracks</a>
       <a href="#privacy">Privacy</a>
       <a href="https://github.com/Italian-seasoning/CodexUsageMonitor">GitHub</a>
-      <a class="nav-download" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download 1.1.2</a>
+      <a class="nav-download download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download 1.1.2</a>
     </nav>
   </header>
 
   <main id="main">
     <section class="hero" id="top">
       <div class="hero-copy">
-        <p class="release-note"><span></span> Version 1.1.2 for macOS 14+</p>
+        <p class="release-note"><span></span> Version 1.1.2 · macOS 14+</p>
         <h1>See what Codex is doing, directly from your Mac.</h1>
-        <p class="hero-detail">Local token usage, model-aware API estimates, Headroom savings, and desktop widgets. No account, server, or API key.</p>
+        <p class="hero-detail">Tokens, model-aware cost estimates, Headroom savings, and widgets. Private by default.</p>
         <div class="hero-actions">
-          <a class="primary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download for macOS</a>
-          <a class="secondary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest">Read release notes</a>
+          <a class="primary-action download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg"><span>Download for macOS</span></a>
+          <a class="secondary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor">View on GitHub</a>
         </div>
-        <p class="requirements">Universal build for Apple silicon and Intel · Automatic updates via Sparkle</p>
+        <p class="requirements">Apple silicon + Intel · Automatic updates</p>
       </div>
 
       <div class="product-stage" aria-label="Codex Usage Monitor interface preview">
@@ -82,22 +84,18 @@
       </div>
     </section>
 
-    <section class="signal-strip" aria-label="Product highlights">
-      <span>Local logs</span><span>Per-model pricing</span><span>Headroom savings</span><span>WidgetKit</span><span>Automatic updates</span>
-    </section>
-
     <section class="inside" id="inside">
       <div class="section-intro reveal">
-        <p>Built for the glance between prompts</p>
-        <h2>Your local Codex history, arranged into useful signals.</h2>
+        <p>The useful numbers</p>
+        <h2>Codex usage at a glance.</h2>
       </div>
 
       <div class="feature-ledger">
         <article class="feature-row reveal">
           <div class="feature-index">Usage</div>
           <div>
-            <h3>Session, today, week, month, and lifetime</h3>
-            <p>See input, cached input, output, reasoning, requests, sessions, streaks, and visible chart peaks without reading JSONL files.</p>
+            <h3>Every useful time range</h3>
+            <p>Session, today, week, month, and lifetime—with token types, requests, sessions, and peaks.</p>
           </div>
           <div class="mini-viz usage-viz" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </article>
@@ -105,8 +103,8 @@
         <article class="feature-row reveal">
           <div class="feature-index">Models</div>
           <div>
-            <h3>Costs follow the model you actually used</h3>
-            <p>Recorded model IDs are priced separately across uncached input, cached input, and output. Estimates are labeled as API-equivalent, not subscription spending.</p>
+            <h3>Cost follows the model</h3>
+            <p>Separate rates for uncached input, cached input, and output. Always labeled as an API-equivalent estimate.</p>
           </div>
           <div class="model-list" aria-label="Example model cost breakdown">
             <span><b>GPT 5.6 Sol</b><em>$48.20</em></span>
@@ -118,8 +116,8 @@
         <article class="feature-row reveal">
           <div class="feature-index">Headroom</div>
           <div>
-            <h3>Compression savings are visible</h3>
-            <p>Track tokens saved today and over time, savings rate, requests compressed, and estimated API cost avoided when Headroom is installed.</p>
+            <h3>See what Headroom saved</h3>
+            <p>Saved tokens, savings rate, compressed requests, and estimated cost avoided.</p>
           </div>
           <div class="saved-figure"><strong>1.9M</strong><span>tokens saved</span></div>
         </article>
@@ -128,12 +126,12 @@
 
     <section class="widgets-section">
       <div class="widgets-copy reveal">
-        <h2>Three widget sizes. Your metrics, in your order.</h2>
-        <p>Each size remembers its own theme, primary value, chart, and supporting stats. Choose top model today, seven days, this month, or lifetime.</p>
+        <h2>Widgets that show what you care about.</h2>
+        <p>Each size keeps its own theme, primary metric, chart, and supporting stats.</p>
         <ul>
-          <li>Crimson, Graphite, Paper, and system monochrome</li>
-          <li>Native WidgetKit tinted and monochrome rendering</li>
-          <li>Exact preview before applying changes</li>
+          <li>Four themes, independent from the app</li>
+          <li>Top model by day, week, month, or lifetime</li>
+          <li>Native WidgetKit rendering</li>
         </ul>
       </div>
       <div class="widget-family reveal" aria-label="Small, medium, and large widget previews">
@@ -146,8 +144,8 @@
     <section class="privacy" id="privacy">
       <div class="privacy-lock" aria-hidden="true">⌁</div>
       <div class="reveal">
-        <h2>Your usage data stays on your Mac.</h2>
-        <p>Codex Usage Monitor reads local Codex logs and the local Headroom database. It does not upload prompts, tokens, session history, or pricing data. GitHub is used only for optional app updates.</p>
+        <h2>Your data stays on your Mac.</h2>
+        <p>Reads local Codex logs and, optionally, Headroom. Nothing is uploaded. GitHub is contacted only for updates.</p>
       </div>
       <dl class="privacy-facts reveal">
         <div><dt>Accounts</dt><dd>None</dd></div>
@@ -157,23 +155,11 @@
       </dl>
     </section>
 
-    <section class="install-section">
-      <div class="install-heading reveal">
-        <h2>Install in under a minute.</h2>
-        <p>Download the disk image, move the app to Applications, open it, and approve local Codex access during onboarding.</p>
-      </div>
-      <ol class="install-steps reveal">
-        <li><span>1</span><p><b>Download</b> the latest DMG from GitHub Releases.</p></li>
-        <li><span>2</span><p><b>Move</b> Codex Usage Monitor into Applications.</p></li>
-        <li><span>3</span><p><b>Allow access</b> once during onboarding, then add a widget.</p></li>
-      </ol>
-    </section>
-
     <section class="final-cta">
-      <p>Codex Usage Monitor 1.1.2</p>
-      <h2>Know what your local Codex work adds up to.</h2>
+      <p>Codex Usage Monitor 1.1.2 · Free and open source</p>
+      <h2>Know what your Codex work adds up to.</h2>
       <div class="hero-actions">
-        <a class="primary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download for macOS</a>
+        <a class="primary-action download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg"><span>Download for macOS</span></a>
         <a class="secondary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor">View source on GitHub</a>
       </div>
     </section>

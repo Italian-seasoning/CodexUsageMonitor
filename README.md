@@ -3,6 +3,8 @@
 A native macOS app and WidgetKit extension for local Codex usage, model-aware
 API-equivalent cost estimates, Headroom savings, and configurable desktop widgets.
 
+![Codex Usage Monitor interface](docs/assets/site-preview.png)
+
 [Download the latest release](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg)
 · [View the website](https://italian-seasoning.github.io/CodexUsageMonitor/)
 · [Report an issue](https://github.com/Italian-seasoning/CodexUsageMonitor/issues)
