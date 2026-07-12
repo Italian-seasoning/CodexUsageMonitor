@@ -1,0 +1,10 @@
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+dist/
+.codex/
+.superpowers/
+docs/handoffs/
+docs/superpowers/

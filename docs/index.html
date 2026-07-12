@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101010">
+  <meta name="description" content="Codex Usage Monitor is a private, native macOS app for local Codex token usage, model-aware API estimates, Headroom savings, and desktop widgets.">
+  <meta property="og:title" content="Codex Usage Monitor">
+  <meta property="og:description" content="See what Codex is doing, directly from your Mac.">
+  <meta property="og:type" content="website">
+  <title>Codex Usage Monitor</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Codex Usage Monitor home">
+      <span class="brand-mark">C</span>
+      <span>Codex Usage</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#inside">What it tracks</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/Italian-seasoning/CodexUsageMonitor">GitHub</a>
+      <a class="nav-download" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download 1.1.2</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="release-note"><span></span> Version 1.1.2 for macOS 14+</p>
+        <h1>See what Codex is doing, directly from your Mac.</h1>
+        <p class="hero-detail">Local token usage, model-aware API estimates, Headroom savings, and desktop widgets. No account, server, or API key.</p>
+        <div class="hero-actions">
+          <a class="primary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download for macOS</a>
+          <a class="secondary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest">Read release notes</a>
+        </div>
+        <p class="requirements">Universal build for Apple silicon and Intel · Automatic updates via Sparkle</p>
+      </div>
+
+      <div class="product-stage" aria-label="Codex Usage Monitor interface preview">
+        <div class="stage-glow"></div>
+        <div class="app-window">
+          <div class="titlebar">
+            <div class="traffic-lights"><i></i><i></i><i></i></div>
+            <span>Codex Usage</span>
+            <div class="size-switch"><b>1×1</b><span>1×2</span><span>2×2</span></div>
+          </div>
+          <div class="app-summary">
+            <div><strong>14.7M</strong><span>Today</span></div>
+            <div><strong>1.5B</strong><span>Lifetime</span></div>
+            <div><strong>$1,283</strong><span>Total API estimate</span></div>
+            <div><strong>1.9M</strong><span>Headroom tokens</span></div>
+          </div>
+          <div class="app-body">
+            <div class="controls-panel">
+              <div class="control-heading">Configure 1×2</div>
+              <label>App theme <span>Crimson⌄</span></label>
+              <label>Widget theme <span>Crimson⌄</span></label>
+              <label>Primary <span>Today tokens⌄</span></label>
+              <label>Chart <span>Total tokens⌄</span></label>
+              <div class="headroom-line"><span>Headroom saved</span><b>1.9M</b></div>
+            </div>
+            <div class="preview-panel">
+              <div class="preview-label">Widget preview <span>Updated now</span></div>
+              <div class="widget-card">
+                <div class="widget-top"><b>Codex</b><span>GPT 5.6 Sol</span></div>
+                <strong>14.7M</strong>
+                <small>Today</small>
+                <div class="bars" aria-hidden="true">
+                  <i style="height:31%"></i><i style="height:18%"></i><i style="height:52%"></i><i style="height:26%"></i><i style="height:91%"></i><i style="height:64%"></i><i class="active" style="height:44%"></i>
+                </div>
+                <div class="widget-stats"><span>$17.20 today</span><span>1.5B lifetime</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="signal-strip" aria-label="Product highlights">
+      <span>Local logs</span><span>Per-model pricing</span><span>Headroom savings</span><span>WidgetKit</span><span>Automatic updates</span>
+    </section>
+
+    <section class="inside" id="inside">
+      <div class="section-intro reveal">
+        <p>Built for the glance between prompts</p>
+        <h2>Your local Codex history, arranged into useful signals.</h2>
+      </div>
+
+      <div class="feature-ledger">
+        <article class="feature-row reveal">
+          <div class="feature-index">Usage</div>
+          <div>
+            <h3>Session, today, week, month, and lifetime</h3>
+            <p>See input, cached input, output, reasoning, requests, sessions, streaks, and visible chart peaks without reading JSONL files.</p>
+          </div>
+          <div class="mini-viz usage-viz" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </article>
+
+        <article class="feature-row reveal">
+          <div class="feature-index">Models</div>
+          <div>
+            <h3>Costs follow the model you actually used</h3>
+            <p>Recorded model IDs are priced separately across uncached input, cached input, and output. Estimates are labeled as API-equivalent, not subscription spending.</p>
+          </div>
+          <div class="model-list" aria-label="Example model cost breakdown">
+            <span><b>GPT 5.6 Sol</b><em>$48.20</em></span>
+            <span><b>GPT 5.6 Luna</b><em>$3.38</em></span>
+            <span><b>GPT 5.4 Mini</b><em>$2.24</em></span>
+          </div>
+        </article>
+
+        <article class="feature-row reveal">
+          <div class="feature-index">Headroom</div>
+          <div>
+            <h3>Compression savings are visible</h3>
+            <p>Track tokens saved today and over time, savings rate, requests compressed, and estimated API cost avoided when Headroom is installed.</p>
+          </div>
+          <div class="saved-figure"><strong>1.9M</strong><span>tokens saved</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="widgets-section">
+      <div class="widgets-copy reveal">
+        <h2>Three widget sizes. Your metrics, in your order.</h2>
+        <p>Each size remembers its own theme, primary value, chart, and supporting stats. Choose top model today, seven days, this month, or lifetime.</p>
+        <ul>
+          <li>Crimson, Graphite, Paper, and system monochrome</li>
+          <li>Native WidgetKit tinted and monochrome rendering</li>
+          <li>Exact preview before applying changes</li>
+        </ul>
+      </div>
+      <div class="widget-family reveal" aria-label="Small, medium, and large widget previews">
+        <div class="widget-small"><span>Codex</span><strong>$1,283</strong><small>Total API estimate</small></div>
+        <div class="widget-medium"><span>Codex · GPT 5.6 Sol</span><strong>14.7M</strong><small>Today</small><div class="tiny-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="widget-large"><span>Codex usage</span><strong>196.3M</strong><small>7 day peak</small><div class="large-rule"></div><p>Top model this month</p><b>GPT 5.6 Sol</b></div>
+      </div>
+    </section>
+
+    <section class="privacy" id="privacy">
+      <div class="privacy-lock" aria-hidden="true">⌁</div>
+      <div class="reveal">
+        <h2>Your usage data stays on your Mac.</h2>
+        <p>Codex Usage Monitor reads local Codex logs and the local Headroom database. It does not upload prompts, tokens, session history, or pricing data. GitHub is used only for optional app updates.</p>
+      </div>
+      <dl class="privacy-facts reveal">
+        <div><dt>Accounts</dt><dd>None</dd></div>
+        <div><dt>API keys</dt><dd>None</dd></div>
+        <div><dt>Analytics</dt><dd>None</dd></div>
+        <div><dt>Data storage</dt><dd>Local</dd></div>
+      </dl>
+    </section>
+
+    <section class="install-section">
+      <div class="install-heading reveal">
+        <h2>Install in under a minute.</h2>
+        <p>Download the disk image, move the app to Applications, open it, and approve local Codex access during onboarding.</p>
+      </div>
+      <ol class="install-steps reveal">
+        <li><span>1</span><p><b>Download</b> the latest DMG from GitHub Releases.</p></li>
+        <li><span>2</span><p><b>Move</b> Codex Usage Monitor into Applications.</p></li>
+        <li><span>3</span><p><b>Allow access</b> once during onboarding, then add a widget.</p></li>
+      </ol>
+    </section>
+
+    <section class="final-cta">
+      <p>Codex Usage Monitor 1.1.2</p>
+      <h2>Know what your local Codex work adds up to.</h2>
+      <div class="hero-actions">
+        <a class="primary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">Download for macOS</a>
+        <a class="secondary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor">View source on GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand" href="#top"><span class="brand-mark">C</span><span>Codex Usage</span></a>
+    <p>Independent software for local Codex users. Not affiliated with OpenAI.</p>
+    <div><a href="privacy.html">Privacy</a><a href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases">Releases</a><a href="https://github.com/Italian-seasoning/CodexUsageMonitor/issues">Support</a></div>
+  </footer>
+</body>
+</html>
