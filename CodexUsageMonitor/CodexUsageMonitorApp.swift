@@ -98,9 +98,7 @@ struct CodexUsageMonitorApp: App {
         }
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates…") {
-                    AppUpdater.shared.checkForUpdates()
-                }
+                CheckForUpdatesCommand()
             }
             CommandGroup(after: .help) {
                 Button("Show App Tour") {

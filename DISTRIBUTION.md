@@ -1,32 +1,42 @@
-# Codex Usage Monitor for macOS
+# Codex Usage Monitor distribution
 
-Drag `CodexUsageMonitor.app` to Applications, then open it. The first-run tour explains the live local totals, model-aware API estimate, Headroom units, and widget settings.
+## Current preview
 
-The app installs its bundled 60-second refresh helper as a user LaunchAgent when first opened. No administrator password is required. Usage data stays on the Mac and is read from the current user's local Codex session logs.
+Version 1.1.2 is preview software. It is currently ad-hoc signed, not signed with
+an Apple Developer ID, and not notarized by Apple. macOS may require Control-click,
+then **Open**. The DMG contains only the app and an Applications shortcut.
 
-## Gatekeeper
+## Local package
 
-This build is ad-hoc signed unless the packager has a Developer ID Application certificate. For an ad-hoc build, macOS may require Control-clicking the app and choosing Open. A normal double-click experience requires Developer ID signing and Apple notarization.
+Run:
 
-## Building a notarized release
-
-Set `SIGN_IDENTITY` to a Developer ID Application identity and `NOTARY_PROFILE` to a configured `notarytool` keychain profile, then run:
-
-```bash
+```sh
 ./scripts/package_release.sh
 ```
-# Automatic updates
 
-Codex Usage Monitor uses Sparkle 2 and GitHub Releases. It checks once per day,
-downloads updates automatically, and asks before installing them. Users can also
-choose **Codex Usage Monitor > Check for Updates…**.
+Without a Developer ID certificate this creates an ad-hoc signed ZIP and DMG for
+local testing. With `SIGN_IDENTITY` and `NOTARY_PROFILE`, it signs, notarizes, and
+staples the DMG.
 
-The Sparkle private EdDSA key is stored in the developer login Keychain. The app
-contains only its public key. Do not delete the private key, because future update
-archives must be signed by the same key.
+## Sparkle updates
 
-To publish version 1.1.2 after configuring a Developer ID certificate,
-notarization profile, GitHub repository, and `gh auth login`:
+Sparkle 2.9.4 is configured to check daily and automatically install updates. The
+app also provides **Codex Usage Monitor > Check for Updates…**. Update archives and
+the appcast are signed with the existing Sparkle EdDSA key; the app verifies both
+the signed feed and archive before extraction.
+
+The updater becomes operational after the first Developer ID signed, notarized
+GitHub Release publishes `appcast.xml`. The unsigned preview is intentionally not
+published as a production update.
+
+The Sparkle private key is stored in the developer login Keychain. Keep a secure
+backup: future updates must use the same key unless a supported key rotation is
+performed.
+
+## Publish a production release
+
+Install a Developer ID Application certificate, configure a `notarytool` Keychain
+profile, authenticate `gh`, then run:
 
 ```sh
 SIGN_IDENTITY="Developer ID Application: …" \
@@ -34,6 +44,6 @@ NOTARY_PROFILE="codex-usage-notary" \
 ./scripts/publish_github_release.sh 1.1.2
 ```
 
-The script packages and notarizes the app, generates a Sparkle-signed appcast,
-and uploads the ZIP, DMG, checksums, and `appcast.xml` to GitHub Release `v1.1.2`.
-
+The script refuses unsigned publication, derives the version from the built app,
+generates and validates the signed appcast, and uploads the ZIP, DMG, appcast, and
+checksums to GitHub Release `v1.1.2`.

@@ -1,10 +1,12 @@
-import AppKit
+import Combine
 import Sparkle
+import SwiftUI
 
 @MainActor
-final class AppUpdater {
+final class AppUpdater: ObservableObject {
     static let shared = AppUpdater()
 
+    @Published private(set) var canCheckForUpdates = false
     private let controller: SPUStandardUpdaterController
 
     private init() {
@@ -13,12 +15,22 @@ final class AppUpdater {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
-        controller.updater.automaticallyChecksForUpdates = true
-        controller.updater.automaticallyDownloadsUpdates = true
-        controller.updater.updateCheckInterval = 24 * 60 * 60
+        controller.updater.publisher(for: \.canCheckForUpdates)
+            .assign(to: &$canCheckForUpdates)
     }
 
     func checkForUpdates() {
         controller.checkForUpdates(nil)
+    }
+}
+
+struct CheckForUpdatesCommand: View {
+    @ObservedObject private var updater = AppUpdater.shared
+
+    var body: some View {
+        Button("Check for Updates…") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
     }
 }
