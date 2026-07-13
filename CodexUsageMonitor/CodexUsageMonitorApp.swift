@@ -81,8 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private enum BackgroundSnapshotRefresh {
     static func run() -> Bool {
         let previous = CodexUsageSnapshotStore.load()
-        let headroom = HeadroomSavingsCollector().collect() ?? previous?.cachedHeadroomActivity
-        let snapshot = CodexUsageReader().snapshot(headroomActivity: headroom)
+        let snapshot = CodexUsageReader().snapshot(headroomActivity: previous?.cachedHeadroomActivity)
 
         if snapshot.hasUsage || previous == nil {
             CodexUsageSnapshotStore.save(snapshot)
