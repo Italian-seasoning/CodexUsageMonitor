@@ -1167,13 +1167,16 @@ enum CodexUsageSnapshotStore {
         return try? JSONDecoder().decode(CodexUsageSnapshot.self, from: data)
     }
 
-    static func save(_ snapshot: CodexUsageSnapshot) {
+    @discardableResult
+    static func save(_ snapshot: CodexUsageSnapshot) -> Bool {
         do {
             try FileManager.default.createDirectory(at: snapshotURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: snapshotURL, options: .atomic)
+            return load()?.generatedAt == snapshot.generatedAt
         } catch {
             // ponytail: local widget handoff; surface stays usable if a write fails.
+            return false
         }
     }
 
@@ -1211,13 +1214,16 @@ enum CodexUsageSnapshotStore {
         saveAllSettings(CodexUsageWidgetSettingsBySize(all: settings))
     }
 
-    static func saveAllSettings(_ settings: CodexUsageWidgetSettingsBySize) {
+    @discardableResult
+    static func saveAllSettings(_ settings: CodexUsageWidgetSettingsBySize) -> Bool {
         do {
             try FileManager.default.createDirectory(at: settingsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(settings)
             try data.write(to: settingsURL, options: .atomic)
+            return loadAllSettings() == settings
         } catch {
             // ponytail: same local handoff as the snapshot.
+            return false
         }
     }
 

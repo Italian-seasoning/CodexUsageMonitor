@@ -235,7 +235,7 @@ struct ContentView: View {
             Button {
                 refresh()
             } label: {
-                Label(isRefreshing ? "Refreshing" : "Refresh data", systemImage: "arrow.clockwise")
+                Label(isRefreshing ? "Refreshing widgets" : "Refresh widgets", systemImage: "arrow.clockwise")
                     .font(.system(size: 13, weight: .semibold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -340,17 +340,31 @@ struct ContentView: View {
                 let headroom = HeadroomSavingsCollector().collect() ?? previous.cachedHeadroomActivity
                 return CodexUsageReader().snapshot(headroomActivity: headroom)
             }.value
+            guard fresh.hasUsage else {
+                refreshMessage = "No Codex usage was found; the previous widget data was kept."
+                isRefreshing = false
+                return
+            }
+
+            let snapshotSaved = CodexUsageSnapshotStore.save(fresh)
+            let settingsSaved = CodexUsageSnapshotStore.saveAllSettings(settingsBySize)
+            guard snapshotSaved, settingsSaved else {
+                refreshMessage = "Could not hand the refreshed data to WidgetKit."
+                isRefreshing = false
+                return
+            }
+
             snapshot = fresh
-            if fresh.hasUsage { CodexUsageSnapshotStore.save(fresh) }
-            WidgetCenter.shared.reloadTimelines(ofKind: "CodexUsageWidget")
-            refreshMessage = "Data refreshed from local sources."
+            hasDraftChanges = false
+            WidgetCenter.shared.reloadAllTimelines()
+            refreshMessage = "Widgets refreshed with the latest Codex data."
             isRefreshing = false
         }
     }
 
     private func saveSettings() {
         CodexUsageSnapshotStore.saveAllSettings(settingsBySize)
-        WidgetCenter.shared.reloadTimelines(ofKind: "CodexUsageWidget")
+        WidgetCenter.shared.reloadAllTimelines()
         hasDraftChanges = false
         refreshMessage = "\(previewSize.title) settings applied to WidgetKit."
     }

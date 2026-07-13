@@ -2,6 +2,10 @@
 
 ## 1.1.3 — Reliable background widgets
 
+> Superseded in 1.2.4 build 8: the unsigned LaunchAgent caused recurring macOS
+> app-data prompts and was removed. Periodic refresh now runs only in the existing
+> app process, including while its window is closed.
+
 ### Goal
 
 Keep the shared usage snapshot current while the main app is quit, then ask

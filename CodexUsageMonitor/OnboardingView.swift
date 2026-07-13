@@ -87,7 +87,6 @@ struct CodexUsageRootView: View {
                 CodexUsageSnapshotStore.save(snapshot)
             }
             hasRequestedCodexAccess = true
-            RefreshAgentInstaller.installIfBundled()
             isRequestingAccess = false
             completion()
         }

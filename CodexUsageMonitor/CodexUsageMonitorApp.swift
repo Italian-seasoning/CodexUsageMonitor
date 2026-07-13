@@ -5,24 +5,14 @@ import WidgetKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
+    private var refreshTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if ProcessInfo.processInfo.arguments.contains("--background-refresh") {
-            NSApp.setActivationPolicy(.prohibited)
-            DispatchQueue.global(qos: .utility).async {
-                exit(BackgroundSnapshotRefresh.run() ? EXIT_SUCCESS : EXIT_FAILURE)
-            }
-            return
-        }
-
         NSApp.setActivationPolicy(.regular)
+        LegacyRefreshAgentCleaner.removeIfPresent()
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
-        let defaults = UserDefaults.standard
-        if defaults.bool(forKey: "CodexUsageMonitor.hasRequestedCodexAccess")
-            || defaults.bool(forKey: "CodexUsageMonitor.hasCompletedOnboarding") {
-            RefreshAgentInstaller.installIfBundled()
-        }
+        scheduleWidgetRefresh()
         showMainWindowSoon()
     }
 
@@ -47,6 +37,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         true
+    }
+
+    private func scheduleWidgetRefresh() {
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+            DispatchQueue.global(qos: .utility).async {
+                _ = BackgroundSnapshotRefresh.run()
+            }
+        }
     }
 
     private func showMainWindowSoon() {
@@ -75,6 +73,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.window = window
         }
         window?.makeKeyAndOrderFront(nil)
+    }
+}
+
+private enum LegacyRefreshAgentCleaner {
+    private static let identifier = "com.nolankrahn.CodexUsageMonitor.refresh"
+
+    static func removeIfPresent() {
+        let plistURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/\(identifier).plist")
+        guard FileManager.default.fileExists(atPath: plistURL.path) else { return }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["bootout", "gui/\(getuid())", plistURL.path]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+        try? FileManager.default.removeItem(at: plistURL)
     }
 }
 
@@ -135,65 +152,6 @@ struct CodexUsageMonitorApp: App {
                     NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
                 }
             }
-        }
-    }
-}
-
-enum RefreshAgentInstaller {
-    private static let identifier = "com.nolankrahn.CodexUsageMonitor.refresh"
-
-    static func installIfBundled() {
-        guard let executable = Bundle.main.executableURL,
-              FileManager.default.isExecutableFile(atPath: executable.path)
-        else { return }
-
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let agentsDirectory = home.appendingPathComponent("Library/LaunchAgents", isDirectory: true)
-        let logsDirectory = home.appendingPathComponent("Library/Logs/CodexUsageMonitor", isDirectory: true)
-        let plistURL = agentsDirectory.appendingPathComponent("\(identifier).plist")
-        let uid = getuid()
-        let domain = "gui/\(uid)"
-        let service = "\(domain)/\(identifier)"
-
-        let plist: [String: Any] = [
-            "Label": identifier,
-            "ProgramArguments": [executable.path, "--background-refresh"],
-            "RunAtLoad": true,
-            "StartInterval": 300,
-            "StandardErrorPath": logsDirectory.appendingPathComponent("refresh.err.log").path
-        ]
-
-        do {
-            try FileManager.default.createDirectory(at: agentsDirectory, withIntermediateDirectories: true)
-            try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
-            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-            let existing = try? Data(contentsOf: plistURL)
-            let isLoaded = runLaunchctl(["print", service]) == 0
-            if existing == data, isLoaded { return }
-
-            if isLoaded {
-                _ = runLaunchctl(["bootout", domain, plistURL.path])
-            }
-            try data.write(to: plistURL, options: .atomic)
-            _ = runLaunchctl(["bootstrap", domain, plistURL.path])
-            _ = runLaunchctl(["kickstart", "-k", service])
-        } catch {
-            // The app still refreshes while open. Installation can be retried next launch.
-        }
-    }
-
-    private static func runLaunchctl(_ arguments: [String]) -> Int32 {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus
-        } catch {
-            return -1
         }
     }
 }

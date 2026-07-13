@@ -7,7 +7,6 @@ BUILD_APP="$DERIVED_DATA/Build/Products/Release/CodexUsageMonitor.app"
 DIST="$ROOT/dist"
 STAGE="$DIST/stage"
 APP="$STAGE/CodexUsageMonitor.app"
-REFRESH_BIN="$APP/Contents/MacOS/CodexUsageRefreshSnapshot"
 WIDGET="$APP/Contents/PlugIns/CodexUsageWidget.appex"
 ARCHIVE="$DIST/CodexUsageMonitor-macOS.zip"
 DMG_ROOT="$DIST/dmg-root"
@@ -32,23 +31,6 @@ xcodebuild \
 
 ditto "$BUILD_APP" "$APP"
 
-SDK="$(xcrun --sdk macosx --show-sdk-path)"
-for ARCH in arm64 x86_64; do
-  xcrun swiftc \
-    -O \
-    -sdk "$SDK" \
-    -target "$ARCH-apple-macos14.0" \
-    "$ROOT/Shared/CodexUsageSnapshot.swift" \
-    "$ROOT/CodexUsageMonitor/HeadroomSavingsCollector.swift" \
-    "$ROOT/scripts/RefreshSnapshot.swift" \
-    -o "$DIST/CodexUsageRefreshSnapshot-$ARCH"
-done
-lipo -create \
-  "$DIST/CodexUsageRefreshSnapshot-arm64" \
-  "$DIST/CodexUsageRefreshSnapshot-x86_64" \
-  -output "$REFRESH_BIN"
-rm "$DIST/CodexUsageRefreshSnapshot-arm64" "$DIST/CodexUsageRefreshSnapshot-x86_64"
-
 IDENTITY="${SIGN_IDENTITY:-}"
 if [[ -z "$IDENTITY" ]]; then
   IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
@@ -69,7 +51,6 @@ if [[ "$IDENTITY" != "-" && -z "${NOTARY_PROFILE:-}" ]]; then
   exit 1
 fi
 
-codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$REFRESH_BIN"
 if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
   codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
 fi
