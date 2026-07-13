@@ -35,13 +35,20 @@ xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
 shasum -a 256 "$RELEASE_DIR/$ARCHIVE" "$DIST/CodexUsageMonitor-macOS.dmg" > "$RELEASE_DIR/SHA256SUMS.txt"
 
-gh release create "$TAG" \
-  --repo "$REPOSITORY" \
-  --title "Codex Usage Monitor $VERSION preview (build $BUILD)" \
-  --notes "Unsigned preview. This build is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open." \
-  "$RELEASE_DIR/$ARCHIVE" \
-  "$RELEASE_DIR/appcast.xml" \
-  "$DIST/CodexUsageMonitor-macOS.dmg" \
+TITLE="Codex Usage Monitor $VERSION preview (build $BUILD)"
+NOTES="Unsigned preview. This build is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open."
+ASSETS=(
+  "$RELEASE_DIR/$ARCHIVE"
+  "$RELEASE_DIR/appcast.xml"
+  "$DIST/CodexUsageMonitor-macOS.dmg"
   "$RELEASE_DIR/SHA256SUMS.txt"
+)
+
+if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+  gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${ASSETS[@]}"
+  gh release edit "$TAG" --repo "$REPOSITORY" --title "$TITLE" --notes "$NOTES"
+else
+  gh release create "$TAG" --repo "$REPOSITORY" --title "$TITLE" --notes "$NOTES" "${ASSETS[@]}"
+fi
 
 echo "Published $REPOSITORY $TAG"

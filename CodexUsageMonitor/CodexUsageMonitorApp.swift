@@ -18,7 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
-        if UserDefaults.standard.bool(forKey: "CodexUsageMonitor.hasRequestedCodexAccess") {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "CodexUsageMonitor.hasRequestedCodexAccess")
+            || defaults.bool(forKey: "CodexUsageMonitor.hasCompletedOnboarding") {
             RefreshAgentInstaller.installIfBundled()
         }
         showMainWindowSoon()
