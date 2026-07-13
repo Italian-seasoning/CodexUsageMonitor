@@ -1,14 +1,26 @@
 import AppKit
 import Darwin
 import SwiftUI
+import WidgetKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if ProcessInfo.processInfo.arguments.contains("--background-refresh") {
+            NSApp.setActivationPolicy(.prohibited)
+            DispatchQueue.global(qos: .utility).async {
+                exit(BackgroundSnapshotRefresh.run() ? EXIT_SUCCESS : EXIT_FAILURE)
+            }
+            return
+        }
+
         NSApp.setActivationPolicy(.regular)
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
+        if UserDefaults.standard.bool(forKey: "CodexUsageMonitor.hasRequestedCodexAccess") {
+            RefreshAgentInstaller.installIfBundled()
+        }
         showMainWindowSoon()
     }
 
@@ -64,6 +76,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+private enum BackgroundSnapshotRefresh {
+    static func run() -> Bool {
+        let previous = CodexUsageSnapshotStore.load()
+        let headroom = HeadroomSavingsCollector().collect() ?? previous?.cachedHeadroomActivity
+        let snapshot = CodexUsageReader().snapshot(headroomActivity: headroom)
+
+        if snapshot.hasUsage || previous == nil {
+            CodexUsageSnapshotStore.save(snapshot)
+        }
+        CodexUsageSnapshotStore.saveAllSettings(CodexUsageSnapshotStore.loadAllSettings())
+        WidgetCenter.shared.reloadTimelines(ofKind: "CodexUsageWidget")
+
+        guard snapshot.hasUsage || previous == nil else { return true }
+        return CodexUsageSnapshotStore.load()?.generatedAt == snapshot.generatedAt
+    }
+}
+
 private enum WidgetRegistration {
     static func refresh() {
         let app = Bundle.main.bundleURL.path
@@ -109,13 +138,13 @@ struct CodexUsageMonitorApp: App {
     }
 }
 
-private enum RefreshAgentInstaller {
+enum RefreshAgentInstaller {
     private static let identifier = "com.nolankrahn.CodexUsageMonitor.refresh"
 
     static func installIfBundled() {
-        let refreshBinary = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/CodexUsageRefreshSnapshot")
-        guard FileManager.default.isExecutableFile(atPath: refreshBinary.path) else { return }
+        guard let executable = Bundle.main.executableURL,
+              FileManager.default.isExecutableFile(atPath: executable.path)
+        else { return }
 
         let home = FileManager.default.homeDirectoryForCurrentUser
         let agentsDirectory = home.appendingPathComponent("Library/LaunchAgents", isDirectory: true)
@@ -127,10 +156,9 @@ private enum RefreshAgentInstaller {
 
         let plist: [String: Any] = [
             "Label": identifier,
-            "ProgramArguments": [refreshBinary.path],
+            "ProgramArguments": [executable.path, "--background-refresh"],
             "RunAtLoad": true,
-            "StartInterval": 60,
-            "StandardOutPath": logsDirectory.appendingPathComponent("refresh.log").path,
+            "StartInterval": 300,
             "StandardErrorPath": logsDirectory.appendingPathComponent("refresh.err.log").path
         ]
 

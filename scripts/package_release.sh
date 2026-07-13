@@ -58,18 +58,23 @@ if [[ -z "$IDENTITY" ]]; then
   echo "No Developer ID Application certificate found; creating an ad-hoc signed build."
 fi
 
+SIGN_OPTIONS=""
+if [[ "$IDENTITY" != "-" ]]; then
+  SIGN_OPTIONS="--options runtime"
+fi
+
 if [[ "$IDENTITY" != "-" && -z "${NOTARY_PROFILE:-}" ]]; then
   echo "A Developer ID identity was found, but NOTARY_PROFILE is missing." >&2
   echo "Refusing to create a misleading unnotarized public release." >&2
   exit 1
 fi
 
-codesign --force --options runtime --sign "$IDENTITY" "$REFRESH_BIN"
+codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$REFRESH_BIN"
 if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
-  codesign --force --deep --options runtime --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
+  codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
 fi
-codesign --force --options runtime --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
-codesign --force --options runtime --sign "$IDENTITY" "$APP"
+codesign --force $SIGN_OPTIONS --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
+codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
 ditto -c -k --norsrc --keepParent "$APP" "$ARCHIVE"

@@ -22,6 +22,8 @@
 	<string>public.app-category.developer-tools</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSAppDataUsageDescription</key>
+	<string>Reads local Codex and Headroom usage files to update your statistics and widgets. Nothing is uploaded.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>
