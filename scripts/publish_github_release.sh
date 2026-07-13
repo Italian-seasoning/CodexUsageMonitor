@@ -10,14 +10,6 @@ SPARKLE_BIN="$ROOT/build/DistributionDerivedData/SourcePackages/artifacts/sparkl
 
 command -v gh >/dev/null || { echo "GitHub CLI (gh) is required." >&2; exit 1; }
 
-IDENTITY="${SIGN_IDENTITY:-}"
-if [[ -z "$IDENTITY" ]]; then
-  IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
-fi
-[[ -n "$IDENTITY" ]] || { echo "A Developer ID Application certificate is required to publish." >&2; exit 1; }
-[[ -n "${NOTARY_PROFILE:-}" ]] || { echo "NOTARY_PROFILE is required to publish." >&2; exit 1; }
-export SIGN_IDENTITY="$IDENTITY"
-
 "$ROOT/scripts/package_release.sh"
 [[ -x "$SPARKLE_BIN/generate_appcast" ]] || { echo "Sparkle generate_appcast was not produced by the release build." >&2; exit 1; }
 
@@ -45,8 +37,8 @@ shasum -a 256 "$RELEASE_DIR/$ARCHIVE" "$DIST/CodexUsageMonitor-macOS.dmg" > "$RE
 
 gh release create "$TAG" \
   --repo "$REPOSITORY" \
-  --title "Codex Usage Monitor $VERSION (build $BUILD)" \
-  --generate-notes \
+  --title "Codex Usage Monitor $VERSION preview (build $BUILD)" \
+  --notes "Unsigned preview. This build is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open." \
   "$RELEASE_DIR/$ARCHIVE" \
   "$RELEASE_DIR/appcast.xml" \
   "$DIST/CodexUsageMonitor-macOS.dmg" \

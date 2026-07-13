@@ -25,25 +25,22 @@ app also provides **Codex Usage Monitor > Check for Updates…**. Update archive
 the appcast are signed with the existing Sparkle EdDSA key; the app verifies both
 the signed feed and archive before extraction.
 
-The updater becomes operational after the first Developer ID signed, notarized
-GitHub Release publishes `appcast.xml`. The unsigned preview is intentionally not
-published as a production update.
+Unsigned previews can update through Sparkle because the archive and feed use its
+EdDSA signatures. Apple Developer ID signing is still required to avoid Gatekeeper
+warnings and provide a stable macOS identity for permissions and widgets.
 
 The Sparkle private key is stored in the developer login Keychain. Keep a secure
 backup: future updates must use the same key unless a supported key rotation is
 performed.
 
-## Publish a production release
+## Publish a release
 
-Install a Developer ID Application certificate, configure a `notarytool` Keychain
-profile, authenticate `gh`, then run:
+Authenticate `gh`, then run:
 
 ```sh
-SIGN_IDENTITY="Developer ID Application: …" \
-NOTARY_PROFILE="codex-usage-notary" \
 ./scripts/publish_github_release.sh 1.1.2
 ```
 
-The script refuses unsigned publication, derives the version from the built app,
-generates and validates the signed appcast, and uploads the ZIP, DMG, appcast, and
-checksums to GitHub Release `v1.1.2`.
+The script derives the version from the built app, generates and validates the
+Sparkle-signed appcast, and uploads the ZIP, DMG, appcast, and checksums. Set
+`SIGN_IDENTITY` and `NOTARY_PROFILE` when Developer ID credentials are available.
