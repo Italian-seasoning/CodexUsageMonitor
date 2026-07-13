@@ -8,8 +8,6 @@ API-equivalent cost estimates, Headroom savings, and configurable desktop widget
 > or notarized by Apple. macOS may require Control-clicking the app and choosing
 > **Open**. Treat it as a test build, not a finished production release.
 
-![Codex Usage Monitor interface](docs/assets/site-preview.png)
-
 [Download the unsigned preview](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg)
 · [View the website](https://italian-seasoning.github.io/CodexUsageMonitor/)
 · [Report an issue](https://github.com/Italian-seasoning/CodexUsageMonitor/issues)
