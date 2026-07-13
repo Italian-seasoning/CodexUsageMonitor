@@ -15,7 +15,6 @@ command -v gh >/dev/null || { echo "GitHub CLI (gh) is required." >&2; exit 1; }
 
 APP="$DIST/stage/CodexUsageMonitor.app"
 VERSION="$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")"
-BUILD="$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")"
 if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$VERSION" ]]; then
   echo "Requested version $REQUESTED_VERSION does not match built version $VERSION." >&2
   exit 1
@@ -35,8 +34,8 @@ xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
 shasum -a 256 "$RELEASE_DIR/$ARCHIVE" "$DIST/CodexUsageMonitor-macOS.dmg" > "$RELEASE_DIR/SHA256SUMS.txt"
 
-TITLE="Codex Usage Monitor $VERSION preview (build $BUILD)"
-NOTES="Unsigned preview. This build is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open."
+TITLE="Codex Usage Monitor $VERSION preview"
+NOTES="Unsigned preview. The release is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open."
 ASSETS=(
   "$RELEASE_DIR/$ARCHIVE"
   "$RELEASE_DIR/appcast.xml"

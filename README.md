@@ -47,6 +47,6 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current preview: **1.2.0** (build 8)
+Current preview: **1.2.0**
 
 Codex Usage Monitor is independent software and is not affiliated with OpenAI.

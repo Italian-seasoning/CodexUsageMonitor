@@ -2,7 +2,7 @@
 
 ## 1.1.3 — Reliable background widgets
 
-> Superseded in 1.2.0 build 8: the unsigned LaunchAgent caused recurring macOS
+> Superseded in 1.2.0: the unsigned LaunchAgent caused recurring macOS
 > app-data prompts and was removed. Periodic refresh now runs only in the existing
 > app process, including while its window is closed.
 
@@ -86,7 +86,7 @@ Codex-focused monitor.
 
 ### Deliberately deferred
 
-- Other AI tools and “best tool now” recommendations.
+- Other developer tools and “best tool now” recommendations.
 - Multi-account support.
 - iCloud sync, licensing, subscriptions, or 90-day cloud history.
 - Copying SessionWatcher’s interface, wording, or branding.

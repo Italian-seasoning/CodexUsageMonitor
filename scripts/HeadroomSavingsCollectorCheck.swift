@@ -91,7 +91,7 @@ struct HeadroomSavingsCollectorCheck {
         {
           "schema_version": 1,
           "path": "/tmp/headroom-fixture/savings_events.jsonl",
-          "top_model": "claude-model",
+          "top_model": "other-model",
           "lifetime": {
             "tokens_saved": 1000,
             "tokens_before": 1600,
@@ -124,7 +124,7 @@ struct HeadroomSavingsCollectorCheck {
           },
           "by_model": [
             {
-              "model": "claude-model",
+              "model": "other-model",
               "tokens_saved": 900,
               "tokens_before": 1000,
               "cost_usd": 0.0027,
@@ -150,7 +150,7 @@ struct HeadroomSavingsCollectorCheck {
               "savings_percent": 16.7
             },
             {
-              "client": "claude",
+              "client": "other-client",
               "tokens_saved": 900,
               "tokens_before": 1000,
               "cost_usd": 0.0027,
@@ -178,7 +178,7 @@ struct HeadroomSavingsCollectorCheck {
             #"{"v":1,"ts":"2026-07-08T06:30:00.000Z","before":100,"after":80,"saved":20,"cost_usd":0.00006,"model":"gpt-5.4","client":"Codex","source":"proxy","pid":101}"#,
             #"{"v":1,"ts":"2026-07-08T07:30:00.000Z","before":200,"after":170,"saved":30,"cost_usd":0.00009,"model":"gpt-5.5","client":"CODEX","source":"proxy","pid":101}"#,
             #"{"v":1,"ts":"2026-07-09T11:00:00.000Z","before":300,"after":250,"saved":50,"cost_usd":0.00015,"model":"gpt-5.5","client":"codex","source":"proxy","pid":101}"#,
-            #"{"v":1,"ts":"2026-07-09T11:30:00.000Z","before":1000,"after":100,"saved":900,"cost_usd":0.0027,"model":"claude-model","client":"claude","source":"proxy","pid":202}"#,
+            #"{"v":1,"ts":"2026-07-09T11:30:00.000Z","before":1000,"after":100,"saved":900,"cost_usd":0.0027,"model":"other-model","client":"other-client","source":"proxy","pid":202}"#,
             "{\"v\":1,\"ts\":\""
         ]
         try rows.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)

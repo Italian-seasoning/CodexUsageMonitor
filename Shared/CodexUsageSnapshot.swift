@@ -1175,7 +1175,6 @@ enum CodexUsageSnapshotStore {
             try data.write(to: snapshotURL, options: .atomic)
             return load()?.generatedAt == snapshot.generatedAt
         } catch {
-            // ponytail: local widget handoff; surface stays usable if a write fails.
             return false
         }
     }
@@ -1222,7 +1221,6 @@ enum CodexUsageSnapshotStore {
             try data.write(to: settingsURL, options: .atomic)
             return loadAllSettings() == settings
         } catch {
-            // ponytail: same local handoff as the snapshot.
             return false
         }
     }
