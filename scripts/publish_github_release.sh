@@ -35,7 +35,12 @@ rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
 shasum -a 256 "$RELEASE_DIR/$ARCHIVE" "$DIST/CodexUsageMonitor-macOS.dmg" > "$RELEASE_DIR/SHA256SUMS.txt"
 
 TITLE="Codex Usage Monitor $VERSION preview"
-NOTES="Unsigned preview. The release is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open."
+SIGNING_AUTHORITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(.*\)$/\1/p' | head -1)"
+if [[ "$SIGNING_AUTHORITY" == Apple\ Development:* ]]; then
+  NOTES="Apple Development-signed preview. The release is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized for public distribution. macOS may require Control-click, then Open."
+else
+  NOTES="Ad-hoc signed preview. The release is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized. macOS may require Control-click, then Open."
+fi
 ASSETS=(
   "$RELEASE_DIR/$ARCHIVE"
   "$RELEASE_DIR/appcast.xml"

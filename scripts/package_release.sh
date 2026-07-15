@@ -24,6 +24,7 @@ xcodebuild \
   -configuration Release \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED_DATA" \
+  -allowProvisioningUpdates \
   ARCHS='arm64 x86_64' \
   ONLY_ACTIVE_ARCH=NO \
   -quiet \
@@ -32,30 +33,38 @@ xcodebuild \
 ditto "$BUILD_APP" "$APP"
 
 IDENTITY="${SIGN_IDENTITY:-}"
+PRESERVE_XCODE_SIGNATURE=0
 if [[ -z "$IDENTITY" ]]; then
   IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
 fi
 if [[ -z "$IDENTITY" ]]; then
-  IDENTITY="-"
-  echo "No Developer ID Application certificate found; creating an ad-hoc signed build."
+  IDENTITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(Apple Development:.*\)$/\1/p' | head -1)"
+  if [[ -n "$IDENTITY" ]]; then
+    PRESERVE_XCODE_SIGNATURE=1
+    echo "Preserving Xcode Personal Team signature: $IDENTITY"
+  else
+    IDENTITY="-"
+    echo "No Apple signing identity found; creating an ad-hoc signed build."
+  fi
 fi
 
-SIGN_OPTIONS=""
-if [[ "$IDENTITY" != "-" ]]; then
-  SIGN_OPTIONS="--options runtime"
-fi
-
-if [[ "$IDENTITY" != "-" && -z "${NOTARY_PROFILE:-}" ]]; then
+if [[ "$IDENTITY" == Developer\ ID\ Application:* && -z "${NOTARY_PROFILE:-}" ]]; then
   echo "A Developer ID identity was found, but NOTARY_PROFILE is missing." >&2
   echo "Refusing to create a misleading unnotarized public release." >&2
   exit 1
 fi
 
-if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
-  codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
+if [[ "$PRESERVE_XCODE_SIGNATURE" -eq 0 ]]; then
+  SIGN_OPTIONS=""
+  if [[ "$IDENTITY" != "-" ]]; then
+    SIGN_OPTIONS="--options runtime"
+  fi
+  if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
+    codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
+  fi
+  codesign --force $SIGN_OPTIONS --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
+  codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$APP"
 fi
-codesign --force $SIGN_OPTIONS --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
-codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
 ditto -c -k --norsrc --keepParent "$APP" "$ARCHIVE"
@@ -97,7 +106,7 @@ hdiutil detach "$DEVICE" -quiet
 hdiutil convert "$DMG_RW" -quiet -format UDZO -o "$DMG"
 rm -f "$DMG_RW"
 
-if [[ "$IDENTITY" != "-" && -n "${NOTARY_PROFILE:-}" ]]; then
+if [[ "$IDENTITY" == Developer\ ID\ Application:* && -n "${NOTARY_PROFILE:-}" ]]; then
   xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
   xcrun stapler staple "$DMG"
 else

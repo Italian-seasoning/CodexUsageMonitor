@@ -50,7 +50,7 @@ The current ad-hoc signature gives macOS no stable Developer ID identity. The ap
 can minimize prompts, but cannot guarantee that macOS remembers data-access consent
 across every unsigned update.
 
-## 1.2.0 — Limit intelligence
+## Future — Limit intelligence
 
 ### Goal
 
