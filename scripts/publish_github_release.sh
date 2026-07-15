@@ -32,8 +32,6 @@ cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
 
 xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
-shasum -a 256 "$RELEASE_DIR/$ARCHIVE" "$DIST/CodexUsageMonitor-macOS.dmg" > "$RELEASE_DIR/SHA256SUMS.txt"
-
 TITLE="Codex Usage Monitor $VERSION preview"
 SIGNING_AUTHORITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(.*\)$/\1/p' | head -1)"
 if [[ "$SIGNING_AUTHORITY" == Apple\ Development:* ]]; then
@@ -45,7 +43,6 @@ ASSETS=(
   "$RELEASE_DIR/$ARCHIVE"
   "$RELEASE_DIR/appcast.xml"
   "$DIST/CodexUsageMonitor-macOS.dmg"
-  "$RELEASE_DIR/SHA256SUMS.txt"
 )
 
 if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
