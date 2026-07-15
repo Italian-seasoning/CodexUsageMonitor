@@ -8,12 +8,15 @@ struct CodexUsageRootView: View {
     @AppStorage("CodexUsageMonitor.hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("CodexUsageMonitor.hasRequestedCodexAccess") private var hasRequestedCodexAccess = false
     @State private var showsWelcome = false
+    @State private var showsSkipWarning = false
     @State private var tourStep: Int?
     @State private var isRequestingAccess = false
+    private let currentVersion: String
 
     init() {
-        let completed = UserDefaults.standard.bool(forKey: "CodexUsageMonitor.hasCompletedOnboarding")
-        _showsWelcome = State(initialValue: !completed)
+        let version = OnboardingStateStore.currentAppVersion
+        currentVersion = version
+        _showsWelcome = State(initialValue: OnboardingStateStore.shouldPresent(appVersion: version))
     }
 
     var body: some View {
@@ -21,9 +24,8 @@ struct CodexUsageRootView: View {
             if showsWelcome {
                 OnboardingWelcomeView(
                     isRequestingAccess: isRequestingAccess,
-                    onSkip: {
-                        requestCodexAccess(then: finishOnboarding)
-                    },
+                    needsCodexAccess: !hasRequestedCodexAccess,
+                    onSkip: { showsSkipWarning = true },
                     onStartTour: {
                         requestCodexAccess {
                             showsWelcome = false
@@ -45,7 +47,7 @@ struct CodexUsageRootView: View {
                                 self.tourStep = tourStep + 1
                             }
                         },
-                        onSkip: finishOnboarding
+                        onSkip: { showsSkipWarning = true }
                     )
                     .transition(.opacity)
                 }
@@ -53,7 +55,7 @@ struct CodexUsageRootView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
-            if !hasCompletedOnboarding {
+            if OnboardingStateStore.shouldPresent(appVersion: currentVersion) {
                 showsWelcome = true
             }
         }
@@ -61,10 +63,25 @@ struct CodexUsageRootView: View {
             showsWelcome = false
             tourStep = 0
         }
+        .alert("Skip onboarding?", isPresented: $showsSkipWarning) {
+            Button("Continue Onboarding", role: .cancel) {}
+            Button("Skip Anyway") { completeOnboarding(completed: false) }
+        } message: {
+            Text("Your existing settings will be kept. If Codex access or a new setup step is missing, usage and widgets may stay empty until you run onboarding from the Help menu.")
+        }
     }
 
     private func finishOnboarding() {
-        hasCompletedOnboarding = true
+        completeOnboarding(completed: true)
+    }
+
+    private func completeOnboarding(completed: Bool) {
+        let hasEverCompletedOnboarding = hasCompletedOnboarding || completed
+        hasCompletedOnboarding = hasEverCompletedOnboarding
+        OnboardingStateStore.markPresented(
+            appVersion: currentVersion,
+            completed: hasEverCompletedOnboarding
+        )
         withAnimation(.easeOut(duration: 0.2)) {
             showsWelcome = false
             tourStep = nil
@@ -95,6 +112,7 @@ struct CodexUsageRootView: View {
 
 private struct OnboardingWelcomeView: View {
     var isRequestingAccess: Bool
+    var needsCodexAccess: Bool
     var onSkip: () -> Void
     var onStartTour: () -> Void
 
@@ -150,7 +168,7 @@ private struct OnboardingWelcomeView: View {
 
                         Button(action: onStartTour) {
                             Label(
-                                isRequestingAccess ? "Requesting access" : "Allow access & tour the app",
+                                isRequestingAccess ? "Requesting access" : needsCodexAccess ? "Allow access & tour the app" : "Tour the app",
                                 systemImage: isRequestingAccess ? "ellipsis" : "arrow.right"
                             )
                                 .font(.system(size: 14, weight: .semibold))
@@ -162,7 +180,7 @@ private struct OnboardingWelcomeView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(isRequestingAccess)
-                        .accessibilityHint("Requests local Codex log access, then starts a four-step tour")
+                        .accessibilityHint(needsCodexAccess ? "Requests local Codex log access, then starts a four-step tour" : "Starts a four-step tour")
                     }
                     .frame(maxWidth: 470, alignment: .leading)
                 }
