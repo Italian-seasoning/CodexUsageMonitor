@@ -20,6 +20,12 @@ struct HeadroomSavingsCollector {
         self.timeout = timeout
     }
 
+    func sourceFingerprint() -> String {
+        [executableURL, ledgerURL]
+            .map(fileFingerprint)
+            .joined(separator: "|")
+    }
+
     func collect(now: Date = Date()) -> HeadroomActivity? {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path),
               FileManager.default.isReadableFile(atPath: ledgerURL.path),
@@ -100,6 +106,15 @@ struct HeadroomSavingsCollector {
 
         let data = output.fileHandleForReading.readDataToEndOfFile()
         return try? JSONDecoder().decode(SavingsReport.self, from: data)
+    }
+
+    private func fileFingerprint(_ url: URL) -> String {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return "missing:\(url.path)"
+        }
+        let size = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+        let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        return "\(url.path):\(size):\(modified)"
     }
 
     private func loadCodexEvents() -> [SavingsEvent] {

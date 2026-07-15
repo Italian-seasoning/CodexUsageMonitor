@@ -6,19 +6,30 @@ import WidgetKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var refreshTimer: Timer?
+    private var activationScheduled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if ProcessInfo.processInfo.arguments.contains("--background-refresh") {
+            NSApp.setActivationPolicy(.prohibited)
+            DispatchQueue.global(qos: .utility).async {
+                exit(SnapshotRefresh.run() == nil ? EXIT_FAILURE : EXIT_SUCCESS)
+            }
+            return
+        }
+
         NSApp.setActivationPolicy(.regular)
-        LegacyRefreshAgentCleaner.removeIfPresent()
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
+        if OnboardingStateStore.completedCurrentVersion() {
+            BackgroundRefreshAgent.installIfEnabled()
+        }
         scheduleWidgetRefresh()
         showMainWindowSoon()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
         if window?.isVisible != true {
-            showMainWindowSoon()
+            showMainWindow()
         }
     }
 
@@ -40,18 +51,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func scheduleWidgetRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: BackgroundRefreshAgent.interval, repeats: true) { _ in
             DispatchQueue.global(qos: .utility).async {
-                _ = BackgroundSnapshotRefresh.run()
+                _ = SnapshotRefresh.run()
             }
         }
     }
 
     private func showMainWindowSoon() {
         showMainWindow()
+        guard !activationScheduled else { return }
+        activationScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.activationScheduled = false
             self.showMainWindow()
-            NSApp.activate(ignoringOtherApps: true)
+            if !NSApp.isActive {
+                NSApp.activate(ignoringOtherApps: true)
+            }
         }
     }
 
@@ -73,41 +89,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.window = window
         }
         window?.makeKeyAndOrderFront(nil)
-    }
-}
-
-private enum LegacyRefreshAgentCleaner {
-    private static let identifier = "com.nolankrahn.CodexUsageMonitor.refresh"
-
-    static func removeIfPresent() {
-        let plistURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/\(identifier).plist")
-        guard FileManager.default.fileExists(atPath: plistURL.path) else { return }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        process.arguments = ["bootout", "gui/\(getuid())", plistURL.path]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
-        try? FileManager.default.removeItem(at: plistURL)
-    }
-}
-
-private enum BackgroundSnapshotRefresh {
-    static func run() -> Bool {
-        let previous = CodexUsageSnapshotStore.load()
-        let snapshot = CodexUsageReader().snapshot(headroomActivity: previous?.cachedHeadroomActivity)
-
-        if snapshot.hasUsage || previous == nil {
-            CodexUsageSnapshotStore.save(snapshot)
-        }
-        CodexUsageSnapshotStore.saveAllSettings(CodexUsageSnapshotStore.loadAllSettings())
-        WidgetCenter.shared.reloadTimelines(ofKind: "CodexUsageWidget")
-
-        guard snapshot.hasUsage || previous == nil else { return true }
-        return CodexUsageSnapshotStore.load()?.generatedAt == snapshot.generatedAt
     }
 }
 
@@ -138,6 +119,7 @@ private enum WidgetRegistration {
 @main
 struct CodexUsageMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var menuBarModel = MenuBarSnapshotModel()
 
     var body: some Scene {
         Settings {
@@ -153,5 +135,12 @@ struct CodexUsageMonitorApp: App {
                 }
             }
         }
+
+        MenuBarExtra {
+            CodexMenuBarView(model: menuBarModel)
+        } label: {
+            CodexMenuBarLabel(model: menuBarModel)
+        }
+        .menuBarExtraStyle(.menu)
     }
 }

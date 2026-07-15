@@ -29,6 +29,7 @@ struct HeadroomSavingsCollectorCheck {
             calendar: calendar,
             timeout: 2
         )
+        let initialFingerprint = collector.sourceFingerprint()
 
         let activity = try require(collector.collect(now: now), "collector unexpectedly reported unavailable")
         let savings = activity.savings
@@ -58,6 +59,15 @@ struct HeadroomSavingsCollectorCheck {
         try expectEqual(activity.tokensSavedByDay[secondDay], Optional(30), "second local day's Codex savings")
         try expectEqual(activity.tokensSavedByDay[thirdDay], Optional(50), "third local day's Codex savings")
         try expectEqual(activity.tokensSavedByDay.values.reduce(0, +), 100, "daily Codex-only savings total")
+
+        let ledgerHandle = try FileHandle(forWritingTo: ledger)
+        try ledgerHandle.seekToEnd()
+        try ledgerHandle.write(contentsOf: Data("\n".utf8))
+        try ledgerHandle.close()
+        try expect(
+            collector.sourceFingerprint() != initialFingerprint,
+            "Headroom ledger changes should invalidate the refresh fingerprint"
+        )
 
         let missingExecutable = root.appendingPathComponent("missing-headroom")
         let unavailableExecutableCollector = HeadroomSavingsCollector(

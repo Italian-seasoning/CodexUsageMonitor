@@ -1,32 +1,24 @@
 # Codex Usage Monitor roadmap
 
-## 1.1.3 — Reliable background widgets
+## 1.3.0 — Limits, menu bar, and reliable background widgets
 
-> Superseded in 1.2.0: the unsigned LaunchAgent caused recurring macOS
-> app-data prompts and was removed. Periodic refresh now runs only in the existing
-> app process, including while its window is closed.
+Status: implemented.
 
 ### Goal
 
-Keep the shared usage snapshot current while the main app is quit, then ask
-WidgetKit to redraw from that fresh snapshot.
-
-### Current failure
-
-The bundled refresh executable and LaunchAgent installer already exist, but the
-installer is never called. On the current Mac there is no installed or loaded
-`com.nolankrahn.CodexUsageMonitor.refresh` service, so the widget repeatedly reads
-the last snapshot written by the app.
+Keep the shared usage snapshot current while the main app is quit, expose local
+Codex rate limits, and make the most useful status visible from the menu bar.
 
 ### Scope
 
 - Add one onboarding choice for background widget updates and install the bundled
-  refresh agent only after consent.
-- Run the collector every five minutes from the stable app path in `/Applications`.
+  refresh agent only after consented onboarding.
+- Run the signed main app in background mode every three minutes from its stable
+  path in `/Applications`; no separate helper process remains resident.
 - Reinstall or repair the agent after an app update or move.
 - Refresh Codex and Headroom data, atomically save the shared snapshot, then call
   `WidgetCenter.reloadTimelines`.
-- Replace the one-minute widget timeline request with a realistic five-minute
+- Replace the one-minute widget timeline request with a realistic three-minute
   policy; WidgetKit still controls the exact redraw time.
 - Show background-refresh status, last successful collection, and a **Repair**
   action in the app.
@@ -46,11 +38,12 @@ the last snapshot written by the app.
 
 ### Constraint
 
-The current ad-hoc signature gives macOS no stable Developer ID identity. The app
-can minimize prompts, but cannot guarantee that macOS remembers data-access consent
-across every unsigned update.
+The preview uses an Apple Development identity from a Personal Team, not a
+Developer ID distribution identity. The app reuses its main signed identity for
+background work, but cannot guarantee production-grade Gatekeeper or consent
+behavior across every preview update.
 
-## Future — Limit intelligence
+## Limit intelligence
 
 ### Goal
 
@@ -71,7 +64,7 @@ Codex-focused monitor.
   history.
 - Add optional native notifications at configurable warning and critical
   thresholds, plus a reset notification.
-- Add manual, 1-, 2-, 5-, and 15-minute refresh cadence choices.
+- Use one predictable three-minute background cadence with fast unchanged-data exits.
 - Add five-hour usage, weekly usage, pace, and reset time as widget metrics.
 - Keep all limit history local and collect no prompts, code, accounts, or API keys.
 
@@ -84,7 +77,7 @@ Codex-focused monitor.
 - Notifications fire once per threshold per window and reset for the next window.
 - Background CPU and memory remain negligible when Codex logs have not changed.
 
-### Deliberately deferred
+## Still deferred
 
 - Other developer tools and “best tool now” recommendations.
 - Multi-account support.

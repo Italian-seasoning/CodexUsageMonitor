@@ -160,6 +160,78 @@ struct HeadroomActivity: Equatable {
     var tokensSavedByDay: [Date: Int]
 }
 
+struct RateLimitWindow: Codable, Equatable {
+    var usedPercent: Double
+    var windowMinutes: Int
+    var resetsAt: Date
+    var observedAt: Date
+
+    func isCurrent(at date: Date = .now) -> Bool {
+        resetsAt > date && observedAt <= date.addingTimeInterval(60)
+    }
+
+    func pace(at date: Date = .now) -> LimitPace {
+        let duration = TimeInterval(windowMinutes * 60)
+        guard duration > 0 else { return .unknown }
+        let startedAt = resetsAt.addingTimeInterval(-duration)
+        let elapsedPercent = min(100, max(0, date.timeIntervalSince(startedAt) / duration * 100))
+        let lead = usedPercent - elapsedPercent
+        if usedPercent >= 90 || lead >= 25 { return .limitRisk }
+        if usedPercent >= 70 || lead >= 10 { return .runningHigh }
+        return .onPace
+    }
+
+    func resetText(at date: Date = .now) -> String {
+        let seconds = max(0, resetsAt.timeIntervalSince(date))
+        if seconds < 60 { return "Now" }
+        if seconds < 3_600 { return "\(Int(ceil(seconds / 60)))m" }
+        if seconds < 86_400 {
+            let hours = Int(seconds / 3_600)
+            let minutes = Int(seconds.truncatingRemainder(dividingBy: 3_600) / 60)
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+        return resetsAt.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+}
+
+enum LimitPace: String, Codable, Equatable {
+    case onPace
+    case runningHigh
+    case limitRisk
+    case unknown
+
+    var label: String {
+        switch self {
+        case .onPace: "On pace"
+        case .runningHigh: "Running high"
+        case .limitRisk: "Limit risk"
+        case .unknown: "Unavailable"
+        }
+    }
+}
+
+struct RateLimitHistoryPoint: Codable, Equatable, Identifiable {
+    var date: Date
+    var fiveHourUsedPercent: Double?
+    var weeklyUsedPercent: Double?
+
+    var id: Date { date }
+}
+
+struct CodexRateLimits: Codable, Equatable {
+    var fiveHour: RateLimitWindow?
+    var weekly: RateLimitWindow?
+    var history: [RateLimitHistoryPoint]
+
+    var preferredWindow: RateLimitWindow? { fiveHour ?? weekly }
+
+    var nearestReset: RateLimitWindow? {
+        [fiveHour, weekly].compactMap { $0 }.min { $0.resetsAt < $1.resetsAt }
+    }
+
+    var pace: LimitPace { preferredWindow?.pace() ?? .unknown }
+}
+
 struct CodexUsageSnapshot: Codable, Equatable {
     var currentSession: TokenUsage
     var lifetime: TokenUsage
@@ -185,6 +257,7 @@ struct CodexUsageSnapshot: Codable, Equatable {
     var currentModel: String? = nil
     var unpricedTokens: Int? = nil
     var pricingVersion: String? = nil
+    var rateLimits: CodexRateLimits? = nil
 
     static let empty = CodexUsageSnapshot(
         currentSession: .zero,
@@ -210,7 +283,8 @@ struct CodexUsageSnapshot: Codable, Equatable {
         topModelLifetime: nil,
         currentModel: nil,
         unpricedTokens: 0,
-        pricingVersion: ModelPricingCatalog.version
+        pricingVersion: ModelPricingCatalog.version,
+        rateLimits: nil
     )
 }
 
@@ -372,6 +446,8 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
     case peakDay
     case headroomSaved
     case estimatedCost
+    case fiveHourLimit
+    case weeklyLimit
 
     var id: String { rawValue }
 
@@ -384,6 +460,8 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
         case .peakDay: "Peak Day"
         case .headroomSaved: "Headroom Tokens Saved"
         case .estimatedCost: "Total API Estimate"
+        case .fiveHourLimit: "5-Hour Limit"
+        case .weeklyLimit: "Weekly Limit"
         }
     }
 
@@ -396,12 +474,18 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
         case .peakDay: snapshot.peakDay?.usage.total ?? 0
         case .headroomSaved: snapshot.headroom?.lifetimeTokensSaved ?? 0
         case .estimatedCost: Int((snapshot.estimatedCostUSD * 1_000_000).rounded())
+        case .fiveHourLimit: Int((snapshot.rateLimits?.fiveHour?.usedPercent ?? 0).rounded())
+        case .weeklyLimit: Int((snapshot.rateLimits?.weekly?.usedPercent ?? 0).rounded())
         }
     }
 
     func displayValue(in snapshot: CodexUsageSnapshot) -> String {
         switch self {
         case .estimatedCost: snapshot.estimatedCostUSD.compactCurrencyString
+        case .fiveHourLimit:
+            snapshot.rateLimits?.fiveHour.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+        case .weeklyLimit:
+            snapshot.rateLimits?.weekly.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
         default: value(in: snapshot).compactTokenString
         }
     }
@@ -480,6 +564,10 @@ enum StatMetric: String, Codable, CaseIterable, Identifiable {
     case topModelThisMonth
     case topModelLifetime
     case unpricedTokens
+    case fiveHourLimit
+    case weeklyLimit
+    case limitPace
+    case nextReset
 
     var id: String { rawValue }
 
@@ -511,6 +599,10 @@ enum StatMetric: String, Codable, CaseIterable, Identifiable {
         case .topModelThisMonth: "Top Model · Month"
         case .topModelLifetime: "Top Model · Lifetime"
         case .unpricedTokens: "Unpriced"
+        case .fiveHourLimit: "5-Hour Limit"
+        case .weeklyLimit: "Weekly Limit"
+        case .limitPace: "Limit Pace"
+        case .nextReset: "Next Reset"
         }
     }
 
@@ -552,6 +644,12 @@ enum StatMetric: String, Codable, CaseIterable, Identifiable {
         case .topModelThisMonth: return ModelPricingCatalog.displayName(for: snapshot.topModelThisMonth)
         case .topModelLifetime: return ModelPricingCatalog.displayName(for: snapshot.topModelLifetime)
         case .unpricedTokens: return (snapshot.unpricedTokens ?? 0).compactTokenString
+        case .fiveHourLimit:
+            return snapshot.rateLimits?.fiveHour.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+        case .weeklyLimit:
+            return snapshot.rateLimits?.weekly.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+        case .limitPace: return snapshot.rateLimits?.pace.label ?? "Unavailable"
+        case .nextReset: return snapshot.rateLimits?.nearestReset?.resetText() ?? "—"
         }
     }
 
@@ -654,6 +752,8 @@ extension PrimaryMetric {
         case .peakDay: "Peak Day"
         case .headroomSaved: "Headroom Tokens"
         case .estimatedCost: "Total API Estimate"
+        case .fiveHourLimit: "5-Hour"
+        case .weeklyLimit: "Weekly"
         }
     }
 }
@@ -683,7 +783,9 @@ extension StatMetric {
              (.lifetime, .lifetime),
              (.peakDay, .peakDay),
              (.headroomSaved, .headroomSaved),
-             (.costTracked, .estimatedCost):
+             (.costTracked, .estimatedCost),
+             (.fiveHourLimit, .fiveHourLimit),
+             (.weeklyLimit, .weeklyLimit):
             return true
         default:
             return false
@@ -714,8 +816,27 @@ struct CodexUsageReader {
         )
     }
 
+    func sourceFingerprint() -> String {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        let prime: UInt64 = 1_099_511_628_211
+        for file in jsonlFiles().sorted(by: { $0.path < $1.path }) {
+            let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let parts = [
+                file.path,
+                String(values?.fileSize ?? -1),
+                String(values?.contentModificationDate?.timeIntervalSince1970.bitPattern ?? 0)
+            ]
+            for byte in parts.joined(separator: "|").utf8 {
+                hash = (hash ^ UInt64(byte)) &* prime
+            }
+        }
+        return String(hash, radix: 16)
+    }
+
     func snapshot(now: Date = Date(), headroomActivity: HeadroomActivity? = nil) -> CodexUsageSnapshot {
-        let files = deduplicatedFiles(parsedFilesUsingCache())
+        let parsedFiles = parsedFilesUsingCache()
+        let files = deduplicatedFiles(parsedFiles.filter { !$0.samples.isEmpty })
+        let rateLimits = rateLimitSnapshot(from: parsedFiles.flatMap(\.rateLimits), now: now)
         let sessions = groupedSessions(files)
         let startOfToday = calendar.startOfDay(for: now)
         let startOfLast7Days = calendar.date(byAdding: .day, value: -6, to: startOfToday) ?? startOfToday
@@ -810,8 +931,49 @@ struct CodexUsageReader {
             topModelLifetime: modelUsage.first?.model,
             currentModel: newest?.latestSample?.model,
             unpricedTokens: unpricedTokens,
-            pricingVersion: ModelPricingCatalog.version
+            pricingVersion: ModelPricingCatalog.version,
+            rateLimits: rateLimits
         )
+    }
+
+    private func rateLimitSnapshot(from samples: [RateLimitSample], now: Date) -> CodexRateLimits? {
+        guard !samples.isEmpty else { return nil }
+        let sorted = samples.sorted { $0.observedAt < $1.observedAt }
+
+        func currentWindow(minutes: Int) -> RateLimitWindow? {
+            sorted.last { $0.windowMinutes == minutes }.map {
+                RateLimitWindow(
+                    usedPercent: $0.usedPercent,
+                    windowMinutes: $0.windowMinutes,
+                    resetsAt: $0.resetsAt,
+                    observedAt: $0.observedAt
+                )
+            }.flatMap { $0.isCurrent(at: now) ? $0 : nil }
+        }
+
+        let cutoff = calendar.date(byAdding: .day, value: -7, to: now) ?? now.addingTimeInterval(-604_800)
+        var hourly: [Date: RateLimitHistoryPoint] = [:]
+        for sample in sorted where sample.observedAt >= cutoff {
+            let hour = calendar.dateInterval(of: .hour, for: sample.observedAt)?.start ?? sample.observedAt
+            var point = hourly[hour] ?? RateLimitHistoryPoint(
+                date: hour,
+                fiveHourUsedPercent: nil,
+                weeklyUsedPercent: nil
+            )
+            if sample.windowMinutes == 300 {
+                point.fiveHourUsedPercent = sample.usedPercent
+            } else if sample.windowMinutes == 10_080 {
+                point.weeklyUsedPercent = sample.usedPercent
+            }
+            hourly[hour] = point
+        }
+
+        let result = CodexRateLimits(
+            fiveHour: currentWindow(minutes: 300),
+            weekly: currentWindow(minutes: 10_080),
+            history: hourly.values.sorted { $0.date < $1.date }
+        )
+        return result.fiveHour == nil && result.weekly == nil && result.history.isEmpty ? nil : result
     }
 
     private func topModel(in totals: [String: Int]) -> String? {
@@ -923,21 +1085,33 @@ struct CodexUsageReader {
     }
 
     private func loadReaderCache() -> ReaderCache {
-        guard let cacheURL,
-              let data = try? Data(contentsOf: cacheURL),
-              let cache = try? JSONDecoder().decode(ReaderCache.self, from: data),
-              cache.schemaVersion == ReaderCache.currentSchemaVersion
-        else {
+        guard let cacheURL else {
             return ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: [:])
         }
-        return cache
+        let candidates = cacheURL == CodexUsageSnapshotStore.readerCacheURL
+            ? [cacheURL, CodexUsageSnapshotStore.legacyReaderCacheURL]
+            : [cacheURL]
+        for candidate in candidates {
+            guard let data = try? Data(contentsOf: candidate) else { continue }
+            if let cache = try? PropertyListDecoder().decode(ReaderCache.self, from: data),
+               cache.schemaVersion == ReaderCache.currentSchemaVersion {
+                return cache
+            }
+            if let cache = try? JSONDecoder().decode(ReaderCache.self, from: data),
+               cache.schemaVersion == ReaderCache.currentSchemaVersion {
+                return cache
+            }
+        }
+        return ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: [:])
     }
 
     private func saveReaderCache(_ cache: ReaderCache) {
         guard let cacheURL else { return }
         do {
             try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(cache)
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            let data = try encoder.encode(cache)
             try data.write(to: cacheURL, options: .atomic)
         } catch {
             // Cache failure only affects refresh speed; it must never block a valid snapshot.
@@ -956,6 +1130,8 @@ struct CodexUsageReader {
         var previousCumulative: TokenUsage?
         var samples: [UsageSample] = []
         var activeModel: String?
+        var rateLimitSamples: [RateLimitSample] = []
+        var lastRateLimitByWindow: [Int: RateLimitSample] = [:]
 
         for line in data.split(separator: "\n") {
             guard let row = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
@@ -980,6 +1156,29 @@ struct CodexUsageReader {
             if row["type"] as? String == "turn_context", let context = row["payload"] as? [String: Any] {
                 activeModel = context["model"] as? String ?? activeModel
                 continue
+            }
+
+            if let timestamp = parseDate(row["timestamp"] as? String),
+               let payload = row["payload"] as? [String: Any],
+               let limits = payload["rate_limits"] as? [String: Any] {
+                for key in ["primary", "secondary"] {
+                    guard let values = limits[key] as? [String: Any],
+                          let windowMinutes = (values["window_minutes"] as? NSNumber)?.intValue,
+                          let usedPercent = (values["used_percent"] as? NSNumber)?.doubleValue,
+                          let resetsAt = (values["resets_at"] as? NSNumber)?.doubleValue
+                    else { continue }
+
+                    let sample = RateLimitSample(
+                        observedAt: timestamp,
+                        usedPercent: usedPercent,
+                        windowMinutes: windowMinutes,
+                        resetsAt: Date(timeIntervalSince1970: resetsAt)
+                    )
+                    if lastRateLimitByWindow[windowMinutes] != sample {
+                        rateLimitSamples.append(sample)
+                        lastRateLimitByWindow[windowMinutes] = sample
+                    }
+                }
             }
 
             guard
@@ -1014,7 +1213,7 @@ struct CodexUsageReader {
             ))
         }
 
-        guard !samples.isEmpty else { return nil }
+        guard !samples.isEmpty || !rateLimitSamples.isEmpty else { return nil }
         if startedAt == nil { startedAt = samples.first?.timestamp }
         let resolvedPrimaryID = primaryID ?? sessionID
         lineageIDs.insert(resolvedPrimaryID)
@@ -1024,7 +1223,8 @@ struct CodexUsageReader {
             lineageIDs: lineageIDs,
             startedAt: startedAt,
             lineageSequence: samples.map(\.cumulative),
-            samples: samples
+            samples: samples,
+            rateLimits: rateLimitSamples
         )
     }
 
@@ -1119,6 +1319,14 @@ struct CodexUsageReader {
         var startedAt: Date?
         var lineageSequence: [TokenUsage]
         var samples: [UsageSample]
+        var rateLimits: [RateLimitSample]
+    }
+
+    private struct RateLimitSample: Codable, Equatable {
+        var observedAt: Date
+        var usedPercent: Double
+        var windowMinutes: Int
+        var resetsAt: Date
     }
 
     private struct SessionUsage {
@@ -1142,7 +1350,7 @@ struct CodexUsageReader {
     }
 
     private struct ReaderCache: Codable {
-        static let currentSchemaVersion = 2
+        static let currentSchemaVersion = 3
 
         var schemaVersion: Int
         var entries: [String: CachedFile]
@@ -1152,7 +1360,10 @@ struct CodexUsageReader {
 enum CodexUsageSnapshotStore {
     static let snapshotURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/snapshot.json")
     static let settingsURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/settings.json")
-    static let readerCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.json")
+    static let readerCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.plist")
+    static let legacyReaderCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.json")
+    static let backgroundStatusURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/background-status.json")
+    static let refreshLockURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/refresh.lock")
 
     private static let containerBaseURL: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser

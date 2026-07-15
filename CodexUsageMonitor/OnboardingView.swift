@@ -7,6 +7,7 @@ extension Notification.Name {
 struct CodexUsageRootView: View {
     @AppStorage("CodexUsageMonitor.hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("CodexUsageMonitor.hasRequestedCodexAccess") private var hasRequestedCodexAccess = false
+    @AppStorage(BackgroundRefreshAgent.enabledKey) private var backgroundRefreshEnabled = true
     @State private var showsWelcome = false
     @State private var showsSkipWarning = false
     @State private var tourStep: Int?
@@ -25,6 +26,7 @@ struct CodexUsageRootView: View {
                 OnboardingWelcomeView(
                     isRequestingAccess: isRequestingAccess,
                     needsCodexAccess: !hasRequestedCodexAccess,
+                    backgroundRefreshEnabled: $backgroundRefreshEnabled,
                     onSkip: { showsSkipWarning = true },
                     onStartTour: {
                         requestCodexAccess {
@@ -82,6 +84,10 @@ struct CodexUsageRootView: View {
             appVersion: currentVersion,
             completed: hasEverCompletedOnboarding
         )
+        if completed {
+            UserDefaults.standard.set(backgroundRefreshEnabled, forKey: BackgroundRefreshAgent.enabledKey)
+            _ = BackgroundRefreshAgent.setEnabled(backgroundRefreshEnabled)
+        }
         withAnimation(.easeOut(duration: 0.2)) {
             showsWelcome = false
             tourStep = nil
@@ -113,6 +119,7 @@ struct CodexUsageRootView: View {
 private struct OnboardingWelcomeView: View {
     var isRequestingAccess: Bool
     var needsCodexAccess: Bool
+    @Binding var backgroundRefreshEnabled: Bool
     var onSkip: () -> Void
     var onStartTour: () -> Void
 
@@ -162,9 +169,15 @@ private struct OnboardingWelcomeView: View {
                         HStack(spacing: 8) {
                             Label("Local only", systemImage: "lock.fill")
                             Label("One access request", systemImage: "checkmark.shield")
+                            Label("3-min background refresh", systemImage: "clock.arrow.circlepath")
                         }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.58))
+
+                        Toggle("Keep widgets fresh while the app is closed", isOn: $backgroundRefreshEnabled)
+                            .toggleStyle(.switch)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.78))
 
                         Button(action: onStartTour) {
                             Label(
@@ -180,7 +193,7 @@ private struct OnboardingWelcomeView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(isRequestingAccess)
-                        .accessibilityHint(needsCodexAccess ? "Requests local Codex log access, then starts a four-step tour" : "Starts a four-step tour")
+                        .accessibilityHint(needsCodexAccess ? "Requests local Codex log access, then starts a five-step tour" : "Starts a five-step tour")
                     }
                     .frame(maxWidth: 470, alignment: .leading)
                 }
@@ -240,6 +253,7 @@ private struct AnimatedUsageMark: View {
 private enum AppTourStep: Int, CaseIterable {
     case sizes
     case metrics
+    case limits
     case preview
     case actions
 
@@ -247,6 +261,7 @@ private enum AppTourStep: Int, CaseIterable {
         switch self {
         case .sizes: "Start with a widget size"
         case .metrics: "Choose what matters"
+        case .limits: "Know your limit pace"
         case .preview: "Preview the real widget"
         case .actions: "Refresh, then apply"
         }
@@ -256,6 +271,7 @@ private enum AppTourStep: Int, CaseIterable {
         switch self {
         case .sizes: "Each size keeps its own theme, primary metric, chart, and supporting stats."
         case .metrics: "Token totals, requests, Headroom tokens, model, and API-equivalent cost can be arranged per widget."
+        case .limits: "The menu bar, history chart, reset countdown, and widgets all read the same local rate-limit snapshot."
         case .preview: "This is the same shared SwiftUI view WidgetKit renders on your desktop. Charts use the visible peak as their scale."
         case .actions: "Refresh reads local Codex logs immediately. Apply saves this size’s layout to WidgetKit."
         }
@@ -301,8 +317,9 @@ private struct AppTourOverlay: View {
     private func highlightRect(for step: AppTourStep, size: CGSize) -> CGRect {
         switch step {
         case .sizes: CGRect(x: size.width - 204, y: 18, width: 184, height: 56)
-        case .metrics: CGRect(x: 14, y: 325, width: 326, height: min(290, size.height - 350))
-        case .preview: CGRect(x: 366, y: 168, width: size.width - 382, height: size.height - 244)
+        case .metrics: CGRect(x: 14, y: 390, width: 326, height: min(250, size.height - 415))
+        case .limits: CGRect(x: 20, y: 126, width: size.width - 40, height: 62)
+        case .preview: CGRect(x: 366, y: 225, width: size.width - 382, height: size.height - 300)
         case .actions: CGRect(x: size.width - 330, y: size.height - 67, width: 312, height: 54)
         }
     }
@@ -311,6 +328,7 @@ private struct AppTourOverlay: View {
         switch step {
         case .sizes: CGPoint(x: size.width - 220, y: 230)
         case .metrics: CGPoint(x: 535, y: 330)
+        case .limits: CGPoint(x: 535, y: 305)
         case .preview: CGPoint(x: 190, y: 340)
         case .actions: CGPoint(x: size.width - 230, y: size.height - 175)
         }

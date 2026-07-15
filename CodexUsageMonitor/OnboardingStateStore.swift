@@ -35,6 +35,16 @@ enum OnboardingStateStore {
         shouldPresent(appVersion: appVersion, state: load(from: url))
     }
 
+    static func completedCurrentVersion(
+        appVersion: String = currentAppVersion,
+        from url: URL = stateURL
+    ) -> Bool {
+        guard let state = load(from: url) else { return false }
+        return state.schemaVersion == OnboardingState.currentSchemaVersion
+            && state.lastPresentedVersion == appVersion
+            && state.completed
+    }
+
     @discardableResult
     static func markPresented(
         appVersion: String = currentAppVersion,

@@ -26,6 +26,9 @@ struct ContentView: View {
         .background(AppPalette.background)
         .foregroundStyle(AppPalette.text)
         .tint(AppPalette.accent)
+        .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in
+            snapshot = CodexUsageSnapshotStore.load() ?? snapshot
+        }
     }
 
     private var header: some View {
@@ -70,6 +73,8 @@ struct ContentView: View {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(AppPalette.divider, lineWidth: 1)
             }
+
+            LimitSummaryStrip(snapshot: snapshot)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
@@ -149,6 +154,12 @@ struct ContentView: View {
                             }
                         }
                     }
+                }
+
+                InspectorSection(title: "Limits · 7 days") {
+                    LimitHistoryChart(history: snapshot.rateLimits?.history ?? [])
+                    Divider().overlay(AppPalette.divider)
+                    LimitPreferencesView()
                 }
 
                 if let headroom = snapshot.headroom, headroom.isAvailable {
@@ -333,22 +344,18 @@ struct ContentView: View {
         guard !isRefreshing else { return }
         isRefreshing = true
         refreshMessage = "Reading Codex logs and Headroom savings…"
-        let previous = snapshot
-
         Task {
             let fresh = await Task.detached(priority: .userInitiated) {
-                let headroom = HeadroomSavingsCollector().collect() ?? previous.cachedHeadroomActivity
-                return CodexUsageReader().snapshot(headroomActivity: headroom)
+                SnapshotRefresh.run()
             }.value
-            guard fresh.hasUsage else {
+            guard let fresh, fresh.hasUsage else {
                 refreshMessage = "No Codex usage was found; the previous widget data was kept."
                 isRefreshing = false
                 return
             }
 
-            let snapshotSaved = CodexUsageSnapshotStore.save(fresh)
             let settingsSaved = CodexUsageSnapshotStore.saveAllSettings(settingsBySize)
-            guard snapshotSaved, settingsSaved else {
+            guard settingsSaved else {
                 refreshMessage = "Could not hand the refreshed data to WidgetKit."
                 isRefreshing = false
                 return
@@ -356,7 +363,6 @@ struct ContentView: View {
 
             snapshot = fresh
             hasDraftChanges = false
-            WidgetCenter.shared.reloadAllTimelines()
             refreshMessage = "Widgets refreshed with the latest Codex data."
             isRefreshing = false
         }
