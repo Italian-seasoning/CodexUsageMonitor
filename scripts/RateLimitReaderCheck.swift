@@ -41,6 +41,7 @@ struct RateLimitReaderCheck {
         let snapshot = CodexUsageReader(sessionsDirectory: directory, cacheURL: nil).snapshot(now: now)
         precondition(snapshot.rateLimits?.fiveHour?.usedPercent == 42)
         precondition(snapshot.rateLimits?.weekly?.usedPercent == 56)
+        precondition(snapshot.rateLimits?.weekly?.remainingPercent == 44)
         precondition(snapshot.rateLimits?.history.count == 1)
         precondition(snapshot.rateLimits?.nearestReset?.windowMinutes == 300)
         print("RateLimitReaderCheck passed")

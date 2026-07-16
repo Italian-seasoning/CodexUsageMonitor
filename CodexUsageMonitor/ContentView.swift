@@ -7,23 +7,26 @@ struct ContentView: View {
     @State private var snapshot = CodexUsageSnapshotStore.load() ?? .empty
     @State private var settingsBySize = CodexUsageSnapshotStore.loadAllSettings()
     @State private var previewSize = PreviewSize.medium
+    @State private var selection: AppSection? = .overview
     @State private var isRefreshing = false
     @State private var refreshMessage = "Using the latest cached snapshot."
     @State private var hasDraftChanges = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(AppPalette.divider)
+        ZStack {
+            WindowBackdrop()
+                .ignoresSafeArea()
+            AppPalette.windowTint
+                .ignoresSafeArea()
+
             HStack(spacing: 0) {
-                inspector
+                sidebar
+                    .frame(width: 204)
                 Divider().overlay(AppPalette.divider)
-                previewStage
+                detail
             }
-            footer
         }
         .frame(minWidth: 980, idealWidth: 1080, minHeight: 660, idealHeight: 720)
-        .background(AppPalette.background)
         .foregroundStyle(AppPalette.text)
         .tint(AppPalette.accent)
         .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in
@@ -31,191 +34,36 @@ struct ContentView: View {
         }
     }
 
-    private var header: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 12) {
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
                 Image(systemName: "terminal.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 32, height: 32)
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(width: 30, height: 30)
                     .foregroundStyle(.white)
-                    .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Codex Usage Monitor")
-                        .font(.system(size: 19, weight: .bold))
-                    Text("Local Codex usage, model costs, and Headroom savings")
-                        .font(.system(size: 12, weight: .medium))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Codex Usage")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Local monitor")
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                 }
-
-                Spacer()
-
-                Picker("Widget size", selection: $previewSize) {
-                    ForEach(PreviewSize.allCases) { size in
-                        Text(size.title).tag(size)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 196)
             }
+            .padding(.horizontal, 12)
 
-            HStack(spacing: 1) {
-                OverviewMetric(label: "Session", value: snapshot.currentSession.total.compactTokenString)
-                OverviewMetric(label: "Today", value: snapshot.today.total.compactTokenString)
-                OverviewMetric(label: "Lifetime", value: snapshot.lifetime.total.compactTokenString)
-                OverviewMetric(label: "Total API estimate", value: snapshot.estimatedCostUSD.compactCurrencyString, accent: true)
-                OverviewMetric(label: "Headroom tokens saved", value: headroomSavedText)
+            List(AppSection.allCases, selection: $selection) { section in
+                Label(section.title, systemImage: section.symbol)
+                    .tag(section)
+                    .font(.system(size: 13, weight: .medium))
             }
-            .background(AppPalette.divider)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(AppPalette.divider, lineWidth: 1)
-            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
 
-            LimitSummaryStrip(snapshot: snapshot)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-    }
+            Spacer(minLength: 0)
 
-    private var inspector: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Configure \(previewSize.title)")
-                        .font(.system(size: 15, weight: .bold))
-                    Text(previewSize.configurationHint)
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppPalette.muted)
-                }
-
-                InspectorSection(title: "Appearance") {
-                    LabeledContent("App theme") {
-                        Picker("App theme", selection: $appTheme) {
-                            ForEach(AppTheme.allCases) { theme in
-                                Text(theme.label).tag(theme.rawValue)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 146)
-                    }
-
-                    LabeledContent("Widget theme") {
-                        Picker("Widget theme", selection: themeBinding) {
-                            ForEach(WidgetTheme.allCases) { theme in
-                                Text(theme.label).tag(theme)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 146)
-                    }
-
-                    if previewSize != .small {
-                        Toggle("Show supporting stats", isOn: showStatsBinding)
-                    }
-                }
-
-                InspectorSection(title: "Metrics") {
-                    LabeledContent("Primary") {
-                        Picker("Primary", selection: primaryMetricBinding) {
-                            ForEach(PrimaryMetric.allCases) { metric in
-                                Text(metric.label).tag(metric)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 164)
-                    }
-
-                    if previewSize != .small {
-                        LabeledContent("Chart") {
-                            Picker("Chart", selection: chartMetricBinding) {
-                                ForEach(ChartMetric.allCases) { metric in
-                                    Text(metric.label).tag(metric)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(width: 164)
-                        }
-                    }
-
-                    if activeSettings.showsStats && previewSize.statSlotCount > 0 {
-                        Divider().overlay(AppPalette.divider)
-                        ForEach(0..<previewSize.statSlotCount, id: \.self) { index in
-                            LabeledContent(previewSize.statSlotLabel(index)) {
-                                Picker("Stat \(index + 1)", selection: statSlotBinding(index)) {
-                                    ForEach(StatMetric.selectableCases) { metric in
-                                        Text(metric.label).tag(metric)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 164)
-                            }
-                        }
-                    }
-                }
-
-                InspectorSection(title: "Limits · 7 days") {
-                    LimitHistoryChart(history: snapshot.rateLimits?.history ?? [])
-                    Divider().overlay(AppPalette.divider)
-                    LimitPreferencesView()
-                }
-
-                if let headroom = snapshot.headroom, headroom.isAvailable {
-                    InspectorSection(title: "Headroom") {
-                        HeadroomRow(label: "Saved today", value: "\(headroom.todayTokensSaved.compactTokenString) tokens")
-                        HeadroomRow(label: "Total saved", value: "\(headroom.lifetimeTokensSaved.compactTokenString) tokens")
-                        HeadroomRow(label: "Savings rate", value: headroom.savingsPercent.compactPercentString)
-                        HeadroomRow(label: "Est. cost avoided", value: headroom.costSavedUSD.compactCurrencyString)
-                        if let trackingStartedAt = headroom.trackingStartedAt {
-                            Text("Tracked since \(trackingStartedAt.formatted(date: .abbreviated, time: .omitted))")
-                                .font(.system(size: 11))
-                                .foregroundStyle(AppPalette.muted)
-                        }
-                    }
-                }
-
-                InspectorSection(title: "Total API-equivalent estimate") {
-                    PricingSummary(snapshot: snapshot)
-                }
-            }
-            .padding(18)
-        }
-        .frame(width: 342)
-        .background(AppPalette.inspector)
-    }
-
-    private var previewStage: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Widget preview")
-                        .font(.system(size: 15, weight: .bold))
-                    Text(hasDraftChanges ? "Unsaved changes" : "Saved settings")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(hasDraftChanges ? AppPalette.accent : AppPalette.muted)
-                }
-                Spacer()
-                DataFreshnessBadge(snapshot: snapshot)
-            }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 16)
-
-            ZStack {
-                AppPalette.preview
-
-                CodexUsageCardPreview(
-                    snapshot: snapshot,
-                    settings: activeSettings,
-                    size: previewSize.cardSize
-                )
-                .frame(width: previewSize.frame.width, height: previewSize.frame.height)
-                .shadow(color: .black.opacity(0.38), radius: 24, y: 12)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
                 Label("\(snapshot.sessionCount ?? 0) sessions", systemImage: "rectangle.stack")
                 Label("\(snapshot.turnCount ?? 0) requests", systemImage: "arrow.triangle.2.circlepath")
                 if snapshot.headroom?.isAvailable == true {
@@ -223,15 +71,242 @@ struct ContentView: View {
                         .foregroundStyle(AppPalette.accent)
                 }
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(.system(size: 10, weight: .medium))
             .foregroundStyle(AppPalette.muted)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 13)
+            .padding(12)
         }
+        .padding(.top, 18)
+        .padding(.bottom, 8)
+        .background(.thinMaterial)
+    }
+
+    private var detail: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(selectedSection.title)
+                        .font(.system(size: 21, weight: .semibold))
+                    Text(selectedSection.subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                Spacer()
+                DataFreshnessBadge(snapshot: snapshot)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+
+            Divider().overlay(AppPalette.divider)
+
+            Group {
+                switch selectedSection {
+                case .overview: overview
+                case .widget: widgetEditor
+                case .settings: settings
+                }
+            }
+
+            actionBar
+        }
+        .background(.clear)
+    }
+
+    private var overview: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                HStack(spacing: 0) {
+                    OverviewMetric(
+                        label: "Weekly remaining",
+                        value: snapshot.rateLimits?.weekly.map {
+                            "\(Int($0.remainingPercent.rounded()))%"
+                        } ?? "—",
+                        accent: true
+                    )
+                    metricDivider
+                    OverviewMetric(label: "Today", value: snapshot.today.total.compactTokenString)
+                    metricDivider
+                    OverviewMetric(
+                        label: "Current model",
+                        value: ModelPricingCatalog.displayName(for: snapshot.currentModel)
+                    )
+                    metricDivider
+                    OverviewMetric(label: "API estimate today", value: snapshot.todayEstimatedCostUSD.compactCurrencyString)
+                }
+                .appGlassPanel(cornerRadius: 16)
+
+                LimitSummaryStrip(snapshot: snapshot)
+
+                HStack(alignment: .top, spacing: 16) {
+                    InspectorSection(title: "Limit history", subtitle: "Remaining allowance over seven days") {
+                        LimitHistoryChart(history: snapshot.rateLimits?.history ?? [])
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    InspectorSection(title: "Widget", subtitle: previewSize.configurationHint) {
+                        Picker("Widget size", selection: $previewSize) {
+                            ForEach(PreviewSize.allCases) { size in
+                                Text(size.title).tag(size)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        compactPreview
+                    }
+                    .frame(width: 390)
+                }
+
+                HStack(alignment: .top, spacing: 16) {
+                    InspectorSection(title: "Model cost estimate", subtitle: "API-equivalent pricing from local logs") {
+                        PricingSummary(snapshot: snapshot)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    if let headroom = snapshot.headroom, headroom.isAvailable {
+                        InspectorSection(title: "Headroom", subtitle: "Local compression savings") {
+                            HeadroomRow(label: "Saved today", value: "\(headroom.todayTokensSaved.compactTokenString) tokens")
+                            HeadroomRow(label: "Total saved", value: "\(headroom.lifetimeTokensSaved.compactTokenString) tokens")
+                            HeadroomRow(label: "Savings rate", value: headroom.savingsPercent.compactPercentString)
+                            HeadroomRow(label: "Est. cost avoided", value: headroom.costSavedUSD.compactCurrencyString)
+                        }
+                        .frame(width: 300)
+                    }
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    private var widgetEditor: some View {
+        HStack(spacing: 16) {
+            ScrollView {
+                VStack(spacing: 14) {
+                    InspectorSection(title: "Widget size", subtitle: previewSize.configurationHint) {
+                        Picker("Widget size", selection: $previewSize) {
+                            ForEach(PreviewSize.allCases) { size in
+                                Text(size.title).tag(size)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                    }
+
+                    InspectorSection(title: "Appearance") {
+                        LabeledContent("Widget theme") {
+                            Picker("Widget theme", selection: themeBinding) {
+                                ForEach(WidgetTheme.allCases) { theme in
+                                    Text(theme.label).tag(theme)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 156)
+                        }
+                        if previewSize != .small {
+                            Toggle("Show supporting stats", isOn: showStatsBinding)
+                        }
+                    }
+
+                    InspectorSection(title: "Metrics") {
+                        LabeledContent("Primary") {
+                            Picker("Primary", selection: primaryMetricBinding) {
+                                ForEach(PrimaryMetric.allCases) { metric in
+                                    Text(metric.label).tag(metric)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 170)
+                        }
+                        if previewSize != .small {
+                            LabeledContent("Chart") {
+                                Picker("Chart", selection: chartMetricBinding) {
+                                    ForEach(ChartMetric.allCases) { metric in
+                                        Text(metric.label).tag(metric)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 170)
+                            }
+                        }
+                        if activeSettings.showsStats && previewSize.statSlotCount > 0 {
+                            Divider().overlay(AppPalette.divider)
+                            ForEach(0..<previewSize.statSlotCount, id: \.self) { index in
+                                LabeledContent(previewSize.statSlotLabel(index)) {
+                                    Picker("Stat \(index + 1)", selection: statSlotBinding(index)) {
+                                        ForEach(StatMetric.selectableCases) { metric in
+                                            Text(metric.label).tag(metric)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(width: 170)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(18)
+            }
+            .frame(width: 350)
+
+            ZStack {
+                Color.black.opacity(0.06)
+
+                CodexUsageCardPreview(
+                    snapshot: snapshot,
+                    settings: activeSettings,
+                    size: previewSize.cardSize
+                )
+                .frame(width: previewSize.frame.width, height: previewSize.frame.height)
+                .shadow(color: .black.opacity(0.28), radius: 12, y: 6)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Live preview")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(hasDraftChanges ? "Unsaved changes" : "Saved settings")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(hasDraftChanges ? AppPalette.accent : AppPalette.muted)
+                }
+                .padding(16)
+            }
+            .appGlassPanel(cornerRadius: 18)
+        }
+        .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var footer: some View {
+    private var settings: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                InspectorSection(title: "Appearance", subtitle: "Keep the app accent separate from the widget theme") {
+                    LabeledContent("App theme") {
+                        Picker("App theme", selection: $appTheme) {
+                            ForEach(AppTheme.allCases) { theme in
+                                Text(theme.label).tag(theme.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 160)
+                    }
+                }
+
+                InspectorSection(title: "Application behavior", subtitle: "Menu bar, Dock, refresh, and notifications") {
+                    LimitPreferencesView()
+                }
+
+                InspectorSection(title: "Onboarding") {
+                    Button("Run app tour") {
+                        NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
+                    }
+                }
+            }
+            .frame(maxWidth: 680)
+            .padding(20)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var actionBar: some View {
         HStack(spacing: 12) {
             Circle()
                 .fill(isRefreshing ? AppPalette.accent : AppPalette.muted)
@@ -247,45 +322,59 @@ struct ContentView: View {
                 refresh()
             } label: {
                 Label(isRefreshing ? "Refreshing widgets" : "Refresh widgets", systemImage: "arrow.clockwise")
-                    .font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .foregroundStyle(AppPalette.text.opacity(isRefreshing ? 0.48 : 0.92))
-                    .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(AppPalette.divider, lineWidth: 1)
-                    }
-                    .cursorGlowBorder(radius: 9, accent: AppPalette.accent, isEnabled: !isRefreshing)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .cursorGlowBorder(radius: 18, accent: AppPalette.accent, isEnabled: !isRefreshing)
             .disabled(isRefreshing)
 
-            Button {
-                saveSettings()
-            } label: {
-                Label("Apply \(previewSize.title)", systemImage: "checkmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .foregroundStyle(.white.opacity(hasDraftChanges ? 1 : 0.48))
-                    .background(
-                        AppPalette.accent.opacity(hasDraftChanges ? 1 : 0.22),
-                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    )
-                    .cursorGlowBorder(radius: 9, accent: AppPalette.accent, isEnabled: hasDraftChanges)
+            if selectedSection == .widget {
+                Button {
+                    saveSettings()
+                } label: {
+                    Label("Apply \(previewSize.title)", systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .cursorGlowBorder(radius: 18, accent: AppPalette.accent, isEnabled: hasDraftChanges)
+                .disabled(!hasDraftChanges)
             }
-            .buttonStyle(.plain)
-            .disabled(!hasDraftChanges)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(AppPalette.footer)
+        .padding(.vertical, 10)
+        .background(.thinMaterial)
         .overlay(alignment: .top) { Divider().overlay(AppPalette.divider) }
+    }
+
+    private var compactPreview: some View {
+        ZStack {
+            Color.black.opacity(0.06)
+            CodexUsageCardPreview(
+                snapshot: snapshot,
+                settings: activeSettings,
+                size: previewSize.cardSize
+            )
+            .frame(
+                width: previewSize == .small ? 120 : 240,
+                height: previewSize == .large ? 240 : 120
+            )
+        }
+        .frame(height: previewSize == .large ? 260 : 142)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var metricDivider: some View {
+        Divider()
+            .overlay(AppPalette.divider)
+            .padding(.vertical, 12)
     }
 
     private var activeSettings: CodexUsageWidgetSettings {
         settingsBySize.settings(for: previewSize.widgetSize)
+    }
+
+    private var selectedSection: AppSection {
+        selection ?? .overview
     }
 
     private var headroomSavedText: String {
@@ -376,6 +465,38 @@ struct ContentView: View {
     }
 }
 
+private enum AppSection: String, CaseIterable, Identifiable {
+    case overview
+    case widget
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview: "Overview"
+        case .widget: "Widget"
+        case .settings: "Settings"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .overview: "Usage, limits, models, and savings"
+        case .widget: "Configure the desktop widget"
+        case .settings: "Appearance and background behavior"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .overview: "chart.xyaxis.line"
+        case .widget: "rectangle.3.group"
+        case .settings: "gearshape"
+        }
+    }
+}
+
 private enum PreviewSize: String, CaseIterable, Identifiable {
     case small
     case medium
@@ -447,7 +568,7 @@ private struct OverviewMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(value)
-                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .font(.system(size: 21, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(accent ? AppPalette.accent : AppPalette.text)
                 .lineLimit(1)
@@ -456,26 +577,33 @@ private struct OverviewMetric: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
         }
-        .padding(.horizontal, 13)
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-        .background(AppPalette.panel)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
     }
 }
 
 private struct InspectorSection<Content: View>: View {
     var title: String
+    var subtitle: String? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppPalette.text)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppPalette.text)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
+            }
             content
         }
-        .padding(13)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppPalette.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .appGlassPanel(cornerRadius: 16)
     }
 }
 
@@ -573,8 +701,7 @@ private struct DataFreshnessBadge: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(AppPalette.panel, in: Capsule())
-        .overlay { Capsule().stroke(AppPalette.divider, lineWidth: 1) }
+        .appGlassPanel(cornerRadius: 999)
     }
 
     private var isFresh: Bool {
@@ -589,14 +716,10 @@ private struct DataFreshnessBadge: View {
 }
 
 private enum AppPalette {
-    static let background = Color(red: 0.063, green: 0.063, blue: 0.063)
-    static let inspector = Color(red: 0.072, green: 0.072, blue: 0.072)
-    static let preview = Color(red: 0.025, green: 0.025, blue: 0.025)
-    static let footer = Color(red: 0.055, green: 0.055, blue: 0.055)
-    static let panel = Color(red: 0.092, green: 0.092, blue: 0.092)
+    static let windowTint = Color.black.opacity(0.12)
     static let divider = Color.white.opacity(0.11)
     static let text = Color(red: 0.996, green: 0.996, blue: 0.996)
-    static let muted = Color.white.opacity(0.60)
+    static let muted = Color.white.opacity(0.68)
     static var accent: Color {
         AppTheme(rawValue: UserDefaults.standard.string(forKey: "CodexUsageMonitor.appTheme") ?? "crimson")?.accent
             ?? AppTheme.crimson.accent
@@ -613,5 +736,36 @@ private enum AppTheme: String, CaseIterable, Identifiable {
         self == .crimson
             ? Color(red: 1, green: 0.388, blue: 0.388)
             : Color(red: 0.42, green: 0.67, blue: 1)
+    }
+}
+
+private struct WindowBackdrop: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
+extension View {
+    @ViewBuilder
+    func appGlassPanel(cornerRadius: CGFloat) -> some View {
+        if #available(macOS 26.0, *) {
+            glassEffect(
+                .regular.tint(Color.black.opacity(0.18)),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                }
+        }
     }
 }

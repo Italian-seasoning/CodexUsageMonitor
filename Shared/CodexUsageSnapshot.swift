@@ -166,6 +166,10 @@ struct RateLimitWindow: Codable, Equatable {
     var resetsAt: Date
     var observedAt: Date
 
+    var remainingPercent: Double {
+        min(100, max(0, 100 - usedPercent))
+    }
+
     func isCurrent(at date: Date = .now) -> Bool {
         resetsAt > date && observedAt <= date.addingTimeInterval(60)
     }
@@ -460,8 +464,8 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
         case .peakDay: "Peak Day"
         case .headroomSaved: "Headroom Tokens Saved"
         case .estimatedCost: "Total API Estimate"
-        case .fiveHourLimit: "5-Hour Limit"
-        case .weeklyLimit: "Weekly Limit"
+        case .fiveHourLimit: "5-Hour Remaining"
+        case .weeklyLimit: "Weekly Remaining"
         }
     }
 
@@ -474,8 +478,8 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
         case .peakDay: snapshot.peakDay?.usage.total ?? 0
         case .headroomSaved: snapshot.headroom?.lifetimeTokensSaved ?? 0
         case .estimatedCost: Int((snapshot.estimatedCostUSD * 1_000_000).rounded())
-        case .fiveHourLimit: Int((snapshot.rateLimits?.fiveHour?.usedPercent ?? 0).rounded())
-        case .weeklyLimit: Int((snapshot.rateLimits?.weekly?.usedPercent ?? 0).rounded())
+        case .fiveHourLimit: Int((snapshot.rateLimits?.fiveHour?.remainingPercent ?? 0).rounded())
+        case .weeklyLimit: Int((snapshot.rateLimits?.weekly?.remainingPercent ?? 0).rounded())
         }
     }
 
@@ -483,9 +487,9 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .estimatedCost: snapshot.estimatedCostUSD.compactCurrencyString
         case .fiveHourLimit:
-            snapshot.rateLimits?.fiveHour.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+            snapshot.rateLimits?.fiveHour.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"
         case .weeklyLimit:
-            snapshot.rateLimits?.weekly.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+            snapshot.rateLimits?.weekly.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"
         default: value(in: snapshot).compactTokenString
         }
     }
@@ -599,8 +603,8 @@ enum StatMetric: String, Codable, CaseIterable, Identifiable {
         case .topModelThisMonth: "Top Model · Month"
         case .topModelLifetime: "Top Model · Lifetime"
         case .unpricedTokens: "Unpriced"
-        case .fiveHourLimit: "5-Hour Limit"
-        case .weeklyLimit: "Weekly Limit"
+        case .fiveHourLimit: "5-Hour Remaining"
+        case .weeklyLimit: "Weekly Remaining"
         case .limitPace: "Limit Pace"
         case .nextReset: "Next Reset"
         }
@@ -645,9 +649,9 @@ enum StatMetric: String, Codable, CaseIterable, Identifiable {
         case .topModelLifetime: return ModelPricingCatalog.displayName(for: snapshot.topModelLifetime)
         case .unpricedTokens: return (snapshot.unpricedTokens ?? 0).compactTokenString
         case .fiveHourLimit:
-            return snapshot.rateLimits?.fiveHour.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+            return snapshot.rateLimits?.fiveHour.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"
         case .weeklyLimit:
-            return snapshot.rateLimits?.weekly.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+            return snapshot.rateLimits?.weekly.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"
         case .limitPace: return snapshot.rateLimits?.pace.label ?? "Unavailable"
         case .nextReset: return snapshot.rateLimits?.nearestReset?.resetText() ?? "—"
         }
@@ -752,8 +756,8 @@ extension PrimaryMetric {
         case .peakDay: "Peak Day"
         case .headroomSaved: "Headroom Tokens"
         case .estimatedCost: "Total API Estimate"
-        case .fiveHourLimit: "5-Hour"
-        case .weeklyLimit: "Weekly"
+        case .fiveHourLimit: "5-Hour Left"
+        case .weeklyLimit: "Weekly Left"
         }
     }
 }

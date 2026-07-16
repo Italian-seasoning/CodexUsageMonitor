@@ -27,12 +27,11 @@ struct LimitSummaryStrip: View {
                 detail: "Local Codex record"
             )
         }
-        .background(Color.white.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .appGlassPanel(cornerRadius: 16)
     }
 
     private func percent(_ window: RateLimitWindow?) -> String {
-        window.map { "\(Int($0.usedPercent.rounded()))%" } ?? "—"
+        window.map { "\(Int($0.remainingPercent.rounded()))% left" } ?? "—"
     }
 
     private func reset(_ window: RateLimitWindow?) -> String {
@@ -63,7 +62,7 @@ private struct LimitSummaryCell: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(Color.black.opacity(0.22))
+        .background(Color.clear)
     }
 }
 
@@ -78,11 +77,11 @@ struct LimitHistoryChart: View {
         } else {
             Chart(history) { point in
                 if let value = point.fiveHourUsedPercent {
-                    LineMark(x: .value("Time", point.date), y: .value("5-hour", value))
+                    LineMark(x: .value("Time", point.date), y: .value("5-hour", 100 - value))
                         .foregroundStyle(by: .value("Window", "5-hour"))
                 }
                 if let value = point.weeklyUsedPercent {
-                    LineMark(x: .value("Time", point.date), y: .value("Weekly", value))
+                    LineMark(x: .value("Time", point.date), y: .value("Weekly", 100 - value))
                         .foregroundStyle(by: .value("Window", "Weekly"))
                 }
             }
@@ -99,6 +98,7 @@ struct LimitPreferencesView: View {
     @AppStorage(LimitNotificationManager.warningThresholdKey) private var warningThreshold = 70
     @AppStorage(LimitNotificationManager.criticalThresholdKey) private var criticalThreshold = 90
     @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
+    @AppStorage(AppPresenceMode.defaultsKey) private var appPresence = AppPresenceMode.menuBar.rawValue
     @State private var agentStatus = BackgroundRefreshAgentStatus(
         enabled: UserDefaults.standard.bool(forKey: BackgroundRefreshAgent.enabledKey),
         installed: false,
@@ -131,6 +131,24 @@ struct LimitPreferencesView: View {
                 }
                 .labelsHidden()
                 .frame(width: 150)
+            }
+            if menuBarMode == MenuBarDisplayMode.hidden.rawValue {
+                Text("Reopen Codex Usage to show the menu bar item again.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+
+            LabeledContent("Show app in") {
+                Picker("Show app in", selection: $appPresence) {
+                    ForEach(AppPresenceMode.allCases) { mode in
+                        Text(mode.label).tag(mode.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: appPresence) { _, value in
+                    AppPresenceMode.apply(value)
+                }
             }
 
             Divider()

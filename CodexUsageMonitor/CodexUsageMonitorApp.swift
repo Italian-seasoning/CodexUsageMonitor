@@ -17,7 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        NSApp.setActivationPolicy(.regular)
+        AppPresenceMode.apply(
+            UserDefaults.standard.string(forKey: AppPresenceMode.defaultsKey)
+                ?? AppPresenceMode.menuBar.rawValue
+        )
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
         if OnboardingStateStore.completedCurrentVersion() {
@@ -84,6 +87,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.title = "Codex Usage"
             window.identifier = NSUserInterfaceItemIdentifier("CodexUsageMonitor.MainWindow")
             window.minSize = NSSize(width: 980, height: 660)
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.styleMask.insert(.fullSizeContentView)
+            window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.isRestorable = false
             window.contentView = NSHostingView(rootView: CodexUsageRootView())
@@ -122,6 +131,8 @@ private enum WidgetRegistration {
 struct CodexUsageMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var menuBarModel = MenuBarSnapshotModel()
+    @AppStorage(AppPresenceMode.defaultsKey) private var appPresence = AppPresenceMode.menuBar.rawValue
+    @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
 
     var body: some Scene {
         Settings {
@@ -139,10 +150,19 @@ struct CodexUsageMonitorApp: App {
         }
 
         MenuBarExtra {
-            CodexMenuBarView(model: menuBarModel)
+            if showsMenuBarItem {
+                CodexMenuBarView(model: menuBarModel)
+            }
         } label: {
-            CodexMenuBarLabel(model: menuBarModel)
+            if showsMenuBarItem {
+                CodexMenuBarLabel(model: menuBarModel)
+            }
         }
         .menuBarExtraStyle(.menu)
+    }
+
+    private var showsMenuBarItem: Bool {
+        appPresence == AppPresenceMode.menuBar.rawValue
+            && menuBarMode != MenuBarDisplayMode.hidden.rawValue
     }
 }

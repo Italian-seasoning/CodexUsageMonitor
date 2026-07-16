@@ -2,18 +2,44 @@ import AppKit
 import Combine
 import SwiftUI
 
-enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
-    case percentage
-    case meter
-    case reset
+enum AppPresenceMode: String, CaseIterable, Identifiable {
+    static let defaultsKey = "CodexUsageMonitor.appPresence"
+
+    case menuBar
+    case dock
+    case background
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .percentage: "Percentage"
+        case .menuBar: "Menu Bar"
+        case .dock: "Dock"
+        case .background: "Background"
+        }
+    }
+
+    @MainActor
+    static func apply(_ rawValue: String) {
+        let mode = AppPresenceMode(rawValue: rawValue) ?? .menuBar
+        NSApp.setActivationPolicy(mode == .dock ? .regular : .accessory)
+    }
+}
+
+enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
+    case percentage
+    case meter
+    case reset
+    case hidden
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .percentage: "Remaining percentage"
         case .meter: "Meter"
         case .reset: "Reset countdown"
+        case .hidden: "Hidden"
         }
     }
 }
@@ -65,18 +91,19 @@ struct CodexMenuBarLabel: View {
 
     private var labelText: String {
         guard let limits = model.snapshot.rateLimits,
-              let window = limits.preferredWindow
+              let window = limits.weekly ?? limits.fiveHour
         else { return "—" }
+        let prefix = limits.weekly == nil ? "5h" : "W"
         switch MenuBarDisplayMode(rawValue: mode) ?? .percentage {
         case .percentage:
-            return window.windowMinutes == 10_080
-                ? "W \(Int(window.usedPercent.rounded()))%"
-                : "\(Int(window.usedPercent.rounded()))%"
+            return "\(prefix) \(Int(window.remainingPercent.rounded()))%"
         case .meter:
-            let filled = min(5, max(0, Int(ceil(window.usedPercent / 20))))
-            return String(repeating: "●", count: filled) + String(repeating: "○", count: 5 - filled)
+            let filled = min(5, max(0, Int(ceil(window.remainingPercent / 20))))
+            return "\(prefix) " + String(repeating: "●", count: filled) + String(repeating: "○", count: 5 - filled)
         case .reset:
             return window.resetText()
+        case .hidden:
+            return ""
         }
     }
 }
@@ -84,6 +111,7 @@ struct CodexMenuBarLabel: View {
 struct CodexMenuBarView: View {
     @ObservedObject var model: MenuBarSnapshotModel
     @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var mode = MenuBarDisplayMode.percentage.rawValue
+    @AppStorage(AppPresenceMode.defaultsKey) private var appPresence = AppPresenceMode.menuBar.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -98,10 +126,19 @@ struct CodexMenuBarView: View {
                 }
             }
 
-            Picker("Menu bar", selection: $mode) {
+            Picker("Menu label", selection: $mode) {
                 ForEach(MenuBarDisplayMode.allCases) { mode in
                     Text(mode.label).tag(mode.rawValue)
                 }
+            }
+
+            Picker("Show app in", selection: $appPresence) {
+                ForEach(AppPresenceMode.allCases) { mode in
+                    Text(mode.label).tag(mode.rawValue)
+                }
+            }
+            .onChange(of: appPresence) { _, value in
+                AppPresenceMode.apply(value)
             }
 
             Divider()
@@ -128,10 +165,10 @@ struct CodexMenuBarView: View {
                 HStack {
                     Text(title).fontWeight(.semibold)
                     Spacer()
-                    Text("\(Int(window.usedPercent.rounded()))%")
+                    Text("\(Int(window.remainingPercent.rounded()))% left")
                         .monospacedDigit()
                 }
-                ProgressView(value: window.usedPercent, total: 100)
+                ProgressView(value: window.remainingPercent, total: 100)
                 Text("Resets in \(window.resetText())")
                     .font(.caption)
                     .foregroundStyle(.secondary)

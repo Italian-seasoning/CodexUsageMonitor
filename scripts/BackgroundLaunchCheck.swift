@@ -9,8 +9,24 @@ struct BackgroundLaunchCheck {
         }
 
         let executable = URL(fileURLWithPath: CommandLine.arguments[1])
+        let appURL = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
+            throw CheckFailure("could not read app bundle identifier")
+        }
+        let defaults = UserDefaults.standard
+        let originalDomain = defaults.persistentDomain(forName: bundleID)
+        defer {
+            if let originalDomain {
+                defaults.setPersistentDomain(originalDomain, forName: bundleID)
+            } else {
+                defaults.removePersistentDomain(forName: bundleID)
+            }
+        }
+
         try checkBackgroundLaunch(executable)
-        try checkForegroundLaunch(executable)
+        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "menuBar", expectedPolicy: .accessory)
+        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "dock", expectedPolicy: .regular)
+        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "background", expectedPolicy: .accessory)
         print("BackgroundLaunchCheck passed")
     }
 
@@ -33,14 +49,24 @@ struct BackgroundLaunchCheck {
         }
     }
 
-    private static func checkForegroundLaunch(_ executable: URL) throws {
+    private static func checkForegroundLaunch(
+        _ executable: URL,
+        bundleID: String,
+        mode: String,
+        expectedPolicy: NSApplication.ActivationPolicy
+    ) throws {
+        let defaults = UserDefaults.standard
+        var domain = defaults.persistentDomain(forName: bundleID) ?? [:]
+        domain["CodexUsageMonitor.appPresence"] = mode
+        defaults.setPersistentDomain(domain, forName: bundleID)
+
         let process = try launch(executable, arguments: [])
         let deadline = Date().addingTimeInterval(10)
         var launched = false
         while process.isRunning, Date() < deadline {
             if let app = NSRunningApplication(processIdentifier: process.processIdentifier),
                app.isFinishedLaunching,
-               app.activationPolicy == .regular {
+               app.activationPolicy == expectedPolicy {
                 launched = true
                 break
             }
@@ -49,7 +75,7 @@ struct BackgroundLaunchCheck {
         if process.isRunning { process.terminate() }
         process.waitUntilExit()
         guard launched else {
-            throw CheckFailure("foreground app did not finish launching responsively")
+            throw CheckFailure("\(mode) mode did not launch with the expected activation policy")
         }
     }
 
