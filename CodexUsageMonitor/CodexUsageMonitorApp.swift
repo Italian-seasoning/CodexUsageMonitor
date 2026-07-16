@@ -21,7 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
         if OnboardingStateStore.completedCurrentVersion() {
-            BackgroundRefreshAgent.installIfEnabled()
+            DispatchQueue.global(qos: .utility).async {
+                BackgroundRefreshAgent.installIfEnabled()
+            }
         }
         scheduleWidgetRefresh()
         showMainWindowSoon()

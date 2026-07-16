@@ -99,14 +99,18 @@ struct LimitPreferencesView: View {
     @AppStorage(LimitNotificationManager.warningThresholdKey) private var warningThreshold = 70
     @AppStorage(LimitNotificationManager.criticalThresholdKey) private var criticalThreshold = 90
     @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
-    @State private var agentStatus = BackgroundRefreshAgent.status()
+    @State private var agentStatus = BackgroundRefreshAgentStatus(
+        enabled: UserDefaults.standard.bool(forKey: BackgroundRefreshAgent.enabledKey),
+        installed: false,
+        loaded: false,
+        lastSuccess: nil
+    )
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Refresh in background", isOn: $backgroundEnabled)
                 .onChange(of: backgroundEnabled) { _, enabled in
-                    _ = BackgroundRefreshAgent.setEnabled(enabled)
-                    agentStatus = BackgroundRefreshAgent.status()
+                    updateAgentStatus { _ = BackgroundRefreshAgent.setEnabled(enabled) }
                 }
             Text(agentStatus.detail)
                 .font(.system(size: 10))
@@ -114,8 +118,7 @@ struct LimitPreferencesView: View {
 
             if backgroundEnabled && (!agentStatus.installed || !agentStatus.loaded) {
                 Button("Repair background refresh") {
-                    _ = BackgroundRefreshAgent.install()
-                    agentStatus = BackgroundRefreshAgent.status()
+                    updateAgentStatus { _ = BackgroundRefreshAgent.install() }
                 }
                 .buttonStyle(.link)
             }
@@ -158,6 +161,15 @@ struct LimitPreferencesView: View {
                 }
             }
         }
-        .onAppear { agentStatus = BackgroundRefreshAgent.status() }
+        .onAppear { updateAgentStatus() }
+    }
+
+    private func updateAgentStatus(action: @escaping @Sendable () -> Void = {}) {
+        Task {
+            agentStatus = await Task.detached(priority: .utility) {
+                action()
+                return BackgroundRefreshAgent.status()
+            }.value
+        }
     }
 }

@@ -9,7 +9,7 @@ struct BackgroundRefreshRecord: Codable, Equatable {
     var sourceFingerprint: String? = nil
 }
 
-struct BackgroundRefreshAgentStatus {
+struct BackgroundRefreshAgentStatus: Sendable {
     var enabled: Bool
     var installed: Bool
     var loaded: Bool
@@ -71,7 +71,6 @@ enum BackgroundRefreshAgent {
             if isLoaded { _ = launchctl(["bootout", domain, plistURL.path]) }
             try data.write(to: plistURL, options: .atomic)
             guard launchctl(["bootstrap", domain, plistURL.path]) == 0 else { return false }
-            _ = launchctl(["kickstart", "-k", service])
             return isLoaded
         } catch {
             return false

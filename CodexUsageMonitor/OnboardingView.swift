@@ -86,7 +86,10 @@ struct CodexUsageRootView: View {
         )
         if completed {
             UserDefaults.standard.set(backgroundRefreshEnabled, forKey: BackgroundRefreshAgent.enabledKey)
-            _ = BackgroundRefreshAgent.setEnabled(backgroundRefreshEnabled)
+            let enabled = backgroundRefreshEnabled
+            Task.detached(priority: .utility) {
+                _ = BackgroundRefreshAgent.setEnabled(enabled)
+            }
         }
         withAnimation(.easeOut(duration: 0.2)) {
             showsWelcome = false
