@@ -135,20 +135,6 @@ struct CodexUsageMonitorApp: App {
     @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
 
     var body: some Scene {
-        Settings {
-            EmptyView()
-        }
-        .commands {
-            CommandGroup(after: .appInfo) {
-                CheckForUpdatesCommand()
-            }
-            CommandGroup(after: .help) {
-                Button("Show App Tour") {
-                    NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
-                }
-            }
-        }
-
         MenuBarExtra {
             if showsMenuBarItem {
                 CodexMenuBarView(model: menuBarModel)
@@ -159,6 +145,16 @@ struct CodexUsageMonitorApp: App {
             }
         }
         .menuBarExtraStyle(.menu)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesCommand()
+            }
+            CommandGroup(after: .help) {
+                Button("Show App Tour") {
+                    NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
+                }
+            }
+        }
     }
 
     private var showsMenuBarItem: Bool {
