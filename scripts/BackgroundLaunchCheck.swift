@@ -24,9 +24,9 @@ struct BackgroundLaunchCheck {
         }
 
         try checkBackgroundLaunch(executable)
-        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "menuBar", expectedPolicy: .accessory)
+        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "menuBar", expectedPolicy: .regular)
         try checkForegroundLaunch(executable, bundleID: bundleID, mode: "dock", expectedPolicy: .regular)
-        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "background", expectedPolicy: .accessory)
+        try checkForegroundLaunch(executable, bundleID: bundleID, mode: "background", expectedPolicy: .regular)
         print("BackgroundLaunchCheck passed")
     }
 

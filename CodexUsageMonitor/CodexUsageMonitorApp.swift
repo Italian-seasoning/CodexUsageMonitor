@@ -3,7 +3,7 @@ import Darwin
 import SwiftUI
 import WidgetKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var refreshTimer: Timer?
     private var activationScheduled = false
@@ -32,12 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showMainWindowSoon()
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) {
-        if window?.isVisible != true {
-            showMainWindow()
-        }
-    }
-
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showMainWindowSoon()
         return true
@@ -53,6 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         true
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        let presence = UserDefaults.standard.string(forKey: AppPresenceMode.defaultsKey)
+            ?? AppPresenceMode.menuBar.rawValue
+        DispatchQueue.main.async {
+            AppPresenceMode.apply(presence)
+        }
     }
 
     private func scheduleWidgetRefresh() {
@@ -77,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showMainWindow() {
+        NSApp.setActivationPolicy(.regular)
         if window == nil {
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 1080, height: 720),
@@ -95,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.isRestorable = false
+            window.delegate = self
             window.contentView = NSHostingView(rootView: CodexUsageRootView())
             window.center()
             self.window = window
@@ -135,14 +139,10 @@ struct CodexUsageMonitorApp: App {
     @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
 
     var body: some Scene {
-        MenuBarExtra {
-            if showsMenuBarItem {
-                CodexMenuBarView(model: menuBarModel)
-            }
+        MenuBarExtra(isInserted: menuBarItemIsInserted) {
+            CodexMenuBarView(model: menuBarModel)
         } label: {
-            if showsMenuBarItem {
-                CodexMenuBarLabel(model: menuBarModel)
-            }
+            CodexMenuBarLabel(model: menuBarModel)
         }
         .menuBarExtraStyle(.menu)
         .commands {
@@ -153,6 +153,19 @@ struct CodexUsageMonitorApp: App {
                 Button("Show App Tour") {
                     NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
                 }
+            }
+        }
+    }
+
+    private var menuBarItemIsInserted: Binding<Bool> {
+        Binding {
+            !ProcessInfo.processInfo.arguments.contains("--background-refresh")
+                && showsMenuBarItem
+        } set: { isInserted in
+            if !isInserted,
+               !ProcessInfo.processInfo.arguments.contains("--background-refresh"),
+               appPresence == AppPresenceMode.menuBar.rawValue {
+                menuBarMode = MenuBarDisplayMode.hidden.rawValue
             }
         }
     }

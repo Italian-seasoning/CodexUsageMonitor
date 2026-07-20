@@ -15,6 +15,7 @@ final class AppUpdater: ObservableObject {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+        controller.updater.checkForUpdatesInBackground()
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
     }

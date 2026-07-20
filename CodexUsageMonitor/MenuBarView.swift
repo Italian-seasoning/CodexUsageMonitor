@@ -143,6 +143,7 @@ struct CodexMenuBarView: View {
 
             Divider()
             Button("Open Codex Usage") {
+                NSApp.setActivationPolicy(.regular)
                 NSApp.activate(ignoringOtherApps: true)
                 NSApp.windows.first { $0.identifier?.rawValue == "CodexUsageMonitor.MainWindow" }?
                     .makeKeyAndOrderFront(nil)
