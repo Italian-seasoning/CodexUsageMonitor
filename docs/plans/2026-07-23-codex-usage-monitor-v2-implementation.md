@@ -38,7 +38,7 @@
 - Create `CodexUsageMonitor/SourceChangeMonitor.swift`: native FSEvents monitoring with debounce.
 - Modify `CodexUsageMonitor/BackgroundRefreshAgent.swift`: settings-backed enablement and richer diagnostic record.
 - Modify `CodexUsageMonitor/CodexUsageMonitorApp.swift`: coordinator lifecycle, foreground/sleep recovery, background-only execution, and settings injection.
-- Modify `scripts/RefreshSnapshot.swift`: use the same refresh engine or remove it if repository search confirms no production caller.
+- Delete `scripts/RefreshSnapshot.swift`: it has no production caller and duplicates the refresh engine.
 
 ### Onboarding
 
@@ -161,7 +161,11 @@ struct PeriodUsageSummary: Equatable, Sendable {
 }
 
 extension CodexUsageSnapshot {
-    func summary(for period: UsagePeriod, calendar: Calendar = .current) -> PeriodUsageSummary
+    func summary(
+        for period: UsagePeriod,
+        calendar: Calendar = .current,
+        now: Date? = nil
+    ) -> PeriodUsageSummary
 }
 ```
 
@@ -191,16 +195,17 @@ Expected: compile failure because `UsagePeriod` and `summary(for:)` do not exist
 
 - [ ] **Step 3: Implement period summaries**
 
-Use `activityDays` for Today/7D/Month, `lifetime` for Lifetime, and filter `modelUsage` by recorded day when the snapshot contains dated model history. If V1 lacks dated model history, extend snapshot collection with:
+Use `activityDays` for Today/7D/Month, `lifetime` for Lifetime, and filter dated model records from the calendar boundary through the injected `now ?? generatedAt ?? Date()`. Extend snapshot collection with:
 
 ```swift
-struct DailyModelUsage: Codable, Equatable, Hashable {
+struct DailyModelUsage: Codable, Equatable, Identifiable {
     var date: Date
     var models: [ModelUsage]
+    var id: Date { date }
 }
 ```
 
-Decode the new field with `decodeIfPresent(...) ?? []` so V1 snapshots remain valid.
+Build each daily `ModelUsage.estimatedCostUSD` by summing the existing per-sample pricing result; do not recompute cost from a daily aggregate because long-context pricing is sample-sensitive. Decode the new snapshot field with `decodeIfPresent(...) ?? []` so V1 snapshots remain valid. Exclude future-dated rows. For a legacy snapshot without dated model history, keep token/session/request summaries valid and return no period-specific model breakdown rather than inventing one.
 
 - [ ] **Step 4: Run focused and full tests**
 
@@ -247,18 +252,23 @@ struct CodexUsageSettings: Codable, Equatable, Sendable {
     var notificationsEnabled: Bool
     var warningThreshold: Int
     var criticalThreshold: Int
-    var legacyWidgetSettings: CodexUsageWidgetSettingsBySize
 }
 
 struct SettingsLoadResult: Equatable {
     var settings: CodexUsageSettings
     var repairedFields: [String]
     var importedLegacyValues: Bool
+    var legacyWidgetSeed: CodexUsageWidgetSettingsBySize?
+}
+
+struct LegacySettingsSource {
+    var object: (String) -> Any?
+    var widgetSettings: CodexUsageWidgetSettingsBySize?
 }
 
 enum CodexUsageSettingsStore {
     static func load() -> SettingsLoadResult
-    static func load(data: Data, legacy: LegacySettingsSource) -> SettingsLoadResult
+    static func load(data: Data?, legacy: LegacySettingsSource) -> SettingsLoadResult
     static func save(_ settings: CodexUsageSettings) throws
 }
 ```
@@ -277,7 +287,7 @@ The malformed-field test must prove only that field defaults:
 
 ```swift
 #expect(result.settings.backgroundRefreshEnabled == false)
-#expect(result.settings.warningThreshold == 20)
+#expect(result.settings.warningThreshold == 70)
 #expect(result.repairedFields == ["warningThreshold"])
 ```
 
@@ -287,11 +297,11 @@ Run the focused test suite and expect missing-type failures.
 
 - [ ] **Step 3: Implement the decoder and one-time importer**
 
-Decode a keyed container with `decodeIfPresent` per field. Clamp thresholds to `1...100`; preserve valid values; record repaired field names; atomically write with `Data.write(options: .atomic)`. Import legacy JSON/UserDefaults only when no V2 file exists.
+Store V2 app preferences at a new `settings-v2.json` URL. Keep the legacy widget `settings.json` separate and read-only as a migration seed. Decode a keyed container with `decodeIfPresent` per field. Clamp thresholds to `1...100`; preserve valid values; tolerate unknown fields without invalidating the payload; record repaired field names; atomically write with `Data.write(options: .atomic)`. Import only legacy UserDefaults keys that are actually present when no V2 file exists. Do not import notification-deduplication keys, delete legacy values, or persist the widget seed inside app preferences.
 
 - [ ] **Step 4: Replace touched `@AppStorage` uses**
 
-Inject one `CodexUsageSettingsModel` from `CodexUsageMonitorApp` and bind views to its concrete properties. Do not create a generic preference framework.
+Inject one `CodexUsageSettingsModel` from `CodexUsageMonitorApp` and bind touched app-preference views to its concrete properties. Leave onboarding flags/state under `OnboardingStateStore` until Task 5. Do not create a generic preference framework.
 
 - [ ] **Step 5: Prove upgrade safety**
 
@@ -348,7 +358,7 @@ Inject a closure-backed refresh engine and assert ten simultaneous requests call
 
 - [ ] **Step 2: Implement the coordinator**
 
-Store one in-flight `Task<RefreshResult, Never>`. Await it for concurrent callers and clear it only after completion. Retain `flock` as cross-process protection.
+Store one in-flight `Task<RefreshResult, Never>`. Await it for concurrent callers and clear it only after completion. If a forced manual request arrives behind an unforced in-flight pass, queue exactly one forced follow-up instead of coalescing it away. Retain `flock` as cross-process protection.
 
 - [ ] **Step 3: Make one refresh engine authoritative**
 
@@ -375,7 +385,9 @@ Use FSEvents for `~/.codex/sessions` and detected Headroom data paths. Debounce 
 - menu/app button: `.manual`, `force: true`
 - `--background-refresh`: `.backgroundAgent`
 
-Delete direct `CodexUsageReader().snapshot()` refresh paths outside onboarding’s access probe.
+The synchronous background process must check persisted approved-access state before touching `~/.codex`; otherwise return `.permissionRequired` without prompting. Keep onboarding’s reader access probe, remove its direct snapshot write, and follow approval with a coordinator refresh.
+
+Delete `scripts/RefreshSnapshot.swift` after repository search confirms it has no production caller.
 
 - [ ] **Step 6: Validate background behavior**
 
