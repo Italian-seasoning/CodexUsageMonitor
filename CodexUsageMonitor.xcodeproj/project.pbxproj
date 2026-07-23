@@ -27,6 +27,7 @@
 		100000000000000000000118 /* LimitNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000020 /* LimitNotifications.swift */; };
 		100000000000000000000119 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000021 /* MenuBarView.swift */; };
 		100000000000000000000120 /* LimitViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* LimitViews.swift */; };
+		100000000000000000000121 /* CodexUsageMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000023 /* CodexUsageMonitorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -65,6 +66,8 @@
 		100000000000000000000020 /* LimitNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitNotifications.swift; sourceTree = "<group>"; };
 		100000000000000000000021 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		100000000000000000000022 /* LimitViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitViews.swift; sourceTree = "<group>"; };
+		100000000000000000000023 /* CodexUsageMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexUsageMonitorTests.swift; sourceTree = "<group>"; };
+		100000000000000000000024 /* CodexUsageMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodexUsageMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -86,6 +89,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		100000000000000000000204 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -95,6 +105,7 @@
 				100000000000000000000301 /* CodexUsageMonitor */,
 				100000000000000000000302 /* CodexUsageWidget */,
 				100000000000000000000303 /* Shared */,
+				100000000000000000000305 /* CodexUsageMonitorTests */,
 				100000000000000000000304 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -144,8 +155,17 @@
 			children = (
 				100000000000000000000010 /* CodexUsageMonitor.app */,
 				100000000000000000000011 /* CodexUsageWidget.appex */,
+				100000000000000000000024 /* CodexUsageMonitorTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		100000000000000000000305 /* CodexUsageMonitorTests */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000023 /* CodexUsageMonitorTests.swift */,
+			);
+			path = CodexUsageMonitorTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -189,6 +209,25 @@
 			productReference = 100000000000000000000011 /* CodexUsageWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		100000000000000000000403 /* CodexUsageMonitorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 100000000000000000000503 /* Build configuration list for PBXNativeTarget "CodexUsageMonitorTests" */;
+			buildPhases = (
+				100000000000000000000603 /* Sources */,
+				100000000000000000000204 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				100000000000000000000904 /* PBXTargetDependency */,
+			);
+			name = CodexUsageMonitorTests;
+			packageProductDependencies = (
+			);
+			productName = CodexUsageMonitorTests;
+			productReference = 100000000000000000000024 /* CodexUsageMonitorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -204,6 +243,10 @@
 					};
 					100000000000000000000402 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					100000000000000000000403 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 100000000000000000000401;
 					};
 				};
 			};
@@ -226,6 +269,7 @@
 			targets = (
 				100000000000000000000401 /* CodexUsageMonitor */,
 				100000000000000000000402 /* CodexUsageWidget */,
+				100000000000000000000403 /* CodexUsageMonitorTests */,
 			);
 		};
 /* End PBXProject section */
@@ -273,6 +317,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		100000000000000000000603 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				100000000000000000000121 /* CodexUsageMonitorTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -280,6 +332,11 @@
 			isa = PBXTargetDependency;
 			target = 100000000000000000000402 /* CodexUsageWidget */;
 			targetProxy = 100000000000000000000902 /* PBXContainerItemProxy */;
+		};
+		100000000000000000000904 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 100000000000000000000401 /* CodexUsageMonitor */;
+			targetProxy = 100000000000000000000903 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -290,6 +347,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 100000000000000000000402;
 			remoteInfo = CodexUsageWidget;
+		};
+		100000000000000000000903 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 100000000000000000000700 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 100000000000000000000401;
+			remoteInfo = CodexUsageMonitor;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -497,6 +561,42 @@
 			};
 			name = Release;
 		};
+		100000000000000000000807 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = Y9F67Z9663;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.3.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nolankrahn.CodexUsageMonitorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CodexUsageMonitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CodexUsageMonitor";
+				TEST_TARGET_NAME = CodexUsageMonitor;
+			};
+			name = Debug;
+		};
+		100000000000000000000808 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = Y9F67Z9663;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.3.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nolankrahn.CodexUsageMonitorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CodexUsageMonitor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CodexUsageMonitor";
+				TEST_TARGET_NAME = CodexUsageMonitor;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -523,6 +623,15 @@
 			buildConfigurations = (
 				100000000000000000000805 /* Debug */,
 				100000000000000000000806 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		100000000000000000000503 /* Build configuration list for PBXNativeTarget "CodexUsageMonitorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				100000000000000000000807 /* Debug */,
+				100000000000000000000808 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
