@@ -3,10 +3,12 @@ import WidgetKit
 
 struct WidgetsView: View {
     var snapshot: CodexUsageSnapshot
-    @State private var family = WidgetPreviewFamily.usagePulse
-    @State private var style = WidgetPreviewStyle.precision
+    @State private var family = CodexWidgetFamily.usagePulse
+    @State private var style = CodexWidgetStyle.precisionInstrument
     @State private var size = WidgetPreviewSize.medium
-    @State private var settingsBySize = CodexUsageSnapshotStore.loadAllSettings()
+    @State private var period = UsagePeriod.today
+    @State private var theme = WidgetTheme.crimson
+    @State private var arrangement = DashboardArrangement.balanced
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +26,7 @@ struct WidgetsView: View {
                     VStack(spacing: 14) {
                         InspectorSection(title: "Widget family") {
                             Picker("Family", selection: $family) {
-                                ForEach(WidgetPreviewFamily.allCases) { item in
+                                ForEach(CodexWidgetFamily.allCases) { item in
                                     Label(item.title, systemImage: item.symbol).tag(item)
                                 }
                             }
@@ -39,7 +41,14 @@ struct WidgetsView: View {
                         InspectorSection(title: "Presentation") {
                             LabeledContent("Style") {
                                 Picker("Style", selection: $style) {
-                                    ForEach(WidgetPreviewStyle.allCases) { Text($0.title).tag($0) }
+                                    ForEach(CodexWidgetStyle.allCases) { Text($0.title).tag($0) }
+                                }
+                                .labelsHidden()
+                                .frame(width: 165)
+                            }
+                            LabeledContent("Theme") {
+                                Picker("Theme", selection: $theme) {
+                                    ForEach(WidgetTheme.allCases) { Text($0.label).tag($0) }
                                 }
                                 .labelsHidden()
                                 .frame(width: 165)
@@ -49,6 +58,24 @@ struct WidgetsView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(.segmented)
+                            if family.supportsPeriod {
+                                LabeledContent("Period") {
+                                    Picker("Period", selection: $period) {
+                                        ForEach(UsagePeriod.allCases) { Text($0.title).tag($0) }
+                                    }
+                                    .labelsHidden()
+                                    .frame(width: 165)
+                                }
+                            }
+                            if family == .dashboard {
+                                LabeledContent("Arrangement") {
+                                    Picker("Arrangement", selection: $arrangement) {
+                                        ForEach(DashboardArrangement.allCases) { Text($0.title).tag($0) }
+                                    }
+                                    .labelsHidden()
+                                    .frame(width: 165)
+                                }
+                            }
                         }
 
                         InspectorSection(title: "Native configuration", subtitle: "Each desktop instance keeps its own choices") {
@@ -64,17 +91,19 @@ struct WidgetsView: View {
 
                 ZStack {
                     previewBackdrop
-                    if family == .usagePulse {
-                        CodexUsageCardPreview(
-                            snapshot: snapshot,
-                            settings: settingsBySize.settings(for: size.widgetSize),
-                            size: size.cardSize
-                        )
-                        .frame(width: size.frame.width, height: size.frame.height)
-                    } else {
-                        upcomingPreview
-                            .frame(width: size.frame.width, height: size.frame.height)
+                    CodexWidgetFamilyView(
+                        snapshot: snapshot,
+                        configuration: previewConfiguration,
+                        size: size.cardSize,
+                        monochrome: previewConfiguration.theme == .monochrome
+                    )
+                    .frame(width: size.frame.width, height: size.frame.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(AppPalette.accent.opacity(style == .signalGrid ? 0.45 : 0.16))
                     }
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .appGlassPanel(cornerRadius: 18)
@@ -100,36 +129,18 @@ struct WidgetsView: View {
         )
     }
 
-    private var upcomingPreview: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(family.title.uppercased(), systemImage: family.symbol)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(AppPalette.accent)
-            Spacer()
-            Text(family.sampleValue(snapshot))
-                .font(.system(size: size == .small ? 25 : 32, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-            Text(family.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(size == .large ? 3 : 1)
-        }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(AppPalette.accent.opacity(style == .signal ? 0.45 : 0.16))
-        }
-        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+    private var previewConfiguration: WidgetDisplayConfiguration {
+        WidgetDisplayConfiguration(
+            family: family,
+            style: style,
+            theme: theme,
+            period: period,
+            dashboardArrangement: arrangement
+        )
     }
 }
 
-private enum WidgetPreviewFamily: String, CaseIterable, Identifiable {
-    case limits, usagePulse, costLens, modelMix, headroomImpact, sessionLive, dashboard
-    var id: Self { self }
-
+private extension CodexWidgetFamily {
     var title: String {
         switch self {
         case .limits: "Limits"
@@ -166,27 +177,27 @@ private enum WidgetPreviewFamily: String, CaseIterable, Identifiable {
         }
     }
 
-    func sampleValue(_ snapshot: CodexUsageSnapshot) -> String {
+    var supportsPeriod: Bool {
+        ![.limits, .sessionLive].contains(self)
+    }
+}
+
+private extension CodexWidgetStyle {
+    var title: String {
         switch self {
-        case .limits: "\(Int(snapshot.rateLimits?.weekly?.remainingPercent.rounded() ?? 0))% left"
-        case .usagePulse: snapshot.today.total.compactTokenString
-        case .costLens: snapshot.todayEstimatedCostUSD.compactCurrencyString
-        case .modelMix: ModelPricingCatalog.displayName(for: snapshot.topModelToday)
-        case .headroomImpact: (snapshot.headroom?.todayTokensSaved ?? 0).compactTokenString
-        case .sessionLive: snapshot.currentSession.total.compactTokenString
-        case .dashboard: snapshot.last7DaysUsage.total.compactTokenString
+        case .precisionInstrument: "Precision Instrument"
+        case .nativeGlass: "Native Glass"
+        case .signalGrid: "Signal Grid"
         }
     }
 }
 
-private enum WidgetPreviewStyle: String, CaseIterable, Identifiable {
-    case precision, glass, signal
-    var id: Self { self }
+private extension DashboardArrangement {
     var title: String {
         switch self {
-        case .precision: "Precision Instrument"
-        case .glass: "Native Glass"
-        case .signal: "Signal Grid"
+        case .balanced: "Balanced"
+        case .limitsFirst: "Limits First"
+        case .activityFirst: "Activity First"
         }
     }
 }

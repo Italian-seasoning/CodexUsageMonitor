@@ -60,9 +60,15 @@ struct CodexWidgetStyleBackground: View {
             )
         case .nativeGlass:
             ZStack {
-                Rectangle().fill(.ultraThinMaterial)
+                (theme == .frostedWhite && colorScheme == .light
+                    ? Color(red: 0.95, green: 0.96, blue: 0.98)
+                    : Color(red: 0.13, green: 0.14, blue: 0.17))
                 LinearGradient(
-                    colors: [palette.accent.opacity(monochrome ? 0 : 0.14), Color.clear],
+                    colors: [
+                        palette.accent.opacity(monochrome ? 0 : 0.18),
+                        Color.white.opacity(colorScheme == .dark ? 0.035 : 0.16),
+                        Color.clear
+                    ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

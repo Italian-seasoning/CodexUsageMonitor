@@ -54,7 +54,6 @@ struct CodexUsageProvider<Intent: CodexWidgetIntent>: AppIntentTimelineProvider 
 }
 
 struct CodexUsageWidgetView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.widgetFamily) private var family
     @Environment(\.widgetRenderingMode) private var renderingMode
     var entry: CodexUsageEntry
@@ -63,18 +62,19 @@ struct CodexUsageWidgetView: View {
 
     var body: some View {
         let size = cardSize
-        let settings = resolvedSettings(for: size)
-        let dark = isDark(for: settings)
-
-        CodexUsageCardView(
+        let configuration = resolvedConfiguration(for: size)
+        CodexWidgetFamilyView(
             snapshot: entry.snapshot,
-            settings: settings,
+            configuration: configuration,
             size: size,
-            monochrome: monochrome,
-            dark: dark
+            monochrome: monochrome
         )
         .containerBackground(for: .widget) {
-            CodexUsageCardBackground(dark: dark, theme: settings.theme)
+            CodexWidgetStyleBackground(
+                style: configuration.style,
+                theme: configuration.theme,
+                monochrome: monochrome
+            )
         }
     }
 
@@ -86,20 +86,25 @@ struct CodexUsageWidgetView: View {
         }
     }
 
-    private func resolvedSettings(for size: CodexUsageCardSize) -> CodexUsageWidgetSettings {
-        var settings = entry.settingsBySize.settings(for: size.widgetSettingsSize)
-        if entry.configuration.family != .usagePulse || entry.configuration.theme != .crimson {
-            settings.theme = entry.configuration.theme
+    private func resolvedConfiguration(for size: CodexUsageCardSize) -> WidgetDisplayConfiguration {
+        var configuration = entry.configuration
+        guard configuration.family == .usagePulse,
+              configuration.style == .precisionInstrument,
+              configuration.theme == .crimson,
+              configuration.period == .today else {
+            return configuration
         }
-        return settings
-    }
-
-    private func isDark(for settings: CodexUsageWidgetSettings) -> Bool {
-        if monochrome { return colorScheme == .dark }
-        return switch settings.theme {
-        case .frostedWhite: false
-        case .crimson, .darkGlass, .monochrome: true
+        let legacy = entry.settingsBySize.settings(for: size.widgetSettingsSize)
+        configuration.theme = legacy.theme
+        switch legacy.primaryMetric {
+        case .last7Days:
+            configuration.period = .sevenDays
+        case .lifetime:
+            configuration.period = .lifetime
+        default:
+            break
         }
+        return configuration
     }
 }
 

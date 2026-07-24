@@ -103,7 +103,7 @@ struct WidgetMiniBars: View {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(point.id == chart.points.last?.id ? palette.accent : palette.track)
                         .frame(
-                            maxWidth: .infinity,
+                            maxWidth: chart.points.count == 1 ? 12 : .infinity,
                             minHeight: 3,
                             maxHeight: max(3, geometry.size.height * point.value / maxValue)
                         )

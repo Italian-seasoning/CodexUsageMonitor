@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import CodexUsageMonitor
 
@@ -27,5 +28,89 @@ struct WidgetConfigurationTests {
                 }
             }
         }
+    }
+
+    @Test("Each widget family exposes its required hero metric")
+    func familyHeroSemantics() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let snapshot = widgetFixture(now: now)
+
+        func hero(_ family: CodexWidgetFamily) -> WidgetSemanticContent {
+            WidgetFamilySemanticBuilder.content(
+                snapshot: snapshot,
+                configuration: WidgetDisplayConfiguration(
+                    family: family,
+                    style: .precisionInstrument,
+                    theme: .crimson,
+                    period: .today,
+                    dashboardArrangement: .balanced
+                ),
+                now: now
+            )
+        }
+
+        #expect(hero(.limits).heroValue == "75%")
+        #expect(hero(.limits).heroLabel == "5-hour remaining")
+        #expect(hero(.usagePulse).heroValue == 1_234.compactTokenString)
+        #expect(hero(.costLens).heroValue == 2.5.compactCurrencyString)
+        #expect(hero(.modelMix).heroValue == "GPT 5.6 Sol")
+        #expect(hero(.headroomImpact).heroValue == 400.compactTokenString)
+        #expect(hero(.sessionLive).heroValue == 321.compactTokenString)
+        #expect(hero(.dashboard).heroValue == 1_234.compactTokenString)
+    }
+
+    private func widgetFixture(now: Date) -> CodexUsageSnapshot {
+        let usage = TokenUsage(input: 900, cachedInput: 100, output: 200, reasoningOutput: 34, total: 1_234)
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.today = usage
+        snapshot.lifetime = usage
+        snapshot.currentSession = TokenUsage(input: 200, cachedInput: 20, output: 90, reasoningOutput: 11, total: 321)
+        snapshot.currentSessionTurns = 7
+        snapshot.currentSessionStartedAt = now.addingTimeInterval(-900)
+        snapshot.currentModel = "gpt-5.6-sol"
+        snapshot.generatedAt = now
+        snapshot.activityDays = [
+            DailyUsage(
+                date: now,
+                usage: usage,
+                sessions: 3,
+                turns: 12,
+                headroomSaved: 400,
+                estimatedCostMicros: 2_500_000
+            )
+        ]
+        snapshot.dailyModelUsage = [
+            DailyModelUsage(
+                date: now,
+                models: [
+                    ModelUsage(model: "gpt-5.6-sol", usage: usage, turns: 12, estimatedCostUSD: 2.5)
+                ]
+            )
+        ]
+        var headroom = HeadroomSavings.zero
+        headroom.todayTokensSaved = 400
+        headroom.last7DaysTokensSaved = 800
+        headroom.lifetimeTokensSaved = 1_200
+        headroom.lifetimeRequests = 20
+        headroom.savingsPercent = 0.25
+        headroom.costSavedUSD = 4.2
+        headroom.lastUpdated = now
+        snapshot.headroom = headroom
+        snapshot.rateLimits = CodexRateLimits(
+            fiveHour: RateLimitWindow(
+                usedPercent: 25,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(3_600),
+                observedAt: now
+            ),
+            weekly: RateLimitWindow(
+                usedPercent: 40,
+                windowMinutes: 10_080,
+                resetsAt: now.addingTimeInterval(86_400),
+                observedAt: now
+            ),
+            history: []
+        )
+        return snapshot
     }
 }
