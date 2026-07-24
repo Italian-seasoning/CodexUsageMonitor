@@ -25,6 +25,15 @@ struct PeriodUsageSummary: Equatable, Sendable {
     let estimatedCostUSD: Double
     let topModel: ModelUsage?
     let days: [DailyUsage]
+
+    func value(for measure: UsageMeasure) -> Double {
+        switch measure {
+        case .tokens: Double(usage.total)
+        case .apiEquivalentCost: estimatedCostUSD
+        case .sessions: Double(sessionCount)
+        case .requests: Double(requestCount)
+        }
+    }
 }
 
 extension CodexUsageSnapshot {

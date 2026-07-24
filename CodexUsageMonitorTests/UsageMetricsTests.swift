@@ -28,6 +28,19 @@ struct UsageMetricsTests {
         #expect(UsageMeasure.tokens.rawValue == "tokens")
     }
 
+    @Test("Today token selection does not fall back to the current model")
+    func todayTokenSelectionUsesTodayUsage() {
+        let fixture = usageMetricsFixture()
+        var snapshot = fixture.snapshot
+        snapshot.currentModel = "gpt-5.6-sol"
+
+        let presented = snapshot
+            .summary(for: .today, calendar: fixture.calendar, now: fixture.now)
+            .value(for: .tokens)
+
+        #expect(presented == 100)
+    }
+
     @Test("Period summaries exclude future rows and preserve recorded model cost")
     func periodSummariesExcludeFutureRowsAndPreserveRecordedModelCost() {
         let fixture = usageMetricsFixture()

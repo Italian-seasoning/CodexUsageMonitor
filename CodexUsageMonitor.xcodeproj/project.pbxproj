@@ -37,6 +37,12 @@
 		100000000000000000000128 /* RefreshCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000030 /* RefreshCoordinator.swift */; };
 		100000000000000000000129 /* SourceChangeMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000031 /* SourceChangeMonitor.swift */; };
 		100000000000000000000130 /* OnboardingStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000032 /* OnboardingStateTests.swift */; };
+		100000000000000000000131 /* AppChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000033 /* AppChrome.swift */; };
+		100000000000000000000132 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000034 /* AnalysisView.swift */; };
+		100000000000000000000133 /* ModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000035 /* ModelsView.swift */; };
+		100000000000000000000134 /* WidgetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000036 /* WidgetsView.swift */; };
+		100000000000000000000135 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000037 /* SettingsView.swift */; };
+		100000000000000000000136 /* DataHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000038 /* DataHealthView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -85,6 +91,12 @@
 		100000000000000000000030 /* RefreshCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshCoordinator.swift; sourceTree = "<group>"; };
 		100000000000000000000031 /* SourceChangeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceChangeMonitor.swift; sourceTree = "<group>"; };
 		100000000000000000000032 /* OnboardingStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStateTests.swift; sourceTree = "<group>"; };
+		100000000000000000000033 /* AppChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppChrome.swift; sourceTree = "<group>"; };
+		100000000000000000000034 /* AnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisView.swift; sourceTree = "<group>"; };
+		100000000000000000000035 /* ModelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsView.swift; sourceTree = "<group>"; };
+		100000000000000000000036 /* WidgetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetsView.swift; sourceTree = "<group>"; };
+		100000000000000000000037 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		100000000000000000000038 /* DataHealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHealthView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -132,6 +144,12 @@
 			children = (
 				100000000000000000000001 /* CodexUsageMonitorApp.swift */,
 				100000000000000000000002 /* ContentView.swift */,
+				100000000000000000000033 /* AppChrome.swift */,
+				100000000000000000000034 /* AnalysisView.swift */,
+				100000000000000000000035 /* ModelsView.swift */,
+				100000000000000000000036 /* WidgetsView.swift */,
+				100000000000000000000037 /* SettingsView.swift */,
+				100000000000000000000038 /* DataHealthView.swift */,
 				100000000000000000000007 /* HeadroomSavingsCollector.swift */,
 				100000000000000000000012 /* OnboardingView.swift */,
 				100000000000000000000017 /* OnboardingStateStore.swift */,
@@ -317,6 +335,12 @@
 			files = (
 				100000000000000000000101 /* CodexUsageMonitorApp.swift in Sources */,
 				100000000000000000000102 /* ContentView.swift in Sources */,
+				100000000000000000000131 /* AppChrome.swift in Sources */,
+				100000000000000000000132 /* AnalysisView.swift in Sources */,
+				100000000000000000000133 /* ModelsView.swift in Sources */,
+				100000000000000000000134 /* WidgetsView.swift in Sources */,
+				100000000000000000000135 /* SettingsView.swift in Sources */,
+				100000000000000000000136 /* DataHealthView.swift in Sources */,
 				100000000000000000000103 /* CodexUsageSnapshot.swift in Sources */,
 				100000000000000000000123 /* UsageMetrics.swift in Sources */,
 				100000000000000000000126 /* CodexUsageSettings.swift in Sources */,
