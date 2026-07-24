@@ -52,7 +52,7 @@ final class MenuBarSnapshotModel: ObservableObject {
         guard !isRefreshing else { return }
         isRefreshing = true
         Task {
-            _ = await Task.detached(priority: .utility) { SnapshotRefresh.run() }.value
+            _ = await RefreshCoordinator.shared.refresh(trigger: .manual, force: true)
             reload()
             isRefreshing = false
         }

@@ -4,9 +4,11 @@ import Foundation
 struct BackgroundRefreshRecord: Codable, Equatable {
     var lastAttempt: Date
     var lastSuccess: Date?
+    var outcome: RefreshOutcome? = nil
     var durationSeconds: Double
     var error: String?
     var sourceFingerprint: String? = nil
+    var widgetReloadRequestedAt: Date? = nil
 }
 
 struct BackgroundRefreshAgentStatus: Sendable {

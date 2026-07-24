@@ -6,13 +6,16 @@ import WidgetKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var refreshTimer: Timer?
+    private var wakeObserver: NSObjectProtocol?
+    private let sourceChangeMonitor = SourceChangeMonitor()
     private var activationScheduled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.arguments.contains("--background-refresh") {
             NSApp.setActivationPolicy(.prohibited)
-            DispatchQueue.global(qos: .utility).async {
-                exit(SnapshotRefresh.run() == nil ? EXIT_FAILURE : EXIT_SUCCESS)
+            Task.detached(priority: .utility) {
+                let result = await RefreshCoordinator.shared.refresh(trigger: .backgroundAgent)
+                exit(result.outcome == .failed ? EXIT_FAILURE : EXIT_SUCCESS)
             }
             return
         }
@@ -27,8 +30,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 BackgroundRefreshAgent.installIfEnabled()
             }
         }
+        sourceChangeMonitor.start()
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { _ = await RefreshCoordinator.shared.refresh(trigger: .wake) }
+        }
         scheduleWidgetRefresh()
+        requestRefresh(.launch)
         showMainWindowSoon()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard !ProcessInfo.processInfo.arguments.contains("--background-refresh") else { return }
+        requestRefresh(.foreground)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        sourceChangeMonitor.stop()
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -56,10 +80,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func scheduleWidgetRefresh() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: BackgroundRefreshAgent.interval, repeats: true) { _ in
-            DispatchQueue.global(qos: .utility).async {
-                _ = SnapshotRefresh.run()
-            }
+            Task { _ = await RefreshCoordinator.shared.refresh(trigger: .fallbackTimer) }
         }
+    }
+
+    private func requestRefresh(_ trigger: RefreshTrigger) {
+        Task { _ = await RefreshCoordinator.shared.refresh(trigger: trigger) }
     }
 
     private func showMainWindowSoon() {

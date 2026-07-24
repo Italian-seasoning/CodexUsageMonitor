@@ -105,13 +105,11 @@ struct CodexUsageRootView: View {
 
         isRequestingAccess = true
         Task {
-            let snapshot = await Task.detached(priority: .userInitiated) {
+            _ = await Task.detached(priority: .userInitiated) {
                 CodexUsageReader().snapshot()
             }.value
-            if snapshot.hasUsage {
-                CodexUsageSnapshotStore.save(snapshot)
-            }
             hasRequestedCodexAccess = true
+            _ = await RefreshCoordinator.shared.refresh(trigger: .manual, force: true)
             isRequestingAccess = false
             completion()
         }

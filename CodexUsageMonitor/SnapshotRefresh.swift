@@ -13,10 +13,27 @@ enum SnapshotRefresh {
         category: "BackgroundRefresh"
     )
 
-    static func run() -> CodexUsageSnapshot? {
+    static func run(trigger: RefreshTrigger, force: Bool = false) -> RefreshResult {
         let startedAt = Date()
+        if trigger == .backgroundAgent,
+           !UserDefaults.standard.bool(forKey: "CodexUsageMonitor.hasRequestedCodexAccess") {
+            let message = "Codex data access has not been approved."
+            saveRecord(
+                startedAt: startedAt,
+                outcome: .permissionRequired,
+                message: message,
+                fingerprint: nil,
+                widgetReloadRequestedAt: nil
+            )
+            return RefreshResult(outcome: .permissionRequired, snapshot: nil, message: message)
+        }
+
         guard let lock = RefreshLock.acquire() else {
-            return CodexUsageSnapshotStore.load()
+            return RefreshResult(
+                outcome: .unchanged,
+                snapshot: CodexUsageSnapshotStore.load(),
+                message: "Another refresh process is already running."
+            )
         }
         defer { lock.release() }
 
@@ -25,9 +42,16 @@ enum SnapshotRefresh {
         let reader = CodexUsageReader()
         let headroomCollector = HeadroomSavingsCollector()
         let fingerprint = reader.sourceFingerprint() + "|" + headroomCollector.sourceFingerprint()
+        let reuseCached = canReuseSnapshot(
+            previousFingerprint: previousRecord?.sourceFingerprint,
+            currentFingerprint: fingerprint,
+            hasSnapshot: previous != nil,
+            force: force
+        )
         let candidate: CodexUsageSnapshot?
+        let outcome: RefreshOutcome
 
-        if previousRecord?.sourceFingerprint == fingerprint, var cached = previous {
+        if reuseCached, var cached = previous {
             let now = Date()
             cached.generatedAt = now
             if var limits = cached.rateLimits {
@@ -36,41 +60,93 @@ enum SnapshotRefresh {
                 cached.rateLimits = limits
             }
             candidate = cached
+            outcome = .unchanged
         } else {
             let headroom = headroomCollector.collect() ?? previous?.cachedHeadroomActivity
             let snapshot = reader.snapshot(headroomActivity: headroom)
-            candidate = snapshot.hasUsage ? snapshot : previous
+            if snapshot.hasUsage {
+                candidate = snapshot
+                outcome = .updated
+            } else {
+                candidate = previous
+                outcome = .unchanged
+            }
         }
 
-        guard let candidate, CodexUsageSnapshotStore.save(candidate) else {
-            let error = "Could not save the refreshed snapshot."
-            BackgroundRefreshAgent.saveRecord(
-                BackgroundRefreshRecord(
-                    lastAttempt: startedAt,
-                    lastSuccess: BackgroundRefreshAgent.loadRecord()?.lastSuccess,
-                    durationSeconds: Date().timeIntervalSince(startedAt),
-                    error: error,
-                    sourceFingerprint: fingerprint
-                )
+        guard let candidate else {
+            let message = "No Codex usage was found and no previous snapshot is available."
+            saveRecord(
+                startedAt: startedAt,
+                outcome: .failed,
+                message: message,
+                fingerprint: fingerprint,
+                widgetReloadRequestedAt: nil
             )
-            logger.error("\(error, privacy: .public)")
-            return nil
+            logger.error("\(message, privacy: .public)")
+            return RefreshResult(outcome: .failed, snapshot: nil, message: message)
         }
 
-        WidgetCenter.shared.reloadTimelines(ofKind: "CodexUsageWidget")
+        guard CodexUsageSnapshotStore.save(candidate) else {
+            let message = "Could not save the refreshed snapshot."
+            saveRecord(
+                startedAt: startedAt,
+                outcome: .failed,
+                message: message,
+                fingerprint: fingerprint,
+                widgetReloadRequestedAt: nil
+            )
+            logger.error("\(message, privacy: .public)")
+            return RefreshResult(outcome: .failed, snapshot: previous, message: message)
+        }
+
+        WidgetCenter.shared.reloadAllTimelines()
+        let widgetReloadRequestedAt = Date()
         LimitNotificationManager.evaluate(candidate)
+        saveRecord(
+            startedAt: startedAt,
+            outcome: outcome,
+            message: nil,
+            fingerprint: fingerprint,
+            widgetReloadRequestedAt: widgetReloadRequestedAt
+        )
+        NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
+        let message = outcome == .updated
+            ? "Snapshot refreshed with the latest Codex data."
+            : "Sources are unchanged; the cached snapshot remains current."
+        logger.debug("Snapshot refresh \(outcome.rawValue, privacy: .public) in \(Date().timeIntervalSince(startedAt), privacy: .public) seconds")
+        return RefreshResult(outcome: outcome, snapshot: candidate, message: message)
+    }
+
+    static func canReuseSnapshot(
+        previousFingerprint: String?,
+        currentFingerprint: String,
+        hasSnapshot: Bool,
+        force: Bool
+    ) -> Bool {
+        !force && hasSnapshot && previousFingerprint == currentFingerprint
+    }
+
+    private static func saveRecord(
+        startedAt: Date,
+        outcome: RefreshOutcome,
+        message: String?,
+        fingerprint: String?,
+        widgetReloadRequestedAt: Date?
+    ) {
+        let previous = BackgroundRefreshAgent.loadRecord()
         BackgroundRefreshAgent.saveRecord(
             BackgroundRefreshRecord(
                 lastAttempt: startedAt,
-                lastSuccess: Date(),
+                lastSuccess: outcome == .failed || outcome == .permissionRequired
+                    ? previous?.lastSuccess
+                    : Date(),
+                outcome: outcome,
                 durationSeconds: Date().timeIntervalSince(startedAt),
-                error: nil,
-                sourceFingerprint: fingerprint
+                error: message,
+                sourceFingerprint: fingerprint ?? previous?.sourceFingerprint,
+                widgetReloadRequestedAt: widgetReloadRequestedAt
             )
         )
-        NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
-        logger.debug("Snapshot refreshed in \(Date().timeIntervalSince(startedAt), privacy: .public) seconds")
-        return candidate
     }
 }
 

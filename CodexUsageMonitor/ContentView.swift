@@ -434,11 +434,9 @@ struct ContentView: View {
         isRefreshing = true
         refreshMessage = "Reading Codex logs and Headroom savings…"
         Task {
-            let fresh = await Task.detached(priority: .userInitiated) {
-                SnapshotRefresh.run()
-            }.value
-            guard let fresh, fresh.hasUsage else {
-                refreshMessage = "No Codex usage was found; the previous widget data was kept."
+            let result = await RefreshCoordinator.shared.refresh(trigger: .manual, force: true)
+            guard let fresh = result.snapshot, fresh.hasUsage else {
+                refreshMessage = result.message
                 isRefreshing = false
                 return
             }
@@ -452,7 +450,7 @@ struct ContentView: View {
 
             snapshot = fresh
             hasDraftChanges = false
-            refreshMessage = "Widgets refreshed with the latest Codex data."
+            refreshMessage = result.message
             isRefreshing = false
         }
     }
