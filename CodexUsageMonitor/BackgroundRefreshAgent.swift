@@ -25,7 +25,6 @@ struct BackgroundRefreshAgentStatus: Sendable {
 }
 
 enum BackgroundRefreshAgent {
-    static let enabledKey = "CodexUsageMonitor.backgroundRefreshEnabled"
     static let identifier = "com.nolankrahn.CodexUsageMonitor.refresh"
     static let interval: TimeInterval = 180
 
@@ -37,13 +36,12 @@ enum BackgroundRefreshAgent {
     }
 
     static func installIfEnabled() {
-        guard UserDefaults.standard.bool(forKey: enabledKey) else { return }
+        guard CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled else { return }
         _ = install()
     }
 
     @discardableResult
     static func setEnabled(_ enabled: Bool) -> Bool {
-        UserDefaults.standard.set(enabled, forKey: enabledKey)
         return enabled ? install() : uninstall()
     }
 
@@ -86,7 +84,7 @@ enum BackgroundRefreshAgent {
 
     static func status() -> BackgroundRefreshAgentStatus {
         BackgroundRefreshAgentStatus(
-            enabled: UserDefaults.standard.bool(forKey: enabledKey),
+            enabled: CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled,
             installed: FileManager.default.fileExists(atPath: plistURL.path),
             loaded: isLoaded,
             lastSuccess: loadRecord()?.lastSuccess

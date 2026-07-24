@@ -478,7 +478,7 @@ struct CodexUsageWidgetSettingsBySize: Codable, Equatable {
     }
 }
 
-enum WidgetTheme: String, Codable, CaseIterable, Identifiable {
+enum WidgetTheme: String, Codable, CaseIterable, Identifiable, Sendable {
     case crimson
     case darkGlass
     case frostedWhite
@@ -1463,6 +1463,7 @@ struct CodexUsageReader {
 enum CodexUsageSnapshotStore {
     static let snapshotURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/snapshot.json")
     static let settingsURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/settings.json")
+    static let settingsV2URL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/settings-v2.json")
     static let readerCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.plist")
     static let legacyReaderCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.json")
     static let backgroundStatusURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/background-status.json")
@@ -1498,10 +1499,14 @@ enum CodexUsageSnapshotStore {
     }
 
     static func loadAllSettings() -> CodexUsageWidgetSettingsBySize {
+        loadAllSettingsIfPresent() ?? .default
+    }
+
+    static func loadAllSettingsIfPresent() -> CodexUsageWidgetSettingsBySize? {
         guard let data = try? Data(contentsOf: settingsURL),
               !data.isEmpty
         else {
-            return .default
+            return nil
         }
 
         if let settings = try? JSONDecoder().decode(CodexUsageWidgetSettingsBySize.self, from: data) {
@@ -1520,7 +1525,7 @@ enum CodexUsageSnapshotStore {
             )
         }
 
-        return .default
+        return nil
     }
 
     static func saveSettings(_ settings: CodexUsageWidgetSettings) {

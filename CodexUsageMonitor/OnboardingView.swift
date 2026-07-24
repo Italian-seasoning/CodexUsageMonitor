@@ -5,9 +5,9 @@ extension Notification.Name {
 }
 
 struct CodexUsageRootView: View {
+    @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
     @AppStorage("CodexUsageMonitor.hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("CodexUsageMonitor.hasRequestedCodexAccess") private var hasRequestedCodexAccess = false
-    @AppStorage(BackgroundRefreshAgent.enabledKey) private var backgroundRefreshEnabled = true
     @State private var showsWelcome = false
     @State private var showsSkipWarning = false
     @State private var tourStep: Int?
@@ -26,7 +26,7 @@ struct CodexUsageRootView: View {
                 OnboardingWelcomeView(
                     isRequestingAccess: isRequestingAccess,
                     needsCodexAccess: !hasRequestedCodexAccess,
-                    backgroundRefreshEnabled: $backgroundRefreshEnabled,
+                    backgroundRefreshEnabled: $settingsModel.settings.backgroundRefreshEnabled,
                     onSkip: { showsSkipWarning = true },
                     onStartTour: {
                         requestCodexAccess {
@@ -85,8 +85,7 @@ struct CodexUsageRootView: View {
             completed: hasEverCompletedOnboarding
         )
         if completed {
-            UserDefaults.standard.set(backgroundRefreshEnabled, forKey: BackgroundRefreshAgent.enabledKey)
-            let enabled = backgroundRefreshEnabled
+            let enabled = settingsModel.settings.backgroundRefreshEnabled
             Task.detached(priority: .utility) {
                 _ = BackgroundRefreshAgent.setEnabled(enabled)
             }

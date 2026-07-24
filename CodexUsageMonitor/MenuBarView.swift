@@ -2,15 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 
-enum AppPresenceMode: String, CaseIterable, Identifiable {
-    static let defaultsKey = "CodexUsageMonitor.appPresence"
-
-    case menuBar
-    case dock
-    case background
-
-    var id: String { rawValue }
-
+extension AppPresenceMode {
     var label: String {
         switch self {
         case .menuBar: "Menu Bar"
@@ -20,20 +12,12 @@ enum AppPresenceMode: String, CaseIterable, Identifiable {
     }
 
     @MainActor
-    static func apply(_ rawValue: String) {
-        let mode = AppPresenceMode(rawValue: rawValue) ?? .menuBar
+    static func apply(_ mode: AppPresenceMode) {
         NSApp.setActivationPolicy(mode == .dock ? .regular : .accessory)
     }
 }
 
-enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
-    case percentage
-    case meter
-    case reset
-    case hidden
-
-    var id: String { rawValue }
-
+extension MenuBarDisplayMode {
     var label: String {
         switch self {
         case .percentage: "Remaining percentage"
@@ -77,7 +61,7 @@ final class MenuBarSnapshotModel: ObservableObject {
 
 struct CodexMenuBarLabel: View {
     @ObservedObject var model: MenuBarSnapshotModel
-    @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var mode = MenuBarDisplayMode.percentage.rawValue
+    @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
 
     var body: some View {
         let stale = model.snapshot.generatedAt.map { Date().timeIntervalSince($0) > 6 * 60 } ?? true
@@ -94,7 +78,7 @@ struct CodexMenuBarLabel: View {
               let window = limits.weekly ?? limits.fiveHour
         else { return "—" }
         let prefix = limits.weekly == nil ? "5h" : "W"
-        switch MenuBarDisplayMode(rawValue: mode) ?? .percentage {
+        switch settingsModel.settings.menuBarDisplayMode {
         case .percentage:
             return "\(prefix) \(Int(window.remainingPercent.rounded()))%"
         case .meter:
@@ -110,8 +94,7 @@ struct CodexMenuBarLabel: View {
 
 struct CodexMenuBarView: View {
     @ObservedObject var model: MenuBarSnapshotModel
-    @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var mode = MenuBarDisplayMode.percentage.rawValue
-    @AppStorage(AppPresenceMode.defaultsKey) private var appPresence = AppPresenceMode.menuBar.rawValue
+    @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -126,18 +109,18 @@ struct CodexMenuBarView: View {
                 }
             }
 
-            Picker("Menu label", selection: $mode) {
+            Picker("Menu label", selection: $settingsModel.settings.menuBarDisplayMode) {
                 ForEach(MenuBarDisplayMode.allCases) { mode in
-                    Text(mode.label).tag(mode.rawValue)
+                    Text(mode.label).tag(mode)
                 }
             }
 
-            Picker("Show app in", selection: $appPresence) {
+            Picker("Show app in", selection: $settingsModel.settings.appPresence) {
                 ForEach(AppPresenceMode.allCases) { mode in
-                    Text(mode.label).tag(mode.rawValue)
+                    Text(mode.label).tag(mode)
                 }
             }
-            .onChange(of: appPresence) { _, value in
+            .onChange(of: settingsModel.settings.appPresence) { _, value in
                 AppPresenceMode.apply(value)
             }
 

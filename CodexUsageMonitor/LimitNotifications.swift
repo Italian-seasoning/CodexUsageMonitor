@@ -2,19 +2,16 @@ import Foundation
 import UserNotifications
 
 enum LimitNotificationManager {
-    static let enabledKey = "CodexUsageMonitor.limitNotificationsEnabled"
-    static let warningThresholdKey = "CodexUsageMonitor.limitWarningThreshold"
-    static let criticalThresholdKey = "CodexUsageMonitor.limitCriticalThreshold"
-
     static func requestAuthorization() async -> Bool {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) == true
     }
 
     static func evaluate(_ snapshot: CodexUsageSnapshot, now: Date = .now) {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: enabledKey), let limits = snapshot.rateLimits else { return }
-        let warning = defaults.object(forKey: warningThresholdKey) as? Int ?? 70
-        let critical = defaults.object(forKey: criticalThresholdKey) as? Int ?? 90
+        let settings = CodexUsageSettingsStore.load().settings
+        guard settings.notificationsEnabled, let limits = snapshot.rateLimits else { return }
+        let warning = settings.warningThreshold
+        let critical = settings.criticalThreshold
 
         for window in [limits.fiveHour, limits.weekly].compactMap({ $0 }) where window.isCurrent(at: now) {
             evaluateReset(for: window, now: now, defaults: defaults)

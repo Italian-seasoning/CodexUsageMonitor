@@ -3,7 +3,7 @@ import SwiftUI
 import WidgetKit
 
 struct ContentView: View {
-    @AppStorage("CodexUsageMonitor.appTheme") private var appTheme = AppTheme.crimson.rawValue
+    @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
     @State private var snapshot = CodexUsageSnapshotStore.load() ?? .empty
     @State private var settingsBySize = CodexUsageSnapshotStore.loadAllSettings()
     @State private var previewSize = PreviewSize.medium
@@ -280,9 +280,9 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 InspectorSection(title: "Appearance", subtitle: "Keep the app accent separate from the widget theme") {
                     LabeledContent("App theme") {
-                        Picker("App theme", selection: $appTheme) {
+                        Picker("App theme", selection: $settingsModel.settings.appTheme) {
                             ForEach(AppTheme.allCases) { theme in
-                                Text(theme.label).tag(theme.rawValue)
+                                Text(theme.label).tag(theme)
                             }
                         }
                         .labelsHidden()
@@ -715,22 +715,18 @@ private struct DataFreshnessBadge: View {
     }
 }
 
+@MainActor
 private enum AppPalette {
     static let windowTint = Color.black.opacity(0.12)
     static let divider = Color.white.opacity(0.11)
     static let text = Color(red: 0.996, green: 0.996, blue: 0.996)
     static let muted = Color.white.opacity(0.68)
     static var accent: Color {
-        AppTheme(rawValue: UserDefaults.standard.string(forKey: "CodexUsageMonitor.appTheme") ?? "crimson")?.accent
-            ?? AppTheme.crimson.accent
+        CodexUsageMonitorApp.sharedSettingsModel.settings.appTheme.accent
     }
 }
 
-private enum AppTheme: String, CaseIterable, Identifiable {
-    case crimson
-    case graphite
-
-    var id: String { rawValue }
+extension AppTheme {
     var label: String { self == .crimson ? "Crimson" : "Graphite" }
     var accent: Color {
         self == .crimson

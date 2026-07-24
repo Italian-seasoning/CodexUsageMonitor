@@ -18,8 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         AppPresenceMode.apply(
-            UserDefaults.standard.string(forKey: AppPresenceMode.defaultsKey)
-                ?? AppPresenceMode.menuBar.rawValue
+            CodexUsageMonitorApp.sharedSettingsModel.settings.appPresence
         )
         _ = AppUpdater.shared
         WidgetRegistration.refresh()
@@ -50,10 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        let presence = UserDefaults.standard.string(forKey: AppPresenceMode.defaultsKey)
-            ?? AppPresenceMode.menuBar.rawValue
         DispatchQueue.main.async {
-            AppPresenceMode.apply(presence)
+            AppPresenceMode.apply(CodexUsageMonitorApp.sharedSettingsModel.settings.appPresence)
         }
     }
 
@@ -99,7 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.isReleasedWhenClosed = false
             window.isRestorable = false
             window.delegate = self
-            window.contentView = NSHostingView(rootView: CodexUsageRootView())
+            window.contentView = NSHostingView(
+                rootView: CodexUsageRootView()
+                    .environmentObject(CodexUsageMonitorApp.sharedSettingsModel)
+            )
             window.center()
             self.window = window
         }
@@ -133,16 +133,19 @@ private enum WidgetRegistration {
 
 @main
 struct CodexUsageMonitorApp: App {
+    static let sharedSettingsModel = CodexUsageSettingsModel()
+
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var menuBarModel = MenuBarSnapshotModel()
-    @AppStorage(AppPresenceMode.defaultsKey) private var appPresence = AppPresenceMode.menuBar.rawValue
-    @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
+    @StateObject private var settingsModel = sharedSettingsModel
 
     var body: some Scene {
         MenuBarExtra(isInserted: menuBarItemIsInserted) {
             CodexMenuBarView(model: menuBarModel)
+                .environmentObject(settingsModel)
         } label: {
             CodexMenuBarLabel(model: menuBarModel)
+                .environmentObject(settingsModel)
         }
         .menuBarExtraStyle(.menu)
         .commands {
@@ -164,14 +167,14 @@ struct CodexUsageMonitorApp: App {
         } set: { isInserted in
             if !isInserted,
                !ProcessInfo.processInfo.arguments.contains("--background-refresh"),
-               appPresence == AppPresenceMode.menuBar.rawValue {
-                menuBarMode = MenuBarDisplayMode.hidden.rawValue
+               settingsModel.settings.appPresence == .menuBar {
+                settingsModel.settings.menuBarDisplayMode = .hidden
             }
         }
     }
 
     private var showsMenuBarItem: Bool {
-        appPresence == AppPresenceMode.menuBar.rawValue
-            && menuBarMode != MenuBarDisplayMode.hidden.rawValue
+        settingsModel.settings.appPresence == .menuBar
+            && settingsModel.settings.menuBarDisplayMode != .hidden
     }
 }

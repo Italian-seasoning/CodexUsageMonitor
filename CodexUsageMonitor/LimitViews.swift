@@ -93,14 +93,9 @@ struct LimitHistoryChart: View {
 }
 
 struct LimitPreferencesView: View {
-    @AppStorage(BackgroundRefreshAgent.enabledKey) private var backgroundEnabled = false
-    @AppStorage(LimitNotificationManager.enabledKey) private var notificationsEnabled = false
-    @AppStorage(LimitNotificationManager.warningThresholdKey) private var warningThreshold = 70
-    @AppStorage(LimitNotificationManager.criticalThresholdKey) private var criticalThreshold = 90
-    @AppStorage("CodexUsageMonitor.menuBarDisplayMode") private var menuBarMode = MenuBarDisplayMode.percentage.rawValue
-    @AppStorage(AppPresenceMode.defaultsKey) private var appPresence = AppPresenceMode.menuBar.rawValue
+    @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
     @State private var agentStatus = BackgroundRefreshAgentStatus(
-        enabled: UserDefaults.standard.bool(forKey: BackgroundRefreshAgent.enabledKey),
+        enabled: CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled,
         installed: false,
         loaded: false,
         lastSuccess: nil
@@ -108,15 +103,15 @@ struct LimitPreferencesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Refresh in background", isOn: $backgroundEnabled)
-                .onChange(of: backgroundEnabled) { _, enabled in
+            Toggle("Refresh in background", isOn: $settingsModel.settings.backgroundRefreshEnabled)
+                .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
                     updateAgentStatus { _ = BackgroundRefreshAgent.setEnabled(enabled) }
                 }
             Text(agentStatus.detail)
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
 
-            if backgroundEnabled && (!agentStatus.installed || !agentStatus.loaded) {
+            if settingsModel.settings.backgroundRefreshEnabled && (!agentStatus.installed || !agentStatus.loaded) {
                 Button("Repair background refresh") {
                     updateAgentStatus { _ = BackgroundRefreshAgent.install() }
                 }
@@ -124,54 +119,54 @@ struct LimitPreferencesView: View {
             }
 
             LabeledContent("Menu bar") {
-                Picker("Menu bar", selection: $menuBarMode) {
+                Picker("Menu bar", selection: $settingsModel.settings.menuBarDisplayMode) {
                     ForEach(MenuBarDisplayMode.allCases) { mode in
-                        Text(mode.label).tag(mode.rawValue)
+                        Text(mode.label).tag(mode)
                     }
                 }
                 .labelsHidden()
                 .frame(width: 150)
             }
-            if menuBarMode == MenuBarDisplayMode.hidden.rawValue {
+            if settingsModel.settings.menuBarDisplayMode == .hidden {
                 Text("Reopen Codex Usage to show the menu bar item again.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
 
             LabeledContent("Show app in") {
-                Picker("Show app in", selection: $appPresence) {
+                Picker("Show app in", selection: $settingsModel.settings.appPresence) {
                     ForEach(AppPresenceMode.allCases) { mode in
-                        Text(mode.label).tag(mode.rawValue)
+                        Text(mode.label).tag(mode)
                     }
                 }
                 .labelsHidden()
                 .frame(width: 150)
-                .onChange(of: appPresence) { _, value in
+                .onChange(of: settingsModel.settings.appPresence) { _, value in
                     AppPresenceMode.apply(value)
                 }
             }
 
             Divider()
-            Toggle("Limit notifications", isOn: $notificationsEnabled)
-                .onChange(of: notificationsEnabled) { _, enabled in
+            Toggle("Limit notifications", isOn: $settingsModel.settings.notificationsEnabled)
+                .onChange(of: settingsModel.settings.notificationsEnabled) { _, enabled in
                     guard enabled else { return }
                     Task {
                         if !(await LimitNotificationManager.requestAuthorization()) {
-                            notificationsEnabled = false
+                            settingsModel.settings.notificationsEnabled = false
                         }
                     }
                 }
 
-            if notificationsEnabled {
+            if settingsModel.settings.notificationsEnabled {
                 LabeledContent("Warning") {
-                    Picker("Warning", selection: $warningThreshold) {
+                    Picker("Warning", selection: $settingsModel.settings.warningThreshold) {
                         ForEach([60, 70, 80], id: \.self) { Text("\($0)%").tag($0) }
                     }
                     .labelsHidden()
                     .frame(width: 76)
                 }
                 LabeledContent("Critical") {
-                    Picker("Critical", selection: $criticalThreshold) {
+                    Picker("Critical", selection: $settingsModel.settings.criticalThreshold) {
                         ForEach([85, 90, 95], id: \.self) { Text("\($0)%").tag($0) }
                     }
                     .labelsHidden()
