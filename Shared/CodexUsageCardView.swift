@@ -23,8 +23,8 @@ enum CodexUsageCardSize: String, CaseIterable, Identifiable {
     }
 }
 
-/// Reusable helper-app wrapper. The widget target uses the same
-/// `CodexUsageCardView` content with its current WidgetKit rendering mode.
+/// V1 compatibility preview. V2 widget families use semantic content and
+/// `CodexWidgetStyledContainer`, while existing saved previews keep this path.
 struct CodexUsageCardPreview: View {
     @Environment(\.colorScheme) private var colorScheme
 
