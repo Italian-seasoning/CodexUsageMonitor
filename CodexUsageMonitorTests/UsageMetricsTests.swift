@@ -12,18 +12,20 @@ struct UsageMetricsTests {
         #expect(fixture.snapshot.summary(for: .sevenDays, calendar: fixture.calendar, now: fixture.now).usage.total == 700)
         #expect(fixture.snapshot.summary(for: .month, calendar: fixture.calendar, now: fixture.now).usage.total == 3_000)
         #expect(fixture.snapshot.summary(for: .lifetime, calendar: fixture.calendar, now: fixture.now).usage == fixture.snapshot.lifetime)
+        #expect(fixture.snapshot.summary(for: .today, calendar: fixture.calendar).usage.total == 100)
+        #expect(fixture.snapshot.summary(for: .today, calendar: fixture.calendar, now: fixture.now).topModel?.model == "gpt-5.6-sol")
     }
 
-    @Test("Period summaries keep measures separate from models")
-    func periodSummariesKeepMeasuresSeparateFromModels() {
+    @Test("Token measure stays numeric across periods")
+    func tokenMeasureStaysNumericAcrossPeriods() {
         let fixture = usageMetricsFixture()
 
-        for period in UsagePeriod.allCases {
-            let summary = fixture.snapshot.summary(for: period, calendar: fixture.calendar, now: fixture.now)
-            #expect(UsageMeasure.tokens.rawValue == "tokens")
-            #expect(UsageMeasure.tokens.rawValue != summary.topModel?.model)
+        let tokenValues: [Int] = UsagePeriod.allCases.map {
+            fixture.snapshot.summary(for: $0, calendar: fixture.calendar, now: fixture.now).usage.total
         }
-        #expect(fixture.snapshot.summary(for: .today, calendar: fixture.calendar, now: fixture.now).topModel?.model == "gpt-5.6-sol")
+
+        #expect(tokenValues == [100, 700, 3_000, 5_000])
+        #expect(UsageMeasure.tokens.rawValue == "tokens")
     }
 
     @Test("Period summaries exclude future rows and preserve recorded model cost")
@@ -82,12 +84,16 @@ struct UsageMetricsTests {
             from: JSONSerialization.data(withJSONObject: object)
         )
         let today = decoded.summary(for: .today, calendar: fixture.calendar, now: fixture.now)
+        let lifetime = decoded.summary(for: .lifetime, calendar: fixture.calendar, now: fixture.now)
 
         #expect(decoded.dailyModelUsage.isEmpty)
         #expect(today.usage.total == 100)
         #expect(today.sessionCount == 1)
         #expect(today.requestCount == 10)
+        #expect(abs(today.estimatedCostUSD - 0.62) < 0.000_001)
         #expect(today.topModel == nil)
+        #expect(lifetime.topModel?.model == "gpt-5.6-terra")
+        #expect(abs(lifetime.estimatedCostUSD - 2.32) < 0.000_001)
     }
 }
 
@@ -103,11 +109,18 @@ private func usageMetricsFixture() -> (snapshot: CodexUsageSnapshot, calendar: C
     }
 
     var activityDays = [
-        DailyUsage(date: day(2026, 6, 30), usage: usage(400), sessions: 4, turns: 40),
-        DailyUsage(date: day(2026, 7, 1), usage: usage(700), sessions: 7, turns: 70)
+        DailyUsage(date: day(2026, 6, 30), usage: usage(400), sessions: 4, turns: 40, estimatedCostMicros: 400_000),
+        DailyUsage(date: day(2026, 7, 1), usage: usage(700), sessions: 7, turns: 70, estimatedCostMicros: 700_000)
     ]
     activityDays += (2...24).map {
-        DailyUsage(date: day(2026, 7, $0), usage: usage(100), sessions: 1, turns: 10)
+        let cost = $0 == 24 ? 620_000 : ($0 >= 18 ? 100_000 : nil)
+        return DailyUsage(
+            date: day(2026, 7, $0),
+            usage: usage(100),
+            sessions: 1,
+            turns: 10,
+            estimatedCostMicros: cost
+        )
     }
     activityDays.append(DailyUsage(date: day(2026, 7, 25), usage: usage(900), sessions: 9, turns: 90))
 
@@ -122,7 +135,11 @@ private func usageMetricsFixture() -> (snapshot: CodexUsageSnapshot, calendar: C
         activityDays: activityDays,
         generatedAt: now,
         sessionCount: 50,
-        turnCount: 500
+        turnCount: 500,
+        modelUsage: [
+            ModelUsage(model: "gpt-5.6-terra", usage: usage(1_700), turns: 170, estimatedCostUSD: 1.7),
+            ModelUsage(model: "gpt-5.6-sol", usage: usage(100), turns: 10, estimatedCostUSD: 0.62)
+        ]
     )
     snapshot.dailyModelUsage = [
         DailyModelUsage(

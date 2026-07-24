@@ -69,17 +69,25 @@ extension CodexUsageSnapshot {
                 models[model.model] = aggregate
             }
         }
-        let topModel = models.values.sorted {
+        let datedModels = Array(models.values)
+        let legacyLifetimeModels = period == .lifetime && dailyModelUsage.isEmpty ? modelUsage ?? [] : []
+        let summaryModels = legacyLifetimeModels.isEmpty ? datedModels : legacyLifetimeModels
+        let topModel = summaryModels.sorted {
             $0.usage.total == $1.usage.total
                 ? $0.model < $1.model
                 : $0.usage.total > $1.usage.total
         }.first
+        let estimatedCostUSD = if !summaryModels.isEmpty {
+            summaryModels.reduce(0) { $0 + $1.estimatedCostUSD }
+        } else {
+            Double(days.reduce(0) { $0 + ($1.estimatedCostMicros ?? 0) }) / 1_000_000
+        }
 
         return PeriodUsageSummary(
             usage: usage,
             sessionCount: sessionCount,
             requestCount: requestCount,
-            estimatedCostUSD: models.values.reduce(0) { $0 + $1.estimatedCostUSD },
+            estimatedCostUSD: estimatedCostUSD,
             topModel: topModel,
             days: days
         )

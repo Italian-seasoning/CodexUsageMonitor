@@ -20,10 +20,11 @@ struct CodexUsageReaderCheck {
         try testPrefixContinuationCountsOnlyNewUsage()
         try testSubagentFilesGroupBySessionID()
         try testMalformedTrailingRowAndNullInfoAreIgnored()
+        try testFutureDatedModelsDoNotAffectPeriodLeaders()
         try testModelAwarePricingAndUnpricedUsage()
         try testLegacySnapshotDecodesWithoutNewFields()
 
-        print("CodexUsageReaderCheck passed (9 deterministic scenarios)")
+        print("CodexUsageReaderCheck passed (10 deterministic scenarios)")
 
         if arguments.contains("--live") {
             printLiveSnapshot()
@@ -266,6 +267,46 @@ struct CodexUsageReaderCheck {
             try expectEqual(snapshot.turnCount, 1, "malformed/null turns")
             try expectEqual(snapshot.sessionCount, 1, "malformed/null sessions")
             try expectEqual(snapshot.lastUpdated, try date("2026-07-04T15:01:00.000Z"), "malformed/null last update")
+        }
+    }
+
+    private static func testFutureDatedModelsDoNotAffectPeriodLeaders() throws {
+        try withFixture(named: "future-model") { root in
+            let sample = usage(input: 200_000, total: 200_000)
+            var current = sample
+            current.add(sample)
+            let future = usage(input: 1_000_000, total: 1_000_000)
+            var cumulative = current
+            cumulative.add(future)
+
+            try writeRollout(
+                root: root,
+                path: "2026/07/04/rollout-future-model.jsonl",
+                rows: [
+                    try sessionMeta("2026-07-04T09:00:00.000Z", id: "future-model"),
+                    try turnContext("2026-07-04T09:00:01.000Z", model: "gpt-5.6-sol"),
+                    try tokenRow("2026-07-04T09:01:00.000Z", cumulative: sample, last: sample),
+                    try tokenRow("2026-07-04T10:01:00.000Z", cumulative: current, last: sample),
+                    try turnContext("2026-07-05T09:00:01.000Z", model: "future-model"),
+                    try tokenRow("2026-07-05T09:01:00.000Z", cumulative: cumulative, last: future)
+                ]
+            )
+
+            let snapshot = try makeSnapshot(root: root, now: "2026-07-04T12:00:00.000Z")
+            try expectEqual(snapshot.topModelToday, Optional("gpt-5.6-sol"), "future-safe today model")
+            try expectEqual(snapshot.topModelLast7Days, Optional("gpt-5.6-sol"), "future-safe seven-day model")
+            try expectEqual(snapshot.topModelThisMonth, Optional("gpt-5.6-sol"), "future-safe month model")
+
+            let today = try date("2026-07-04T00:00:00.000Z")
+            guard let dailyModel = snapshot.dailyModelUsage
+                .first(where: { $0.date == today })?
+                .models.first(where: { $0.model == "gpt-5.6-sol" }),
+                let pricing = ModelPricingCatalog.pricing(for: dailyModel.model)
+            else {
+                throw CheckFailure(message: "missing current daily model pricing fixture")
+            }
+            try expectNear(dailyModel.estimatedCostUSD, 2, tolerance: 0.000_001, "per-sample daily model cost")
+            try expectNear(pricing.estimatedCost(for: dailyModel.usage), 4, tolerance: 0.000_001, "aggregate repricing")
         }
     }
 

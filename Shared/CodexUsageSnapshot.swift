@@ -904,7 +904,7 @@ struct CodexUsageReader {
                 hash = (hash ^ UInt64(byte)) &* prime
             }
         }
-        return String(hash, radix: 16)
+        return "daily-model-usage-v1|" + String(hash, radix: 16)
     }
 
     func snapshot(now: Date = Date(), headroomActivity: HeadroomActivity? = nil) -> CodexUsageSnapshot {
@@ -950,9 +950,13 @@ struct CodexUsageReader {
                 dailyModels[model] = dailyModel
                 dailyModelAggregates[day] = dailyModels
 
-                if day >= startOfToday { modelTokensToday[model, default: 0] += sample.usage.total }
-                if day >= startOfLast7Days { modelTokensLast7Days[model, default: 0] += sample.usage.total }
-                if day >= startOfMonth { modelTokensThisMonth[model, default: 0] += sample.usage.total }
+                if day == startOfToday { modelTokensToday[model, default: 0] += sample.usage.total }
+                if day >= startOfLast7Days, day <= startOfToday {
+                    modelTokensLast7Days[model, default: 0] += sample.usage.total
+                }
+                if day >= startOfMonth, day <= startOfToday {
+                    modelTokensThisMonth[model, default: 0] += sample.usage.total
+                }
             }
             let groupedByDay = Dictionary(grouping: session.samples) { calendar.startOfDay(for: $0.timestamp) }
             for (day, samples) in groupedByDay {
