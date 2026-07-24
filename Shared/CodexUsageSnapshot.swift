@@ -1,6 +1,6 @@
 import Foundation
 
-struct TokenUsage: Codable, Equatable, Hashable {
+struct TokenUsage: Codable, Equatable, Hashable, Sendable {
     var input: Int
     var cachedInput: Int
     var output: Int
@@ -41,7 +41,7 @@ struct TokenUsage: Codable, Equatable, Hashable {
     }
 }
 
-struct DailyUsage: Codable, Equatable, Identifiable {
+struct DailyUsage: Codable, Equatable, Identifiable, Sendable {
     var date: Date
     var usage: TokenUsage
     var sessions: Int
@@ -52,13 +52,20 @@ struct DailyUsage: Codable, Equatable, Identifiable {
     var id: Date { date }
 }
 
-struct ModelUsage: Codable, Equatable, Identifiable {
+struct ModelUsage: Codable, Equatable, Identifiable, Sendable {
     var model: String
     var usage: TokenUsage
     var turns: Int
     var estimatedCostUSD: Double
 
     var id: String { model }
+}
+
+struct DailyModelUsage: Codable, Equatable, Identifiable, Sendable {
+    var date: Date
+    var models: [ModelUsage]
+
+    var id: Date { date }
 }
 
 struct ModelPricing: Equatable {
@@ -254,6 +261,7 @@ struct CodexUsageSnapshot: Codable, Equatable {
     var contextWindow: Int? = nil
     var headroom: HeadroomSavings? = nil
     var modelUsage: [ModelUsage]? = nil
+    var dailyModelUsage: [DailyModelUsage] = []
     var topModelToday: String? = nil
     var topModelLast7Days: String? = nil
     var topModelThisMonth: String? = nil
@@ -281,6 +289,7 @@ struct CodexUsageSnapshot: Codable, Equatable {
         contextWindow: nil,
         headroom: nil,
         modelUsage: [],
+        dailyModelUsage: [],
         topModelToday: nil,
         topModelLast7Days: nil,
         topModelThisMonth: nil,
@@ -290,6 +299,67 @@ struct CodexUsageSnapshot: Codable, Equatable {
         pricingVersion: ModelPricingCatalog.version,
         rateLimits: nil
     )
+}
+
+extension CodexUsageSnapshot {
+    private enum CodingKeys: String, CodingKey {
+        case currentSession
+        case lifetime
+        case today
+        case peakDay
+        case currentStreak
+        case longestStreak
+        case lastUpdated
+        case activityDays
+        case generatedAt
+        case sessionCount
+        case turnCount
+        case currentSessionTurns
+        case currentSessionStartedAt
+        case currentContextTokens
+        case contextWindow
+        case headroom
+        case modelUsage
+        case dailyModelUsage
+        case topModelToday
+        case topModelLast7Days
+        case topModelThisMonth
+        case topModelLifetime
+        case currentModel
+        case unpricedTokens
+        case pricingVersion
+        case rateLimits
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        currentSession = try values.decode(TokenUsage.self, forKey: .currentSession)
+        lifetime = try values.decode(TokenUsage.self, forKey: .lifetime)
+        today = try values.decode(TokenUsage.self, forKey: .today)
+        peakDay = try values.decodeIfPresent(DailyUsage.self, forKey: .peakDay)
+        currentStreak = try values.decode(Int.self, forKey: .currentStreak)
+        longestStreak = try values.decode(Int.self, forKey: .longestStreak)
+        lastUpdated = try values.decodeIfPresent(Date.self, forKey: .lastUpdated)
+        activityDays = try values.decode([DailyUsage].self, forKey: .activityDays)
+        generatedAt = try values.decodeIfPresent(Date.self, forKey: .generatedAt)
+        sessionCount = try values.decodeIfPresent(Int.self, forKey: .sessionCount)
+        turnCount = try values.decodeIfPresent(Int.self, forKey: .turnCount)
+        currentSessionTurns = try values.decodeIfPresent(Int.self, forKey: .currentSessionTurns)
+        currentSessionStartedAt = try values.decodeIfPresent(Date.self, forKey: .currentSessionStartedAt)
+        currentContextTokens = try values.decodeIfPresent(Int.self, forKey: .currentContextTokens)
+        contextWindow = try values.decodeIfPresent(Int.self, forKey: .contextWindow)
+        headroom = try values.decodeIfPresent(HeadroomSavings.self, forKey: .headroom)
+        modelUsage = try values.decodeIfPresent([ModelUsage].self, forKey: .modelUsage)
+        dailyModelUsage = try values.decodeIfPresent([DailyModelUsage].self, forKey: .dailyModelUsage) ?? []
+        topModelToday = try values.decodeIfPresent(String.self, forKey: .topModelToday)
+        topModelLast7Days = try values.decodeIfPresent(String.self, forKey: .topModelLast7Days)
+        topModelThisMonth = try values.decodeIfPresent(String.self, forKey: .topModelThisMonth)
+        topModelLifetime = try values.decodeIfPresent(String.self, forKey: .topModelLifetime)
+        currentModel = try values.decodeIfPresent(String.self, forKey: .currentModel)
+        unpricedTokens = try values.decodeIfPresent(Int.self, forKey: .unpricedTokens)
+        pricingVersion = try values.decodeIfPresent(String.self, forKey: .pricingVersion)
+        rateLimits = try values.decodeIfPresent(CodexRateLimits.self, forKey: .rateLimits)
+    }
 }
 
 struct CodexUsageWidgetSettings: Codable, Equatable {
@@ -849,6 +919,7 @@ struct CodexUsageReader {
         var byDay: [Date: DayAggregate] = [:]
         var totalTurns = 0
         var modelAggregates: [String: (usage: TokenUsage, turns: Int, cost: Double)] = [:]
+        var dailyModelAggregates: [Date: [String: (usage: TokenUsage, turns: Int, cost: Double)]] = [:]
         var modelTokensToday: [String: Int] = [:]
         var modelTokensLast7Days: [String: Int] = [:]
         var modelTokensThisMonth: [String: Int] = [:]
@@ -859,16 +930,26 @@ struct CodexUsageReader {
             totalTurns += session.samples.count
             for sample in session.samples {
                 let model = sample.model ?? "Unknown"
+                let pricing = ModelPricingCatalog.pricing(for: sample.model)
+                let estimatedCost = pricing?.estimatedCost(for: sample.usage) ?? 0
                 var aggregate = modelAggregates[model] ?? (.zero, 0, 0)
                 aggregate.usage.add(sample.usage)
                 aggregate.turns += 1
-                if let pricing = ModelPricingCatalog.pricing(for: sample.model) {
-                    aggregate.cost += pricing.estimatedCost(for: sample.usage)
-                } else {
+                aggregate.cost += estimatedCost
+                if pricing == nil {
                     unpricedTokens += sample.usage.total
                 }
                 modelAggregates[model] = aggregate
+
                 let day = calendar.startOfDay(for: sample.timestamp)
+                var dailyModels = dailyModelAggregates[day] ?? [:]
+                var dailyModel = dailyModels[model] ?? (.zero, 0, 0)
+                dailyModel.usage.add(sample.usage)
+                dailyModel.turns += 1
+                dailyModel.cost += estimatedCost
+                dailyModels[model] = dailyModel
+                dailyModelAggregates[day] = dailyModels
+
                 if day >= startOfToday { modelTokensToday[model, default: 0] += sample.usage.total }
                 if day >= startOfLast7Days { modelTokensLast7Days[model, default: 0] += sample.usage.total }
                 if day >= startOfMonth { modelTokensThisMonth[model, default: 0] += sample.usage.total }
@@ -910,6 +991,19 @@ struct CodexUsageReader {
                 estimatedCostUSD: aggregate.cost
             )
         }.sorted { $0.usage.total > $1.usage.total }
+        let dailyModelUsage = dailyModelAggregates.map { date, aggregates in
+            DailyModelUsage(
+                date: date,
+                models: aggregates.map { model, aggregate in
+                    ModelUsage(
+                        model: model,
+                        usage: aggregate.usage,
+                        turns: aggregate.turns,
+                        estimatedCostUSD: aggregate.cost
+                    )
+                }.sorted { $0.usage.total > $1.usage.total }
+            )
+        }.sorted { $0.date < $1.date }
 
         return CodexUsageSnapshot(
             currentSession: newest?.total ?? .zero,
@@ -929,6 +1023,7 @@ struct CodexUsageReader {
             contextWindow: newest?.latestSample?.contextWindow,
             headroom: headroomActivity?.savings.isAvailable == true ? headroomActivity?.savings : nil,
             modelUsage: modelUsage,
+            dailyModelUsage: dailyModelUsage,
             topModelToday: topModel(in: modelTokensToday),
             topModelLast7Days: topModel(in: modelTokensLast7Days),
             topModelThisMonth: topModel(in: modelTokensThisMonth),
