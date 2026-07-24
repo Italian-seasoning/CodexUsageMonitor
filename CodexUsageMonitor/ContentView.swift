@@ -295,7 +295,7 @@ struct ContentView: View {
                 }
 
                 InspectorSection(title: "Onboarding") {
-                    Button("Run app tour") {
+                    Button("Run Setup") {
                         NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
                     }
                 }

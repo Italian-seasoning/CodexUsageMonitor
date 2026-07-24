@@ -179,7 +179,7 @@ struct CodexUsageMonitorApp: App {
                 CheckForUpdatesCommand()
             }
             CommandGroup(after: .help) {
-                Button("Show App Tour") {
+                Button("Run Setup") {
                     NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
                 }
             }
