@@ -55,6 +55,10 @@ final class OnboardingModel: ObservableObject {
         page = min(2, page + 1)
     }
 
+    func previousPage() {
+        page = max(0, page - 1)
+    }
+
     func requestAccess() {
         guard dataAccessState != .requesting else { return }
         dataAccessState = .requesting
@@ -72,11 +76,11 @@ final class OnboardingModel: ObservableObject {
     }
 
     func recordBackgroundRefresh(installed: Bool) {
-        if installed { complete(.backgroundRefresh) }
+        update(.backgroundRefresh, satisfied: installed)
     }
 
     func recordWidgetRegistration(registered: Bool) {
-        if registered { complete(.widgetRegistration) }
+        update(.widgetRegistration, satisfied: registered)
     }
 
     func finish() {
@@ -95,8 +99,17 @@ final class OnboardingModel: ObservableObject {
     }
 
     private func complete(_ requirement: SetupRequirement) {
-        state.completedRequirements.insert(requirement)
-        state.lastPresentedVersion = appVersion
+        update(requirement, satisfied: true)
+    }
+
+    private func update(_ requirement: SetupRequirement, satisfied: Bool) {
+        let changed = satisfied
+            ? state.completedRequirements.insert(requirement).inserted
+            : state.completedRequirements.remove(requirement) != nil
+        guard changed else { return }
+        if satisfied {
+            state.lastPresentedVersion = appVersion
+        }
         persist()
     }
 
@@ -135,13 +148,21 @@ private struct SetupSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Label("Codex Usage Setup", systemImage: "checklist")
-                    .font(.headline)
+            HStack(spacing: 14) {
+                Image(systemName: "terminal.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Set up Codex Usage")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Private, local, and ready for widgets")
+                        .font(.caption)
+                        .foregroundStyle(AppPalette.muted)
+                }
                 Spacer()
-                Text("Step \(model.page + 1) of 3")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                stepProgress
             }
             .padding(20)
 
@@ -154,17 +175,16 @@ private struct SetupSheet: View {
                 default: servicesPage
                 }
             }
-            .id(model.page)
-            .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .opacity))
-            .animation(.easeInOut(duration: 0.2), value: model.page)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(28)
+            .padding(.horizontal, 34)
+            .padding(.vertical, 26)
 
             Divider()
             footer
                 .padding(20)
         }
-        .frame(minWidth: 540, idealWidth: 540, minHeight: 500, idealHeight: 500)
+        .frame(width: 660, height: 520)
+        .background(AppPalette.windowTint)
         .alert("Skip unfinished setup?", isPresented: $showsSkipWarning) {
             Button("Continue Setup", role: .cancel) {}
             Button("Skip for This Version", role: .destructive) { model.skip() }
@@ -173,82 +193,123 @@ private struct SetupSheet: View {
         }
     }
 
+    private var stepProgress: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<3) { step in
+                Capsule()
+                    .fill(step <= model.page ? AppPalette.accent : Color.white.opacity(0.14))
+                    .frame(width: step == model.page ? 28 : 9, height: 6)
+            }
+            Text("\(model.page + 1) / 3")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppPalette.muted)
+                .frame(width: 28, alignment: .trailing)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(model.page + 1) of 3")
+    }
+
     private var privacyPage: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Image(systemName: "lock.shield.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.tint)
-            Text("Your usage stays on this Mac")
-                .font(.title2.bold())
-            Text("Codex Usage reads local Codex session logs and optional Headroom savings. It does not upload your logs, prompts, or usage history.")
-                .foregroundStyle(.secondary)
-            setupRow(.codexDataAccess, detail: "Read local Codex session files")
-            setupRow(.backgroundRefresh, detail: "Keep widgets current when the app is closed")
-            setupRow(.widgetRegistration, detail: "Make the widget available to macOS")
+        VStack(alignment: .leading, spacing: 16) {
+            pageHeading(
+                symbol: "lock.shield.fill",
+                title: "Your usage stays on this Mac",
+                detail: "Codex Usage reads local session totals and optional Headroom savings. Your prompts and logs are never uploaded."
+            )
+            setupRow(.codexDataAccess, symbol: "folder.fill", detail: "Read local Codex session totals")
+            setupRow(.backgroundRefresh, symbol: "arrow.clockwise", detail: "Keep the shared snapshot current")
+            setupRow(.widgetRegistration, symbol: "rectangle.3.group.fill", detail: "Show live data in macOS widgets")
             Spacer()
         }
     }
 
     private var accessPage: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Allow Codex data access")
-                .font(.title2.bold())
-            Text("macOS may ask for permission when Codex Usage checks your local sessions folder.")
-                .foregroundStyle(.secondary)
-            accessStatus
-            Button(accessButtonTitle) { model.requestAccess() }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.dataAccessState == .requesting)
+        VStack(alignment: .leading, spacing: 16) {
+            pageHeading(
+                symbol: "folder.badge.questionmark",
+                title: "Connect your local Codex data",
+                detail: "macOS may ask once for permission to read the Codex sessions folder. Nothing leaves your Mac."
+            )
+            HStack(spacing: 14) {
+                accessStatus
+                Spacer()
+                if model.dataAccessState != .approved {
+                    Button(accessButtonTitle) { model.requestAccess() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.dataAccessState == .requesting)
+                }
+            }
+            .padding(16)
+            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(Color.white.opacity(0.09), lineWidth: 1)
+            }
             Spacer()
         }
     }
 
     private var servicesPage: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Finish setup")
-                .font(.title2.bold())
+        VStack(alignment: .leading, spacing: 16) {
+            pageHeading(
+                symbol: model.unmetRequirements.isEmpty ? "checkmark.seal.fill" : "slider.horizontal.3",
+                title: model.unmetRequirements.isEmpty ? "You’re ready to go" : "Keep widgets up to date",
+                detail: model.unmetRequirements.isEmpty
+                    ? "The local reader, background refresh, and widget extension are ready."
+                    : "Finish the two services that keep your desktop widgets current."
+            )
 
-            if model.unmetRequirements.contains(.backgroundRefresh) {
-                Toggle(
-                    "Refresh widgets in the background",
-                    isOn: $settingsModel.settings.backgroundRefreshEnabled
-                )
-                .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
-                    model.recordBackgroundRefresh(installed: BackgroundRefreshAgent.setEnabled(enabled))
-                }
-                if settingsModel.settings.backgroundRefreshEnabled {
-                    Button("Install or Repair Background Refresh") {
+            serviceRow(
+                title: "Background refresh",
+                detail: BackgroundRefreshAgent.status().detail,
+                symbol: "arrow.clockwise",
+                complete: model.state.completedRequirements.contains(.backgroundRefresh)
+            ) {
+                Toggle("", isOn: $settingsModel.settings.backgroundRefreshEnabled)
+                    .labelsHidden()
+                    .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
+                        model.recordBackgroundRefresh(installed: BackgroundRefreshAgent.setEnabled(enabled))
+                    }
+                if settingsModel.settings.backgroundRefreshEnabled,
+                   !model.state.completedRequirements.contains(.backgroundRefresh) {
+                    Button("Repair") {
                         model.recordBackgroundRefresh(installed: BackgroundRefreshAgent.setEnabled(true))
                     }
+                    .controlSize(.small)
                 }
             }
 
-            if model.unmetRequirements.contains(.widgetRegistration) {
-                setupRow(.widgetRegistration, detail: widgetRegistered ? "Widget extension found" : "Widget extension is missing")
-                Button("Check Widget Registration") {
-                    model.recordWidgetRegistration(registered: widgetRegistered)
+            serviceRow(
+                title: "Widget extension",
+                detail: widgetRegistered ? "Available to macOS" : "Extension not found",
+                symbol: "rectangle.3.group.fill",
+                complete: model.state.completedRequirements.contains(.widgetRegistration)
+            ) {
+                if !model.state.completedRequirements.contains(.widgetRegistration) {
+                    Button("Check Again") {
+                        model.recordWidgetRegistration(registered: widgetRegistered)
+                    }
+                    .controlSize(.small)
                 }
             }
 
-            ForEach(model.unmetRequirements, id: \.rawValue) { requirement in
-                if requirement != .backgroundRefresh && requirement != .widgetRegistration {
-                    setupRow(requirement, detail: "Needs attention")
-                }
-            }
-
-            if model.unmetRequirements.isEmpty {
-                ContentUnavailableView(
-                    "Setup Complete",
-                    systemImage: "checkmark.circle.fill",
-                    description: Text("Codex Usage and its widget are ready.")
-                )
+            if model.unmetRequirements.contains(.codexDataAccess) {
+                Label("Codex data access still needs attention.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
             Spacer()
         }
         .onAppear {
             model.recordWidgetRegistration(registered: widgetRegistered)
-            if settingsModel.settings.backgroundRefreshEnabled {
-                model.recordBackgroundRefresh(installed: BackgroundRefreshAgent.status().installed)
+            guard settingsModel.settings.backgroundRefreshEnabled,
+                  BackgroundRefreshAgent.isStableInstall
+            else { return }
+            Task {
+                let installed = await Task.detached(priority: .utility) {
+                    BackgroundRefreshAgent.setEnabled(true)
+                }.value
+                model.recordBackgroundRefresh(installed: installed)
             }
         }
     }
@@ -256,6 +317,9 @@ private struct SetupSheet: View {
     private var footer: some View {
         HStack {
             Button("Skip") { showsSkipWarning = true }
+            if model.page > 0 {
+                Button("Back") { model.previousPage() }
+            }
             Spacer()
             if model.page == 0 {
                 Button("Continue") { model.nextPage() }
@@ -276,19 +340,18 @@ private struct SetupSheet: View {
     private var accessStatus: some View {
         switch model.dataAccessState {
         case .notRequested:
-            Label("Not requested", systemImage: "circle")
-                .foregroundStyle(.secondary)
+            statusLabel("Ready to check", symbol: "circle.dashed", color: AppPalette.muted)
         case .requesting:
-            HStack { ProgressView(); Text("Checking access…") }
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text("Checking access…")
+            }
         case .approved:
-            Label("Access approved", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+            statusLabel("Access approved", symbol: "checkmark.circle.fill", color: .green)
         case .needsManualAction(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            statusLabel(message, symbol: "exclamationmark.triangle.fill", color: .orange)
         case .failed(let message):
-            Label(message, systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red)
+            statusLabel(message, symbol: "xmark.circle.fill", color: .red)
         }
     }
 
@@ -307,19 +370,82 @@ private struct SetupSheet: View {
         )
     }
 
-    private func setupRow(_ requirement: SetupRequirement, detail: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: model.state.completedRequirements.contains(requirement)
-                ? "checkmark.circle.fill"
-                : "circle")
-                .foregroundStyle(model.state.completedRequirements.contains(requirement) ? .green : .secondary)
+    private func pageHeading(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppPalette.accent)
+                .frame(width: 48, height: 48)
+                .background(AppPalette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(requirement.title)
+                Text(title)
+                    .font(.system(size: 24, weight: .semibold))
                 Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func setupRow(_ requirement: SetupRequirement, symbol: String, detail: String) -> some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppPalette.accent)
+                .frame(width: 34, height: 34)
+                .background(AppPalette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(requirement.title).font(.system(size: 13, weight: .semibold))
+                Text(detail).font(.caption).foregroundStyle(AppPalette.muted)
+            }
+            Spacer()
+            Image(systemName: model.state.completedRequirements.contains(requirement) ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(model.state.completedRequirements.contains(requirement) ? .green : AppPalette.muted)
+        }
+        .padding(13)
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.09), lineWidth: 1)
+        }
+    }
+
+    private func serviceRow<Controls: View>(
+        title: String,
+        detail: String,
+        symbol: String,
+        complete: Bool,
+        @ViewBuilder controls: () -> Controls
+    ) -> some View {
+        HStack(spacing: 13) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(complete ? Color.green : AppPalette.accent)
+                .frame(width: 34, height: 34)
+                .background(
+                    (complete ? Color.green : AppPalette.accent).opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(detail).font(.caption).foregroundStyle(AppPalette.muted)
+            }
+            Spacer()
+            controls()
+        }
+        .padding(13)
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.09), lineWidth: 1)
+        }
+    }
+
+    private func statusLabel(_ title: String, symbol: String, color: Color) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(color)
     }
 }
 

@@ -54,6 +54,27 @@ struct OnboardingStateTests {
     }
 
     @MainActor
+    @Test("A failed service recheck revokes stale completion")
+    func failedServiceRecheckRevokesCompletion() {
+        let model = OnboardingModel(
+            appVersion: "2.0",
+            state: OnboardingState(
+                lastPresentedVersion: "2.0",
+                completedRequirements: Set(SetupRequirement.allCases),
+                dismissedUpdateChecklistVersion: nil,
+                updatedAt: .now
+            ),
+            save: { _ in },
+            probe: { .approved }
+        )
+
+        model.recordBackgroundRefresh(installed: false)
+        model.recordWidgetRegistration(registered: false)
+
+        #expect(model.unmetRequirements == [.backgroundRefresh, .widgetRegistration])
+    }
+
+    @MainActor
     @Test("Denied and failed access remain on the permission page")
     func unresolvedAccessStaysOnPermissionPage() async {
         let failed = OnboardingModel(

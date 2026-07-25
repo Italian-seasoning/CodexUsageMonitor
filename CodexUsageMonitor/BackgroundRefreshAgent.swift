@@ -19,7 +19,9 @@ struct BackgroundRefreshAgentStatus: Sendable {
 
     var detail: String {
         if !enabled { return "Off" }
-        if !BackgroundRefreshAgent.isStableInstall { return "Move the app to Applications first" }
+        if !BackgroundRefreshAgent.isStableInstall {
+            return installed ? "Managed by the installed app" : "Move the app to Applications first"
+        }
         if !installed || !loaded { return "Needs repair" }
         guard let lastSuccess else { return "Scheduled every 3 minutes" }
         return "Last refreshed \(lastSuccess.formatted(date: .omitted, time: .shortened))"
@@ -87,7 +89,9 @@ enum BackgroundRefreshAgent {
     static func status() -> BackgroundRefreshAgentStatus {
         BackgroundRefreshAgentStatus(
             enabled: CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled,
-            installed: FileManager.default.fileExists(atPath: plistURL.path),
+            installed: isStableInstall
+                ? targetsCurrentExecutable
+                : FileManager.default.fileExists(atPath: plistURL.path),
             loaded: isLoaded,
             lastSuccess: loadRecord()?.lastSuccess
         )
@@ -113,6 +117,17 @@ enum BackgroundRefreshAgent {
     private static var plistURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents/\(identifier).plist")
+    }
+
+    private static var targetsCurrentExecutable: Bool {
+        guard let executable = Bundle.main.executableURL?.standardizedFileURL.path,
+              let data = try? Data(contentsOf: plistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let arguments = plist["ProgramArguments"] as? [String]
+        else {
+            return false
+        }
+        return arguments.first.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == executable
     }
 
     private static var domain: String { "gui/\(getuid())" }

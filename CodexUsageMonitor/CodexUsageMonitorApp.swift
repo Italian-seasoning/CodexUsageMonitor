@@ -24,7 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             CodexUsageMonitorApp.sharedSettingsModel.settings.appPresence
         )
         _ = AppUpdater.shared
-        WidgetRegistration.refresh()
+        if BackgroundRefreshAgent.isStableInstall {
+            WidgetRegistration.refresh()
+        }
         if OnboardingStateStore.completedCurrentVersion() {
             DispatchQueue.global(qos: .utility).async {
                 BackgroundRefreshAgent.installIfEnabled()

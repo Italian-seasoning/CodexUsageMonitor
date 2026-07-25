@@ -64,14 +64,15 @@ struct AppRail: View {
                     Image(systemName: section.symbol)
                         .font(.system(size: 14, weight: .semibold))
                         .frame(width: 34, height: 30)
+                        .background(
+                            selection == section ? AppPalette.accent.opacity(0.9) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(selection == section ? Color.white : AppPalette.muted)
-                .background(
-                    selection == section ? AppPalette.accent.opacity(0.9) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
+                .frame(width: 34, height: 30)
                 .help(section.title)
                 .accessibilityLabel(section.title)
                 .accessibilityAddTraits(selection == section ? .isSelected : [])
@@ -86,10 +87,11 @@ struct AppRail: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(health.color)
                     .frame(width: 34, height: 30)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(width: 34, height: 30)
             .help("Data health: \(health.title)")
             .accessibilityLabel("Data health, \(health.title)")
         }

@@ -109,7 +109,9 @@ enum SnapshotRefresh {
             fingerprint: fingerprint,
             widgetReloadRequestedAt: widgetReloadRequestedAt
         )
-        NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
+        }
         let message = outcome == .updated
             ? "Snapshot refreshed with the latest Codex data."
             : "Sources are unchanged; the cached snapshot remains current."
