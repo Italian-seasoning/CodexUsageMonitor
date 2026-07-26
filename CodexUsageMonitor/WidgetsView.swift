@@ -123,7 +123,7 @@ struct WidgetsView: View {
 
     private var previewBackdrop: some View {
         LinearGradient(
-            colors: [Color.black.opacity(0.03), AppPalette.accent.opacity(0.05)],
+            colors: [AppPalette.sun.opacity(0.04), AppPalette.accent.opacity(0.09)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

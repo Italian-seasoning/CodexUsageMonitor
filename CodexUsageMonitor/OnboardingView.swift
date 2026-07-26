@@ -149,11 +149,18 @@ private struct SetupSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Image(systemName: "terminal.fill")
+                Image(systemName: "sun.horizon.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
-                    .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(
+                        LinearGradient(
+                            colors: [AppPalette.sun, AppPalette.accent],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Set up Codex Usage")
                         .font(.system(size: 15, weight: .semibold))

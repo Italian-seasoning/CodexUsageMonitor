@@ -29,9 +29,9 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
-        case .analysis: "waveform.path.ecg"
-        case .models: "square.stack.3d.up"
-        case .widgets: "rectangle.3.group"
+        case .analysis: "chart.xyaxis.line"
+        case .models: "water.waves"
+        case .widgets: "square.grid.2x2.fill"
         case .settings: "gearshape"
         }
     }
@@ -49,11 +49,18 @@ struct AppRail: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "terminal.fill")
+            Image(systemName: "sun.horizon.fill")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background(
+                    LinearGradient(
+                        colors: [AppPalette.sun, AppPalette.accent],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
                 .accessibilityLabel("Codex Usage")
                 .padding(.bottom, 5)
 
@@ -192,20 +199,21 @@ struct MetricModule: View {
 
 @MainActor
 enum AppPalette {
-    static let windowTint = Color.black.opacity(0.12)
+    static let windowTint = Color(red: 0.015, green: 0.12, blue: 0.15).opacity(0.72)
     static let divider = Color.white.opacity(0.11)
     static let text = Color(red: 0.996, green: 0.996, blue: 0.996)
-    static let muted = Color.white.opacity(0.68)
+    static let muted = Color(red: 0.79, green: 0.9, blue: 0.9).opacity(0.76)
+    static let sun = Color(red: 1, green: 0.68, blue: 0.27)
     static var accent: Color {
         CodexUsageMonitorApp.sharedSettingsModel.settings.appTheme.accent
     }
 }
 
 extension AppTheme {
-    var label: String { self == .crimson ? "Crimson" : "Graphite" }
+    var label: String { self == .crimson ? "Summer" : "Graphite" }
     var accent: Color {
         self == .crimson
-            ? Color(red: 1, green: 0.388, blue: 0.388)
+            ? Color(red: 0.12, green: 0.78, blue: 0.76)
             : Color(red: 0.42, green: 0.67, blue: 1)
     }
 }
@@ -228,7 +236,7 @@ extension View {
     func appGlassPanel(cornerRadius: CGFloat) -> some View {
         if #available(macOS 26.0, *) {
             glassEffect(
-                .regular.tint(Color.black.opacity(0.18)),
+                .regular.tint(Color(red: 0.02, green: 0.21, blue: 0.24).opacity(0.26)),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
         } else {

@@ -54,7 +54,9 @@ struct CodexWidgetStyleBackground: View {
         switch style {
         case .precisionInstrument:
             LinearGradient(
-                colors: [Color(red: 0.055, green: 0.058, blue: 0.07), Color(red: 0.025, green: 0.028, blue: 0.035)],
+                colors: theme == .crimson
+                    ? [Color(red: 0.025, green: 0.25, blue: 0.28), Color(red: 0.015, green: 0.08, blue: 0.13)]
+                    : [Color(red: 0.055, green: 0.058, blue: 0.07), Color(red: 0.025, green: 0.028, blue: 0.035)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -62,7 +64,9 @@ struct CodexWidgetStyleBackground: View {
             ZStack {
                 (theme == .frostedWhite && colorScheme == .light
                     ? Color(red: 0.95, green: 0.96, blue: 0.98)
-                    : Color(red: 0.13, green: 0.14, blue: 0.17))
+                    : theme == .crimson
+                        ? Color(red: 0.035, green: 0.19, blue: 0.22)
+                        : Color(red: 0.13, green: 0.14, blue: 0.17))
                 LinearGradient(
                     colors: [
                         palette.accent.opacity(monochrome ? 0 : 0.18),
@@ -74,7 +78,9 @@ struct CodexWidgetStyleBackground: View {
                 )
             }
         case .signalGrid:
-            Color(red: 0.045, green: 0.05, blue: 0.062)
+            theme == .crimson
+                ? Color(red: 0.018, green: 0.12, blue: 0.16)
+                : Color(red: 0.045, green: 0.05, blue: 0.062)
         }
     }
 }
@@ -92,7 +98,7 @@ extension WidgetStylePalette {
         if monochrome || theme == .monochrome {
             accent = primary
         } else if theme == .crimson {
-            accent = Color(red: 1, green: 0.388, blue: 0.388)
+            accent = Color(red: 0.12, green: 0.82, blue: 0.79)
         } else {
             accent = Color(red: 0.34, green: 0.64, blue: 1)
         }

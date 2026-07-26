@@ -69,7 +69,11 @@ struct CodexUsageCardBackground: View {
 
     var body: some View {
         if theme == .crimson {
-            Color(red: 0.055, green: 0.035, blue: 0.038)
+            LinearGradient(
+                colors: [Color(red: 0.025, green: 0.25, blue: 0.28), Color(red: 0.015, green: 0.08, blue: 0.13)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         } else {
             dark
                 ? Color(red: 0.075, green: 0.082, blue: 0.105)
@@ -116,7 +120,7 @@ private struct CodexUsageCardPalette {
     var tertiary: Color { primary.opacity(dark ? 0.52 : 0.48) }
     var accent: Color {
         if monochrome { return primary }
-        return theme == .crimson ? Color(red: 1, green: 0.388, blue: 0.388) : Color.accentColor
+        return theme == .crimson ? Color(red: 0.12, green: 0.82, blue: 0.79) : Color.accentColor
     }
     var historicalBar: Color { primary.opacity(dark ? 0.30 : 0.22) }
     var track: Color { primary.opacity(dark ? 0.11 : 0.08) }
@@ -261,7 +265,7 @@ private struct CodexUsageCardHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "terminal.fill")
+            Image(systemName: "sun.horizon.fill")
                 .font(.system(size: size == .large ? 10 : 9, weight: .bold))
                 .frame(width: size == .large ? 20 : 18, height: size == .large ? 20 : 18)
                 .background(palette.iconFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))

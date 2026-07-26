@@ -488,7 +488,7 @@ enum WidgetTheme: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var label: String {
         switch self {
-        case .crimson: "Crimson"
+        case .crimson: "Summer"
         case .darkGlass: "Graphite"
         case .frostedWhite: "Paper"
         case .monochrome: "System mono"

@@ -257,6 +257,10 @@ private struct WidgetFamilyHeader: View {
 
     var body: some View {
         HStack(spacing: 5) {
+            Image(systemName: "sun.horizon.fill")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(palette.accent)
+                .accessibilityHidden(true)
             Text(content.eyebrow.uppercased())
                 .font(.system(size: 9, weight: .bold))
                 .tracking(0.5)

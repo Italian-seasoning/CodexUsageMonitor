@@ -322,7 +322,7 @@ extension CodexWidgetStyle: AppEnum {
 extension WidgetTheme: AppEnum {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Widget Theme")
     static var caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-        .crimson: "Crimson",
+        .crimson: "Summer",
         .darkGlass: "Dark Glass",
         .frostedWhite: "Frosted White",
         .monochrome: "Monochrome"
