@@ -25,7 +25,6 @@ ARCHIVE="CodexUsageMonitor-$VERSION-macOS.zip"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
-cp "$DIST/CodexUsageMonitor-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
 
 "$SPARKLE_BIN/generate_appcast" \
   --download-url-prefix "https://github.com/$REPOSITORY/releases/download/$TAG/" \
@@ -33,6 +32,7 @@ cp "$DIST/CodexUsageMonitor-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg
 
 xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
+cp "$DIST/CodexUsageMonitor-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
 (cd "$RELEASE_DIR" && shasum -a 256 "$ARCHIVE" CodexUsageMonitor-macOS.dmg > SHA256SUMS.txt)
 TITLE="Codex Usage Monitor $VERSION preview"
 SIGNING_AUTHORITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(.*\)$/\1/p' | head -1)"
