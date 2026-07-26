@@ -33,19 +33,12 @@ xcodebuild \
 ditto "$BUILD_APP" "$APP"
 
 IDENTITY="${SIGN_IDENTITY:-}"
-PRESERVE_XCODE_SIGNATURE=0
 if [[ -z "$IDENTITY" ]]; then
   IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
 fi
 if [[ -z "$IDENTITY" ]]; then
-  IDENTITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(Apple Development:.*\)$/\1/p' | head -1)"
-  if [[ -n "$IDENTITY" ]]; then
-    PRESERVE_XCODE_SIGNATURE=1
-    echo "Preserving Xcode Personal Team signature: $IDENTITY"
-  else
-    IDENTITY="-"
-    echo "No Apple signing identity found; creating an ad-hoc signed build."
-  fi
+  IDENTITY="-"
+  echo "No Developer ID Application identity found; creating an ad-hoc signed build."
 fi
 
 if [[ "$IDENTITY" == Developer\ ID\ Application:* && -z "${NOTARY_PROFILE:-}" ]]; then
@@ -54,17 +47,15 @@ if [[ "$IDENTITY" == Developer\ ID\ Application:* && -z "${NOTARY_PROFILE:-}" ]]
   exit 1
 fi
 
-if [[ "$PRESERVE_XCODE_SIGNATURE" -eq 0 ]]; then
-  SIGN_OPTIONS=""
-  if [[ "$IDENTITY" != "-" ]]; then
-    SIGN_OPTIONS="--options runtime"
-  fi
-  if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
-    codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
-  fi
-  codesign --force $SIGN_OPTIONS --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
-  codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$APP"
+SIGN_OPTIONS=""
+if [[ "$IDENTITY" != "-" ]]; then
+  SIGN_OPTIONS="--options runtime"
 fi
+if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
+  codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
+fi
+codesign --force $SIGN_OPTIONS --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
+codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
 ditto -c -k --norsrc --keepParent "$APP" "$ARCHIVE"

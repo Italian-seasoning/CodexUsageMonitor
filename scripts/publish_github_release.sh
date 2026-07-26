@@ -25,6 +25,7 @@ ARCHIVE="CodexUsageMonitor-$VERSION-macOS.zip"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
+cp "$DIST/CodexUsageMonitor-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
 
 "$SPARKLE_BIN/generate_appcast" \
   --download-url-prefix "https://github.com/$REPOSITORY/releases/download/$TAG/" \
@@ -32,6 +33,7 @@ cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
 
 xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
+(cd "$RELEASE_DIR" && shasum -a 256 "$ARCHIVE" CodexUsageMonitor-macOS.dmg > SHA256SUMS.txt)
 TITLE="Codex Usage Monitor $VERSION preview"
 SIGNING_AUTHORITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(.*\)$/\1/p' | head -1)"
 if [[ "$SIGNING_AUTHORITY" == Apple\ Development:* ]]; then
@@ -42,14 +44,15 @@ fi
 ASSETS=(
   "$RELEASE_DIR/$ARCHIVE"
   "$RELEASE_DIR/appcast.xml"
-  "$DIST/CodexUsageMonitor-macOS.dmg"
+  "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
+  "$RELEASE_DIR/SHA256SUMS.txt"
 )
 
 if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
   gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${ASSETS[@]}"
   gh release edit "$TAG" --repo "$REPOSITORY" --title "$TITLE" --notes "$NOTES"
 else
-  gh release create "$TAG" --repo "$REPOSITORY" --title "$TITLE" --notes "$NOTES" "${ASSETS[@]}"
+  gh release create "$TAG" --repo "$REPOSITORY" --target "$(git -C "$ROOT" rev-parse HEAD)" --title "$TITLE" --notes "$NOTES" "${ASSETS[@]}"
 fi
 
 echo "Published $REPOSITORY $TAG"

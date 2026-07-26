@@ -2,7 +2,7 @@
 
 ## Current preview
 
-Version 1.2.4 is preview software. It is currently ad-hoc signed, not signed with
+Version 2.0.0 is preview software. It is currently ad-hoc signed, not signed with
 an Apple Developer ID, and not notarized by Apple. macOS may require Control-click,
 then **Open**. The DMG contains only the app and an Applications shortcut.
 
@@ -38,7 +38,7 @@ performed.
 Authenticate `gh`, then run:
 
 ```sh
-./scripts/publish_github_release.sh 1.2.4
+./scripts/publish_github_release.sh 2.0.0
 ```
 
 The script derives the version from the built app, generates and validates the
