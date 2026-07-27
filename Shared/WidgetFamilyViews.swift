@@ -256,20 +256,20 @@ struct CodexWidgetFamilyView: View {
 private struct WidgetFamilyHeader: View {
     var content: WidgetSemanticContent
     var palette: WidgetStylePalette
+    var compact = false
 
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: "sun.horizon.fill")
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(size: WidgetTypeScale.caption, weight: .bold))
                 .foregroundStyle(palette.accent)
                 .accessibilityHidden(true)
-            Text(content.eyebrow.uppercased())
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.5)
+            Text(content.eyebrow)
+                .font(.system(size: WidgetTypeScale.label, weight: .semibold))
                 .foregroundStyle(palette.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            WidgetFreshnessLabel(freshness: content.freshness, palette: palette)
+            WidgetFreshnessLabel(freshness: content.freshness, palette: palette, compact: compact)
         }
     }
 }
@@ -281,7 +281,7 @@ private struct MetricFamilyLayout: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: size == .small ? 7 : 9) {
-            WidgetFamilyHeader(content: content, palette: palette)
+            WidgetFamilyHeader(content: content, palette: palette, compact: size == .small)
             if size == .medium {
                 HStack(alignment: .bottom, spacing: 14) {
                     WidgetHero(content: content, palette: palette, compact: true)
@@ -317,7 +317,7 @@ private struct LimitsFamilyView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            WidgetFamilyHeader(content: content, palette: palette)
+            WidgetFamilyHeader(content: content, palette: palette, compact: size == .small)
             HStack(spacing: 12) {
                 WidgetGaugeRing(progress: progress / 100, palette: palette)
                     .frame(width: size == .small ? 66 : 82, height: size == .small ? 66 : 82)

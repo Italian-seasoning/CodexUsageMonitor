@@ -1,5 +1,14 @@
 import SwiftUI
 
+enum WidgetTypeScale {
+    static let caption: CGFloat = 10
+    static let label: CGFloat = 11
+    static let body: CGFloat = 12
+    static let value: CGFloat = 14
+    static let heroCompact: CGFloat = 30
+    static let hero: CGFloat = 36
+}
+
 struct WidgetLabeledValue: Equatable, Sendable {
     var label: String
     var value: String
@@ -64,13 +73,17 @@ struct WidgetHero: View {
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 2 : 4) {
             Text(content.heroValue)
-                .font(.system(size: compact ? 24 : 31, weight: .semibold, design: .rounded))
+                .font(.system(
+                    size: compact ? WidgetTypeScale.heroCompact : WidgetTypeScale.hero,
+                    weight: .semibold,
+                    design: .rounded
+                ))
                 .monospacedDigit()
                 .foregroundStyle(palette.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.55)
+                .minimumScaleFactor(0.7)
             Text(content.heroLabel)
-                .font(.system(size: compact ? 9 : 10, weight: .medium))
+                .font(.system(size: compact ? WidgetTypeScale.label : WidgetTypeScale.body, weight: .medium))
                 .foregroundStyle(palette.secondary)
                 .lineLimit(2)
         }
@@ -82,12 +95,20 @@ struct WidgetHero: View {
 struct WidgetFreshnessLabel: View {
     var freshness: WidgetFreshness
     var palette: WidgetStylePalette
+    var compact = false
 
     var body: some View {
-        Label(freshness.label, systemImage: freshness.symbol)
-            .font(.system(size: 8, weight: .semibold))
+        Group {
+            if compact {
+                Image(systemName: freshness.symbol)
+                    .accessibilityLabel(freshness.label)
+            } else {
+                Label(freshness.label, systemImage: freshness.symbol)
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+            .font(.system(size: WidgetTypeScale.caption, weight: .semibold))
             .foregroundStyle(freshness == .fresh ? palette.accent : palette.secondary)
-            .labelStyle(.titleAndIcon)
     }
 }
 
@@ -129,7 +150,7 @@ struct WidgetGaugeRing: View {
                 .stroke(palette.accent, style: StrokeStyle(lineWidth: 7, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text(progress, format: .percent.precision(.fractionLength(0)))
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: WidgetTypeScale.value, weight: .bold, design: .rounded))
                 .monospacedDigit()
         }
         .accessibilityElement()
@@ -151,12 +172,12 @@ struct WidgetValueGrid: View {
             ForEach(Array(values.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.value)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: WidgetTypeScale.value, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                        .minimumScaleFactor(0.75)
                     Text(item.label)
-                        .font(.system(size: 8, weight: .medium))
+                        .font(.system(size: WidgetTypeScale.caption, weight: .medium))
                         .foregroundStyle(palette.secondary)
                         .lineLimit(1)
                 }
