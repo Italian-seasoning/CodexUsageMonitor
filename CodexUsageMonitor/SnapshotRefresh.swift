@@ -15,8 +15,7 @@ enum SnapshotRefresh {
 
     static func run(trigger: RefreshTrigger, force: Bool = false) -> RefreshResult {
         let startedAt = Date()
-        if trigger == .backgroundAgent,
-           OnboardingStateStore.load()?.completedRequirements.contains(.codexDataAccess) != true {
+        if !OnboardingStateStore.hasCurrentCodexDataAccess() {
             let message = "Codex data access has not been approved."
             saveRecord(
                 startedAt: startedAt,

@@ -2,6 +2,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let showCodexUsageTour = Notification.Name("showCodexUsageTour")
+    static let codexDataAccessApproved = Notification.Name("codexDataAccessApproved")
 }
 
 @MainActor
@@ -30,12 +31,15 @@ final class OnboardingModel: ObservableObject {
         self.appVersion = appVersion
         self.save = save
         self.probe = probe
-        let state = state ?? OnboardingStateStore.load() ?? OnboardingState(
+        var state = state ?? OnboardingStateStore.load() ?? OnboardingState(
             lastPresentedVersion: "",
             completedRequirements: [],
             dismissedUpdateChecklistVersion: nil,
             updatedAt: .distantPast
         )
+        if !OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: appVersion, state: state) {
+            state.completedRequirements.remove(.codexDataAccess)
+        }
         self.state = state
         dataAccessState = state.completedRequirements.contains(.codexDataAccess) ? .approved : .notRequested
         page = Self.firstPage(for: state)
@@ -72,6 +76,7 @@ final class OnboardingModel: ObservableObject {
             complete(.codexDataAccess)
             page = 2
             _ = await RefreshCoordinator.shared.refresh(trigger: .manual, force: true)
+            NotificationCenter.default.post(name: .codexDataAccessApproved, object: nil)
         }
     }
 

@@ -100,7 +100,10 @@ enum OnboardingStateStore {
 
     static func shouldPresent(appVersion: String, state: OnboardingState?) -> Bool {
         guard let state else { return true }
-        let unmet = Set(SetupRequirement.allCases).subtracting(state.completedRequirements)
+        var unmet = Set(SetupRequirement.allCases).subtracting(state.completedRequirements)
+        if !hasCurrentCodexDataAccess(appVersion: appVersion, state: state) {
+            unmet.insert(.codexDataAccess)
+        }
         return !unmet.isEmpty && state.dismissedUpdateChecklistVersion != appVersion
     }
 
@@ -113,7 +116,17 @@ enum OnboardingStateStore {
         from url: URL = stateURL
     ) -> Bool {
         guard let state = load(from: url) else { return false }
-        return state.completedRequirements == Set(SetupRequirement.allCases)
+        return state.lastPresentedVersion == appVersion
+            && state.completedRequirements == Set(SetupRequirement.allCases)
+    }
+
+    static func hasCurrentCodexDataAccess(
+        appVersion: String = currentAppVersion,
+        state: OnboardingState? = nil
+    ) -> Bool {
+        let state = state ?? load()
+        return state?.lastPresentedVersion == appVersion
+            && state?.completedRequirements.contains(.codexDataAccess) == true
     }
 }
 

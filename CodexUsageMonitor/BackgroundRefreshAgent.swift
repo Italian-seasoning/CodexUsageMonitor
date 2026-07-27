@@ -51,7 +51,12 @@ enum BackgroundRefreshAgent {
 
     @discardableResult
     static func install() -> Bool {
-        guard isStableInstall, let executable = Bundle.main.executableURL else { return false }
+        guard isStableInstall,
+              OnboardingStateStore.hasCurrentCodexDataAccess(),
+              let executable = Bundle.main.executableURL
+        else {
+            return false
+        }
         let fileManager = FileManager.default
         let directory = plistURL.deletingLastPathComponent()
         let plist: [String: Any] = [

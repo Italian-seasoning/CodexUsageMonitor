@@ -6,6 +6,17 @@ import Testing
 
 @Suite
 struct WidgetConfigurationTests {
+    @Test("Widget snapshots live outside protected app containers")
+    func sharedSnapshotLocation() {
+        let expected = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/CodexUsageMonitor/snapshot.json")
+            .standardizedFileURL
+
+        #expect(CodexUsageSnapshotStore.snapshotURL.standardizedFileURL == expected)
+        #expect(!CodexUsageSnapshotStore.snapshotURL.path.contains("/Library/Containers/"))
+        #expect(!CodexUsageSnapshotStore.snapshotURL.path.contains("/Library/Group Containers/"))
+    }
+
     @Test("Configuration preserves supported choices and scopes dashboard arrangements")
     func configurationNormalization() {
         for family in CodexWidgetFamily.allCases {
