@@ -38,6 +38,31 @@ struct OnboardingStateTests {
     }
 
     @MainActor
+    @Test("An app update requires one new Codex access approval")
+    func appUpdateRequiresCurrentAccessApproval() {
+        let previous = OnboardingState(
+            lastPresentedVersion: "2.0.2",
+            completedRequirements: Set(SetupRequirement.allCases),
+            dismissedUpdateChecklistVersion: nil,
+            updatedAt: .now
+        )
+
+        #expect(OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.2", state: previous))
+        #expect(!OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.3", state: previous))
+        #expect(OnboardingStateStore.shouldPresent(appVersion: "2.0.3", state: previous))
+
+        let model = OnboardingModel(
+            appVersion: "2.0.3",
+            state: previous,
+            save: { _ in },
+            probe: { .approved }
+        )
+        #expect(model.page == 1)
+        #expect(model.dataAccessState == .notRequested)
+        #expect(!model.state.completedRequirements.contains(.codexDataAccess))
+    }
+
+    @MainActor
     @Test("Installing background refresh cannot grant Codex access")
     func backgroundRefreshDoesNotGrantAccess() {
         let model = OnboardingModel(

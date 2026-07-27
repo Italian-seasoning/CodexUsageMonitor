@@ -1461,21 +1461,20 @@ struct CodexUsageReader {
 }
 
 enum CodexUsageSnapshotStore {
-    static let snapshotURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/snapshot.json")
-    static let settingsURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/settings.json")
-    static let settingsV2URL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/settings-v2.json")
-    static let readerCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.plist")
-    static let legacyReaderCacheURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/reader-cache.json")
-    static let backgroundStatusURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/background-status.json")
-    static let refreshLockURL = containerBaseURL.appendingPathComponent("Library/Application Support/CodexUsageMonitor/refresh.lock")
+    static let snapshotURL = dataDirectoryURL.appendingPathComponent("snapshot.json")
+    static let settingsURL = dataDirectoryURL.appendingPathComponent("settings.json")
+    static let settingsV2URL = dataDirectoryURL.appendingPathComponent("settings-v2.json")
+    static let readerCacheURL = dataDirectoryURL.appendingPathComponent("reader-cache.plist")
+    static let legacyReaderCacheURL = dataDirectoryURL.appendingPathComponent("reader-cache.json")
+    static let backgroundStatusURL = dataDirectoryURL.appendingPathComponent("background-status.json")
+    static let refreshLockURL = dataDirectoryURL.appendingPathComponent("refresh.lock")
 
-    private static let containerBaseURL: URL = {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let sandboxSuffix = "Library/Containers/com.nolankrahn.CodexUsageMonitor.widget/Data"
-        return home.path.hasSuffix(sandboxSuffix)
-            ? home
-            : home.appendingPathComponent(sandboxSuffix)
-    }()
+    private static let dataDirectoryURL = URL(
+        fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
+            ?? FileManager.default.homeDirectoryForCurrentUser.path,
+        isDirectory: true
+    )
+        .appendingPathComponent("Library/Application Support/CodexUsageMonitor")
 
     static func load() -> CodexUsageSnapshot? {
         guard let data = try? Data(contentsOf: snapshotURL) else { return nil }

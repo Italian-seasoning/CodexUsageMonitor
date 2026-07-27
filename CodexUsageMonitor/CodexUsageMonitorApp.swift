@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var refreshTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
+    private var dataAccessObserver: NSObjectProtocol?
     private let sourceChangeMonitor = SourceChangeMonitor()
     private var activationScheduled = false
 
@@ -27,12 +28,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if BackgroundRefreshAgent.isStableInstall {
             WidgetRegistration.refresh()
         }
+        let hasCurrentAccess = OnboardingStateStore.hasCurrentCodexDataAccess()
         if OnboardingStateStore.completedCurrentVersion() {
             DispatchQueue.global(qos: .utility).async {
                 BackgroundRefreshAgent.installIfEnabled()
             }
+        } else {
+            DispatchQueue.global(qos: .utility).async {
+                _ = BackgroundRefreshAgent.uninstall()
+            }
         }
-        sourceChangeMonitor.start()
+        if hasCurrentAccess {
+            sourceChangeMonitor.start()
+        }
+        dataAccessObserver = NotificationCenter.default.addObserver(
+            forName: .codexDataAccessApproved,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.sourceChangeMonitor.start()
+        }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -54,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         sourceChangeMonitor.stop()
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
+        if let dataAccessObserver {
+            NotificationCenter.default.removeObserver(dataAccessObserver)
         }
     }
 
