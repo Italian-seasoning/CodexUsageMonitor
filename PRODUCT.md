@@ -14,7 +14,7 @@ Codex Usage Monitor reads local Codex session logs and presents current session,
 
 ## Brand Personality
 
-Precise, compact, technical. The interface should feel like a sharp local instrument, not a dashboard demo.
+Precise, compact, warm. The interface should feel like a polished local instrument with an easy summer character, not a dashboard demo.
 
 ## Anti-references
 
@@ -26,10 +26,10 @@ Avoid SaaS dashboard gradients, decorative glassmorphism, vague neon palettes, o
 - Keep the widget compact enough for repeated glances.
 - Use local data honestly and label it as local when needed.
 - Prefer native macOS and WidgetKit behavior over custom machinery.
-- The helper app uses a focused dark palette: coral red `#FF6363`, near-black `#101010`, and white `#FEFEFE`.
-- Use red for selection, status, and primary actions. Keep passive data surfaces calm and nearly monochrome.
-- First run opens with a concise welcome and a four-step spotlight tour over the real interface. The tour remains replayable from Help.
-- Refresh and Apply use cursor-following red glow borders as pointer affordances. Passive panels never glow.
+- The default Summer theme uses ocean teal, sky blue, warm sand, and sunlit amber over deep coastal surfaces.
+- Use teal for selection and primary actions, amber for warmth and attention, and semantic system colors for status.
+- First run uses one aligned setup sheet with explicit Codex access, background refresh, and widget-registration requirements. Setup remains replayable from Help.
+- The app icon and decorative symbols may use restrained beach, sun, wave, and palm motifs without competing with the data.
 - Widget surfaces stay restrained and instrument-like while respecting WidgetKit monochrome and tinted rendering.
 - Label graph scaling explicitly: each chart is normalized to the largest visible day, shown as its peak value rather than an unexplained percentage.
 - Present model-aware cost as an API-equivalent estimate, never as actual ChatGPT subscription spending.

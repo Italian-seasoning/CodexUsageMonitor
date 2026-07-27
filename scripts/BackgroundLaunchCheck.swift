@@ -31,7 +31,7 @@ struct BackgroundLaunchCheck {
     }
 
     private static func checkBackgroundLaunch(_ executable: URL) throws {
-        let process = try launch(executable, arguments: ["--background-refresh"])
+        let process = try launch(executable, arguments: ["--background-refresh", "--safe-verification"])
 
         var sawRegular = false
         let deadline = Date().addingTimeInterval(10)
@@ -60,7 +60,7 @@ struct BackgroundLaunchCheck {
         domain["CodexUsageMonitor.appPresence"] = mode
         defaults.setPersistentDomain(domain, forName: bundleID)
 
-        let process = try launch(executable, arguments: [])
+        let process = try launch(executable, arguments: ["--safe-verification"])
         let deadline = Date().addingTimeInterval(10)
         var launched = false
         while process.isRunning, Date() < deadline {
