@@ -12,8 +12,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var activationScheduled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            NSApp.setActivationPolicy(.prohibited)
+            return
+        }
+
+        let isSafeVerification = ProcessInfo.processInfo.arguments.contains("--safe-verification")
         if ProcessInfo.processInfo.arguments.contains("--background-refresh") {
             NSApp.setActivationPolicy(.prohibited)
+            if isSafeVerification {
+                exit(EXIT_SUCCESS)
+            }
             Task.detached(priority: .utility) {
                 let result = await RefreshCoordinator.shared.refresh(trigger: .backgroundAgent)
                 exit(result.outcome == .failed ? EXIT_FAILURE : EXIT_SUCCESS)
@@ -24,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         AppPresenceMode.apply(
             CodexUsageMonitorApp.sharedSettingsModel.settings.appPresence
         )
+        if isSafeVerification {
+            showMainWindowSoon()
+            return
+        }
         _ = AppUpdater.shared
         if BackgroundRefreshAgent.isStableInstall {
             WidgetRegistration.refresh()

@@ -36,7 +36,7 @@ struct SettingsView: View {
                     InspectorSection(title: "Setup and updates") {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Codex data access").font(.system(size: 12, weight: .semibold))
+                                Text("Codex data access").font(.system(size: AppTypeScale.body, weight: .semibold))
                                 Text("Review folders, permissions, and background behavior.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -49,7 +49,7 @@ struct SettingsView: View {
                         Divider()
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Software updates").font(.system(size: 12, weight: .semibold))
+                                Text("Software updates").font(.system(size: AppTypeScale.body, weight: .semibold))
                                 Text("Check the configured Sparkle update channel.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)

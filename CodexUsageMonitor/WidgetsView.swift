@@ -14,7 +14,7 @@ struct WidgetsView: View {
         VStack(spacing: 0) {
             AppSectionHeader(section: .widgets) {
                 Text("2.0 Collection")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: AppTypeScale.label, weight: .semibold))
                     .foregroundStyle(AppPalette.accent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -110,9 +110,9 @@ struct WidgetsView: View {
                 .appGlassPanel(cornerRadius: 18)
                 .overlay(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(family.title).font(.system(size: 13, weight: .semibold))
+                        Text(family.title).font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                         Text("\(style.title) · \(size.title)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: AppTypeScale.caption, weight: .medium))
                             .foregroundStyle(AppPalette.muted)
                     }
                     .padding(16)

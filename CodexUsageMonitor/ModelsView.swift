@@ -68,9 +68,9 @@ struct ModelsView: View {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(ModelPricingCatalog.displayName(for: model.model))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.system(size: AppTypeScale.body, weight: .semibold))
                                     Text(model.model)
-                                        .font(.system(size: 9))
+                                        .font(.system(size: AppTypeScale.caption))
                                         .foregroundStyle(.tertiary)
                                 }
                                 Spacer()
@@ -97,8 +97,8 @@ struct ModelsView: View {
 
     private func modelValue(_ value: String, label: String) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
-            Text(value).font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
-            Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+            Text(value).font(.system(size: AppTypeScale.body, weight: .semibold, design: .rounded)).monospacedDigit()
+            Text(label).font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
         }
         .frame(width: 76, alignment: .trailing)
     }

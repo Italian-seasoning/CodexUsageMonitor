@@ -213,7 +213,7 @@ private struct SetupSheet: View {
                     .frame(width: step == model.page ? 28 : 9, height: 6)
             }
             Text("\(model.page + 1) / 3")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(.system(size: AppTypeScale.caption, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppPalette.muted)
                 .frame(width: 28, alignment: .trailing)
         }
@@ -393,7 +393,7 @@ private struct SetupSheet: View {
                 Text(title)
                     .font(.system(size: 24, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 12))
+                    .font(.system(size: AppTypeScale.body))
                     .foregroundStyle(AppPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -408,7 +408,7 @@ private struct SetupSheet: View {
                 .frame(width: 34, height: 34)
                 .background(AppPalette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(requirement.title).font(.system(size: 13, weight: .semibold))
+                Text(requirement.title).font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                 Text(detail).font(.caption).foregroundStyle(AppPalette.muted)
             }
             Spacer()
@@ -440,7 +440,7 @@ private struct SetupSheet: View {
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous)
                 )
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(title).font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                 Text(detail).font(.caption).foregroundStyle(AppPalette.muted)
             }
             Spacer()
@@ -456,7 +456,7 @@ private struct SetupSheet: View {
 
     private func statusLabel(_ title: String, symbol: String, color: Color) -> some View {
         Label(title, systemImage: symbol)
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: AppTypeScale.body, weight: .medium))
             .foregroundStyle(color)
     }
 }

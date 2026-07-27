@@ -1,12 +1,12 @@
 import SwiftUI
 
 enum WidgetTypeScale {
-    static let caption: CGFloat = 10
-    static let label: CGFloat = 11
-    static let body: CGFloat = 12
-    static let value: CGFloat = 14
-    static let heroCompact: CGFloat = 30
-    static let hero: CGFloat = 36
+    static let caption: CGFloat = 11
+    static let label: CGFloat = 12
+    static let body: CGFloat = 13
+    static let value: CGFloat = 15
+    static let heroCompact: CGFloat = 32
+    static let hero: CGFloat = 38
 }
 
 struct WidgetLabeledValue: Equatable, Sendable {

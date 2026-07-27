@@ -1,6 +1,15 @@
 import AppKit
 import SwiftUI
 
+enum AppTypeScale {
+    static let caption: CGFloat = 11
+    static let label: CGFloat = 12
+    static let body: CGFloat = 13
+    static let sectionTitle: CGFloat = 14
+    static let pageTitle: CGFloat = 22
+    static let value: CGFloat = 22
+}
+
 enum AppSection: String, CaseIterable, Identifiable {
     case analysis
     case models
@@ -117,9 +126,9 @@ struct AppSectionHeader<Trailing: View>: View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(section.title)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: AppTypeScale.pageTitle, weight: .semibold))
                 Text(section.subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: AppTypeScale.label, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
             }
             Spacer(minLength: 12)
@@ -141,10 +150,10 @@ struct InspectorSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 11) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: AppTypeScale.caption, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                 }
             }
@@ -168,7 +177,7 @@ struct MetricModule: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Label(eyebrow, systemImage: symbol)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: AppTypeScale.caption, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 Spacer()
                 Circle()
@@ -177,17 +186,17 @@ struct MetricModule: View {
                     .accessibilityHidden(true)
             }
             Text(value)
-                .font(.system(size: 21, weight: .semibold, design: .rounded))
+                .font(.system(size: AppTypeScale.value, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(accent ? AppPalette.accent : AppPalette.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.62)
             Text(detail)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: AppTypeScale.caption, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(2)
             Text(state.title)
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: AppTypeScale.caption, weight: .semibold))
                 .foregroundStyle(state.color)
         }
         .padding(14)

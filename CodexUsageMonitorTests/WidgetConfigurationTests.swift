@@ -81,7 +81,13 @@ struct WidgetConfigurationTests {
                 theme: .darkGlass,
                 monochrome: true
             ) {
-                Color.clear
+                VStack {
+                    HStack {
+                        Color.red.frame(width: 8, height: 8)
+                        Spacer()
+                    }
+                    Spacer()
+                }
             }
             .frame(width: 170, height: 170)
         )
@@ -90,6 +96,43 @@ struct WidgetConfigurationTests {
         let image = try #require(renderer.cgImage)
         let center = NSBitmapImageRep(cgImage: image).colorAt(x: 85, y: 85)
         #expect(try #require(center).alphaComponent < 0.01)
+    }
+
+    @MainActor
+    @Test("Every widget family renders in every size and style")
+    func completeWidgetRenderMatrix() throws {
+        let snapshot = widgetFixture(now: Date(timeIntervalSinceReferenceDate: 800_000_000))
+
+        for family in CodexWidgetFamily.allCases {
+            for style in CodexWidgetStyle.allCases {
+                for size in CodexUsageCardSize.allCases {
+                    let frame = switch size {
+                    case .small: CGSize(width: 170, height: 170)
+                    case .medium: CGSize(width: 340, height: 170)
+                    case .large: CGSize(width: 340, height: 340)
+                    }
+                    let renderer = ImageRenderer(
+                        content: CodexWidgetFamilyView(
+                            snapshot: snapshot,
+                            configuration: WidgetDisplayConfiguration(
+                                family: family,
+                                style: style,
+                                theme: .crimson,
+                                period: .sevenDays,
+                                dashboardArrangement: .balanced
+                            ),
+                            size: size,
+                            monochrome: false,
+                            paintsBackground: true
+                        )
+                        .frame(width: frame.width, height: frame.height)
+                    )
+                    renderer.scale = 1
+
+                    #expect(try #require(renderer.cgImage).width == Int(frame.width))
+                }
+            }
+        }
     }
 
     private func widgetFixture(now: Date) -> CodexUsageSnapshot {
