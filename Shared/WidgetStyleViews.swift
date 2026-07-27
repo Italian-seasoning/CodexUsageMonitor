@@ -13,11 +13,14 @@ struct CodexWidgetStyledContainer<Content: View>: View {
     var style: CodexWidgetStyle
     var theme: WidgetTheme
     var monochrome: Bool
+    var paintsBackground = false
     @ViewBuilder var content: Content
 
     var body: some View {
         ZStack {
-            CodexWidgetStyleBackground(style: style, theme: theme, monochrome: monochrome)
+            if paintsBackground {
+                CodexWidgetStyleBackground(style: style, theme: theme, monochrome: monochrome)
+            }
             if style == .signalGrid {
                 WidgetGridTexture(color: palette.separator)
             }

@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import CodexUsageMonitor
 
@@ -57,6 +59,26 @@ struct WidgetConfigurationTests {
         #expect(hero(.headroomImpact).heroValue == 400.compactTokenString)
         #expect(hero(.sessionLive).heroValue == 321.compactTokenString)
         #expect(hero(.dashboard).heroValue == 1_234.compactTokenString)
+    }
+
+    @MainActor
+    @Test("Widget foreground stays transparent for macOS vibrant rendering")
+    func widgetForegroundLayerRemainsTransparent() throws {
+        let renderer = ImageRenderer(
+            content: CodexWidgetStyledContainer(
+                style: .nativeGlass,
+                theme: .darkGlass,
+                monochrome: true
+            ) {
+                Color.clear
+            }
+            .frame(width: 170, height: 170)
+        )
+        renderer.scale = 1
+
+        let image = try #require(renderer.cgImage)
+        let center = NSBitmapImageRep(cgImage: image).colorAt(x: 85, y: 85)
+        #expect(try #require(center).alphaComponent < 0.01)
     }
 
     private func widgetFixture(now: Date) -> CodexUsageSnapshot {

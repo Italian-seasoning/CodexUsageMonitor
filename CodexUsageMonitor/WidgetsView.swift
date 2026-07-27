@@ -95,7 +95,8 @@ struct WidgetsView: View {
                         snapshot: snapshot,
                         configuration: previewConfiguration,
                         size: size.cardSize,
-                        monochrome: previewConfiguration.theme == .monochrome
+                        monochrome: previewConfiguration.theme == .monochrome,
+                        paintsBackground: true
                     )
                     .frame(width: size.frame.width, height: size.frame.height)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))

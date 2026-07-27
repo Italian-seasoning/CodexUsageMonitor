@@ -207,6 +207,7 @@ struct CodexWidgetFamilyView: View {
     var configuration: WidgetDisplayConfiguration
     var size: CodexUsageCardSize
     var monochrome: Bool
+    var paintsBackground = false
     var now: Date = .now
 
     private var content: WidgetSemanticContent {
@@ -226,7 +227,8 @@ struct CodexWidgetFamilyView: View {
         CodexWidgetStyledContainer(
             style: configuration.style,
             theme: configuration.theme,
-            monochrome: monochrome
+            monochrome: monochrome,
+            paintsBackground: paintsBackground
         ) {
             Group {
                 switch configuration.family {

@@ -11,7 +11,8 @@ import SwiftUI
             dashboardArrangement: .balanced
         ),
         size: .medium,
-        monochrome: false
+        monochrome: false,
+        paintsBackground: true
     )
     .frame(width: 340, height: 170)
 }
@@ -27,7 +28,8 @@ import SwiftUI
             dashboardArrangement: .balanced
         ),
         size: .small,
-        monochrome: false
+        monochrome: false,
+        paintsBackground: true
     )
     .frame(width: 170, height: 170)
 }
@@ -43,7 +45,8 @@ import SwiftUI
             dashboardArrangement: .activityFirst
         ),
         size: .large,
-        monochrome: true
+        monochrome: true,
+        paintsBackground: true
     )
     .frame(width: 340, height: 340)
 }
