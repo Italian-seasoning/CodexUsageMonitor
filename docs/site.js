@@ -9,15 +9,29 @@ document.querySelectorAll('.download-glow').forEach((button) => {
 });
 
 if (!reduceMotion) {
-  const stage = document.querySelector('.product-stage');
-  const windowPreview = document.querySelector('.app-window');
+  document.body.classList.add('motion-ok');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.14 });
+
+  document.querySelectorAll('.reveal').forEach((element) => observer.observe(element));
+
+  const stage = document.querySelector('.hero-product');
   stage?.addEventListener('pointermove', (event) => {
     const bounds = stage.getBoundingClientRect();
     const x = (event.clientX - bounds.left) / bounds.width - 0.5;
     const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-    windowPreview.style.transform = `rotateY(${x * 5 - 4}deg) rotateX(${y * -4 + 1}deg)`;
+    stage.style.setProperty('--stage-y', `${x * 1.8}deg`);
+    stage.style.setProperty('--stage-x', `${1.5 - y * 1.4}deg`);
   });
   stage?.addEventListener('pointerleave', () => {
-    windowPreview.style.transform = 'rotateY(-4deg) rotateX(1deg)';
+    stage.style.removeProperty('--stage-x');
+    stage.style.removeProperty('--stage-y');
   });
 }
