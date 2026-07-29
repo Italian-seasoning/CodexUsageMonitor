@@ -38,8 +38,8 @@ struct OnboardingStateTests {
     }
 
     @MainActor
-    @Test("An app update requires one new Codex access approval")
-    func appUpdateRequiresCurrentAccessApproval() {
+    @Test("An app update preserves approved Codex data access")
+    func appUpdatePreservesAccessApproval() {
         let previous = OnboardingState(
             lastPresentedVersion: "2.0.2",
             completedRequirements: Set(SetupRequirement.allCases),
@@ -48,8 +48,8 @@ struct OnboardingStateTests {
         )
 
         #expect(OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.2", state: previous))
-        #expect(!OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.3", state: previous))
-        #expect(OnboardingStateStore.shouldPresent(appVersion: "2.0.3", state: previous))
+        #expect(OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.3", state: previous))
+        #expect(!OnboardingStateStore.shouldPresent(appVersion: "2.0.3", state: previous))
 
         let model = OnboardingModel(
             appVersion: "2.0.3",
@@ -57,9 +57,9 @@ struct OnboardingStateTests {
             save: { _ in },
             probe: { .approved }
         )
-        #expect(model.page == 1)
-        #expect(model.dataAccessState == .notRequested)
-        #expect(!model.state.completedRequirements.contains(.codexDataAccess))
+        #expect(model.page == 2)
+        #expect(model.dataAccessState == .approved)
+        #expect(model.state.completedRequirements.contains(.codexDataAccess))
     }
 
     @MainActor

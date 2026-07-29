@@ -362,6 +362,69 @@ extension CodexUsageSnapshot {
     }
 }
 
+extension CodexUsageSnapshot {
+    func mergingLegacyHistory(
+        _ legacySnapshots: [CodexUsageSnapshot],
+        calendar: Calendar = .current
+    ) -> CodexUsageSnapshot {
+        guard !legacySnapshots.isEmpty else { return self }
+        var result = self
+        var days = Dictionary(uniqueKeysWithValues: result.activityDays.map {
+            (calendar.startOfDay(for: $0.date), $0)
+        })
+        var importedDates = Set<Date>()
+
+        for snapshot in legacySnapshots {
+            for var day in snapshot.activityDays {
+                let date = calendar.startOfDay(for: day.date)
+                let existing = days[date]
+                guard existing == nil || existing?.usage.hasUsage == false && day.usage.hasUsage else {
+                    continue
+                }
+                day.date = date
+                days[date] = day
+                guard day.usage.hasUsage else { continue }
+                importedDates.insert(date)
+                result.lifetime.add(day.usage)
+                result.sessionCount = (result.sessionCount ?? 0) + day.sessions
+                result.turnCount = (result.turnCount ?? 0) + (day.turns ?? 0)
+            }
+        }
+
+        result.activityDays = days.values.sorted { $0.date < $1.date }
+        guard !importedDates.isEmpty else { return result }
+
+        var dailyModels = Dictionary(uniqueKeysWithValues: result.dailyModelUsage.map {
+            (calendar.startOfDay(for: $0.date), $0)
+        })
+        for snapshot in legacySnapshots {
+            for var day in snapshot.dailyModelUsage {
+                let date = calendar.startOfDay(for: day.date)
+                guard importedDates.contains(date), dailyModels[date] == nil else { continue }
+                day.date = date
+                dailyModels[date] = day
+            }
+        }
+        result.dailyModelUsage = dailyModels.values.sorted { $0.date < $1.date }
+
+        var models = Dictionary(uniqueKeysWithValues: (result.modelUsage ?? []).map { ($0.model, $0) })
+        for day in result.dailyModelUsage where importedDates.contains(calendar.startOfDay(for: day.date)) {
+            for model in day.models {
+                var aggregate = models[model.model]
+                    ?? ModelUsage(model: model.model, usage: .zero, turns: 0, estimatedCostUSD: 0)
+                aggregate.usage.add(model.usage)
+                aggregate.turns += model.turns
+                aggregate.estimatedCostUSD += model.estimatedCostUSD
+                models[model.model] = aggregate
+            }
+        }
+        result.modelUsage = models.values.sorted { $0.usage.total > $1.usage.total }
+        result.topModelLifetime = result.modelUsage?.first?.model
+        result.peakDay = result.activityDays.max { $0.usage.total < $1.usage.total }
+        return result
+    }
+}
+
 struct CodexUsageWidgetSettings: Codable, Equatable {
     var chartDayCount: Int
     var showsStats: Bool
@@ -876,7 +939,7 @@ struct CodexUsageReader {
     init(
         sessionsDirectory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions"),
         calendar: Calendar = .current,
-        activityDayCount: Int = 84,
+        activityDayCount: Int = 0,
         cacheURL: URL? = nil
     ) {
         self.sessionsDirectory = sessionsDirectory
@@ -1090,8 +1153,19 @@ struct CodexUsageReader {
         byDay: [Date: DayAggregate],
         headroomByDay: [Date: Int]
     ) -> [DailyUsage] {
-        (0..<activityDayCount).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset - activityDayCount + 1, to: today) else {
+        let earliestRecordedDay = (Array(byDay.keys) + Array(headroomByDay.keys))
+            .map { calendar.startOfDay(for: $0) }
+            .min() ?? today
+        let earliestDay = activityDayCount > 0
+            ? max(
+                earliestRecordedDay,
+                calendar.date(byAdding: .day, value: 1 - activityDayCount, to: today) ?? earliestRecordedDay
+            )
+            : earliestRecordedDay
+        let dayCount = max(1, (calendar.dateComponents([.day], from: earliestDay, to: today).day ?? 0) + 1)
+
+        return (0..<dayCount).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: earliestDay) else {
                 return nil
             }
             let entry = byDay[day] ?? DayAggregate()
@@ -1468,6 +1542,7 @@ enum CodexUsageSnapshotStore {
     static let legacyReaderCacheURL = dataDirectoryURL.appendingPathComponent("reader-cache.json")
     static let backgroundStatusURL = dataDirectoryURL.appendingPathComponent("background-status.json")
     static let refreshLockURL = dataDirectoryURL.appendingPathComponent("refresh.lock")
+    static let legacyHistoryURL = dataDirectoryURL.appendingPathComponent("legacy-history.json")
 
     private static let dataDirectoryURL = URL(
         fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
@@ -1479,6 +1554,40 @@ enum CodexUsageSnapshotStore {
     static func load() -> CodexUsageSnapshot? {
         guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
         return try? JSONDecoder().decode(CodexUsageSnapshot.self, from: data)
+    }
+
+    static func loadLegacyHistory() -> [CodexUsageSnapshot] {
+        if let data = try? Data(contentsOf: legacyHistoryURL),
+           let snapshots = try? JSONDecoder().decode([CodexUsageSnapshot].self, from: data) {
+            return snapshots
+        }
+
+        let home = URL(
+            fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
+                ?? FileManager.default.homeDirectoryForCurrentUser.path,
+            isDirectory: true
+        )
+        let candidates = [
+            home.appendingPathComponent(
+                "Library/Containers/com.nolankrahn.CodexUsageMonitor.widget/Data/Library/Application Support/CodexUsageMonitor/snapshot.json"
+            ),
+            home.appendingPathComponent(
+                "Library/Group Containers/Y9F67Z9663.com.nolankrahn.CodexUsageMonitor/Library/Application Support/CodexUsageMonitor/snapshot.json"
+            )
+        ]
+        let snapshots = candidates.compactMap { url -> CodexUsageSnapshot? in
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return try? JSONDecoder().decode(CodexUsageSnapshot.self, from: data)
+        }
+        guard !snapshots.isEmpty else { return [] }
+        try? FileManager.default.createDirectory(
+            at: legacyHistoryURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if let data = try? JSONEncoder().encode(snapshots) {
+            try? data.write(to: legacyHistoryURL, options: .atomic)
+        }
+        return snapshots
     }
 
     @discardableResult

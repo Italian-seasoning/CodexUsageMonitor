@@ -19,8 +19,8 @@ struct OnboardingStateStoreCheck {
         OnboardingStateStore.save(complete, to: url)
         precondition(!OnboardingStateStore.shouldPresent(appVersion: "2.0.3", from: url))
         precondition(OnboardingStateStore.completedCurrentVersion(appVersion: "2.0.3", from: url))
-        precondition(OnboardingStateStore.shouldPresent(appVersion: "2.0.4", from: url))
-        precondition(!OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.4", state: complete))
+        precondition(!OnboardingStateStore.shouldPresent(appVersion: "2.0.4", from: url))
+        precondition(OnboardingStateStore.hasCurrentCodexDataAccess(appVersion: "2.0.4", state: complete))
 
         var dismissed = complete
         dismissed.lastPresentedVersion = "2.0.4"

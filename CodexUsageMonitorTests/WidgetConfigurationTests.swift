@@ -43,6 +43,27 @@ struct WidgetConfigurationTests {
         }
     }
 
+    @Test("Curated, saved, and custom presentation presets resolve predictably")
+    func presentationPresets() {
+        let saved = SavedWidgetPreset(
+            id: UUID(),
+            name: "My Coast",
+            style: .signalGrid,
+            theme: .frostedWhite
+        )
+
+        #expect(WidgetPresetMode.summer.presentation().style == .precisionInstrument)
+        #expect(WidgetPresetMode.summer.presentation().theme == .crimson)
+        #expect(WidgetPresetMode.saved.presentation(savedPreset: saved).style == .signalGrid)
+        #expect(WidgetPresetMode.saved.presentation(savedPreset: saved).theme == .frostedWhite)
+        #expect(
+            WidgetPresetMode.custom.presentation(
+                customStyle: .nativeGlass,
+                customTheme: .monochrome
+            ).theme == .monochrome
+        )
+    }
+
     @Test("Each widget family exposes its required hero metric")
     func familyHeroSemantics() {
         let now = Date(timeIntervalSinceReferenceDate: 800_000_000)

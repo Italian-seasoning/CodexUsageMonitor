@@ -40,7 +40,7 @@ enum SnapshotRefresh {
         let previousRecord = BackgroundRefreshAgent.loadRecord()
         let reader = CodexUsageReader()
         let headroomCollector = HeadroomSavingsCollector()
-        let fingerprint = reader.sourceFingerprint() + "|" + headroomCollector.sourceFingerprint()
+        let fingerprint = reader.sourceFingerprint() + "|legacy-history-v1|" + headroomCollector.sourceFingerprint()
         let reuseCached = canReuseSnapshot(
             previousFingerprint: previousRecord?.sourceFingerprint,
             currentFingerprint: fingerprint,
@@ -63,6 +63,7 @@ enum SnapshotRefresh {
         } else {
             let headroom = headroomCollector.collect() ?? previous?.cachedHeadroomActivity
             let snapshot = reader.snapshot(headroomActivity: headroom)
+                .mergingLegacyHistory(CodexUsageSnapshotStore.loadLegacyHistory())
             if snapshot.hasUsage {
                 candidate = snapshot
                 outcome = .updated
