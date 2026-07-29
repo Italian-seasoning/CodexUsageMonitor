@@ -116,8 +116,7 @@ enum OnboardingStateStore {
         from url: URL = stateURL
     ) -> Bool {
         guard let state = load(from: url) else { return false }
-        return state.lastPresentedVersion == appVersion
-            && state.completedRequirements == Set(SetupRequirement.allCases)
+        return state.completedRequirements == Set(SetupRequirement.allCases)
     }
 
     static func hasCurrentCodexDataAccess(
@@ -125,8 +124,7 @@ enum OnboardingStateStore {
         state: OnboardingState? = nil
     ) -> Bool {
         let state = state ?? load()
-        return state?.lastPresentedVersion == appVersion
-            && state?.completedRequirements.contains(.codexDataAccess) == true
+        return state?.completedRequirements.contains(.codexDataAccess) == true
     }
 }
 

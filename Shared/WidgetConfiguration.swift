@@ -28,6 +28,67 @@ enum DashboardArrangement: String, Codable, CaseIterable, Identifiable, Sendable
     var id: Self { self }
 }
 
+enum WidgetPresetMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case summer
+    case darkGlass
+    case frosted
+    case signal
+    case saved
+    case custom
+
+    var id: Self { self }
+
+    func presentation(
+        savedPreset: SavedWidgetPreset? = nil,
+        customStyle: CodexWidgetStyle = .precisionInstrument,
+        customTheme: WidgetTheme = .crimson
+    ) -> (style: CodexWidgetStyle, theme: WidgetTheme) {
+        switch self {
+        case .summer: (.precisionInstrument, .crimson)
+        case .darkGlass: (.nativeGlass, .darkGlass)
+        case .frosted: (.nativeGlass, .frostedWhite)
+        case .signal: (.signalGrid, .darkGlass)
+        case .saved: (savedPreset?.style ?? .precisionInstrument, savedPreset?.theme ?? .crimson)
+        case .custom: (customStyle, customTheme)
+        }
+    }
+}
+
+struct SavedWidgetPreset: Codable, Equatable, Identifiable, Sendable {
+    var id: UUID
+    var name: String
+    var style: CodexWidgetStyle
+    var theme: WidgetTheme
+}
+
+enum SavedWidgetPresetStore {
+    static let url = URL(
+        fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
+            ?? FileManager.default.homeDirectoryForCurrentUser.path,
+        isDirectory: true
+    )
+        .appendingPathComponent("Library/Application Support/CodexUsageMonitor/widget-presets.json")
+
+    static func load() -> [SavedWidgetPreset] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([SavedWidgetPreset].self, from: data)) ?? []
+    }
+
+    @discardableResult
+    static func save(_ presets: [SavedWidgetPreset]) -> Bool {
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try JSONEncoder().encode(presets).write(to: url, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+}
+
 struct WidgetDisplayConfiguration: Equatable, Sendable {
     var family: CodexWidgetFamily
     var style: CodexWidgetStyle

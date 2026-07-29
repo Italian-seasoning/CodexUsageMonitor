@@ -108,6 +108,45 @@ struct UsageMetricsTests {
         #expect(lifetime.topModel?.model == "gpt-5.6-terra")
         #expect(abs(lifetime.estimatedCostUSD - 2.32) < 0.000_001)
     }
+
+    @Test("Legacy history fills missing days without double-counting overlap")
+    func legacyHistoryMergeIsDateSafe() {
+        let fixture = usageMetricsFixture()
+        let today = fixture.calendar.startOfDay(for: fixture.now)
+        let yesterday = fixture.calendar.date(byAdding: .day, value: -1, to: today)!
+        let usage: (Int) -> TokenUsage = {
+            TokenUsage(input: $0, cachedInput: 0, output: 0, reasoningOutput: 0, total: $0)
+        }
+
+        var current = CodexUsageSnapshot.empty
+        current.lifetime = usage(100)
+        current.activityDays = [
+            DailyUsage(date: today, usage: usage(100), sessions: 1, turns: 10)
+        ]
+        current.sessionCount = 1
+        current.turnCount = 10
+
+        var legacy = CodexUsageSnapshot.empty
+        legacy.activityDays = [
+            DailyUsage(date: yesterday, usage: usage(50), sessions: 2, turns: 5),
+            DailyUsage(date: today, usage: usage(999), sessions: 9, turns: 99)
+        ]
+        legacy.dailyModelUsage = [
+            DailyModelUsage(
+                date: yesterday,
+                models: [ModelUsage(model: "gpt-5.6-terra", usage: usage(50), turns: 5, estimatedCostUSD: 0.5)]
+            )
+        ]
+
+        let merged = current.mergingLegacyHistory([legacy], calendar: fixture.calendar)
+
+        #expect(merged.lifetime.total == 150)
+        #expect(merged.sessionCount == 3)
+        #expect(merged.turnCount == 15)
+        #expect(merged.activityDays.count == 2)
+        #expect(merged.activityDays.last?.usage.total == 100)
+        #expect(merged.modelUsage?.first?.usage.total == 50)
+    }
 }
 
 private func usageMetricsFixture() -> (snapshot: CodexUsageSnapshot, calendar: Calendar, now: Date) {

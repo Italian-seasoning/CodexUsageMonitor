@@ -39,7 +39,7 @@ struct ModelsView: View {
             }
 
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     InspectorSection(title: "Model share", subtitle: "\(period.title) attribution from local session logs") {
                         if models.isEmpty {
                             ContentUnavailableView(
@@ -49,23 +49,44 @@ struct ModelsView: View {
                             )
                             .frame(minHeight: 220)
                         } else {
-                            Chart(models) { model in
-                                SectorMark(
-                                    angle: .value("Tokens", model.usage.total),
-                                    innerRadius: .ratio(0.68),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(by: .value("Model", ModelPricingCatalog.displayName(for: model.model)))
+                            HStack(alignment: .firstTextBaseline) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(ModelPricingCatalog.displayName(for: models.first?.model))
+                                        .font(.system(size: AppTypeScale.value, weight: .semibold, design: .rounded))
+                                    Text("\(share(models[0])) of attributed usage")
+                                        .font(.system(size: AppTypeScale.caption, weight: .medium))
+                                        .foregroundStyle(AppPalette.muted)
+                                }
+                                Spacer()
+                                modelValue(totalTokens.compactTokenString, label: "total tokens")
                             }
-                            .chartLegend(position: .trailing, spacing: 10)
-                            .frame(minHeight: 250)
+
+                            Chart(Array(models.prefix(6))) { model in
+                                BarMark(
+                                    x: .value("Tokens", model.usage.total),
+                                    y: .value("Model", ModelPricingCatalog.displayName(for: model.model))
+                                )
+                                .foregroundStyle(AppPalette.accent.gradient)
+                                .cornerRadius(4)
+                            }
+                            .chartXAxis {
+                                AxisMarks(position: .bottom) {
+                                    AxisGridLine().foregroundStyle(Color.white.opacity(0.07))
+                                    AxisValueLabel()
+                                }
+                            }
+                            .frame(height: max(120, CGFloat(min(models.count, 6)) * 32))
                             .accessibilityLabel("Model token share for \(period.title)")
                         }
                     }
 
                     InspectorSection(title: "Attributed models", subtitle: "Tokens, share, requests, and recorded API-equivalent estimate") {
-                        ForEach(models) { model in
+                        ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
                             HStack(spacing: 12) {
+                                Text("#\(index + 1)")
+                                    .font(.system(size: AppTypeScale.caption, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(AppPalette.muted)
+                                    .frame(width: 26, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(ModelPricingCatalog.displayName(for: model.model))
                                         .font(.system(size: AppTypeScale.body, weight: .semibold))
@@ -84,7 +105,8 @@ struct ModelsView: View {
                         }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
         }
     }

@@ -28,9 +28,9 @@ struct AnalysisView: View {
                 }
             }
 
-            ScrollView {
-                GeometryReader { geometry in
-                    VStack(spacing: 14) {
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 10) {
                         if geometry.size.width >= 1_050 {
                             wideMosaic
                         } else {
@@ -44,18 +44,18 @@ struct AnalysisView: View {
                                 .frame(minHeight: 125)
                         }
                     }
-                    .padding(20)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
                 }
-                .frame(minHeight: 590)
             }
         }
     }
 
     private var wideMosaic: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 10) {
             activityChart
                 .frame(maxWidth: .infinity)
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 modules
             }
             .frame(width: 390)
@@ -63,9 +63,9 @@ struct AnalysisView: View {
     }
 
     private var compactMosaic: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             activityChart
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 modules
             }
         }
@@ -106,7 +106,7 @@ struct AnalysisView: View {
             .chartPlotStyle { plot in
                 plot.padding(.top, 8).padding(.horizontal, 4)
             }
-            .frame(minHeight: 230)
+            .frame(minHeight: 190)
             .overlay {
                 if summary.days.isEmpty {
                     ContentUnavailableView(

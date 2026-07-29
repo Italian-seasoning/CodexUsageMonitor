@@ -6,6 +6,47 @@ protocol CodexWidgetIntent: WidgetConfigurationIntent {
     var displayConfiguration: WidgetDisplayConfiguration { get }
 }
 
+struct SavedWidgetPresetEntity: AppEntity {
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Saved Widget Preset")
+    static var defaultQuery = SavedWidgetPresetQuery()
+
+    var id: UUID
+    var name: String
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(name)")
+    }
+
+    var value: SavedWidgetPreset? {
+        SavedWidgetPresetStore.load().first { $0.id == id }
+    }
+}
+
+struct SavedWidgetPresetQuery: EntityQuery {
+    func entities(for identifiers: [UUID]) async throws -> [SavedWidgetPresetEntity] {
+        SavedWidgetPresetStore.load()
+            .filter { identifiers.contains($0.id) }
+            .map { SavedWidgetPresetEntity(id: $0.id, name: $0.name) }
+    }
+
+    func suggestedEntities() async throws -> [SavedWidgetPresetEntity] {
+        SavedWidgetPresetStore.load().map { SavedWidgetPresetEntity(id: $0.id, name: $0.name) }
+    }
+}
+
+private func presentation(
+    preset: WidgetPresetMode,
+    savedPreset: SavedWidgetPresetEntity?,
+    customStyle: CodexWidgetStyle,
+    customTheme: WidgetTheme
+) -> (style: CodexWidgetStyle, theme: WidgetTheme) {
+    preset.presentation(
+        savedPreset: savedPreset?.value,
+        customStyle: customStyle,
+        customTheme: customTheme
+    )
+}
+
 struct CodexUsageEntry: TimelineEntry {
     var date: Date
     var snapshot: CodexUsageSnapshot
@@ -111,83 +152,188 @@ struct CodexUsageWidgetView: View {
 struct LimitsIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Limits"
     static var description = IntentDescription("Configure limit presentation.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .limits, style: style, theme: theme, period: .today, dashboardArrangement: .balanced)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .limits, style: value.style, theme: value.theme, period: .today, dashboardArrangement: .balanced)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\LimitsIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset }
+        } otherwise: {
+            When(\LimitsIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme }
+            } otherwise: {
+                Summary { \.$preset }
+            }
+        }
     }
 }
 
 struct UsagePulseIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Usage Pulse"
     static var description = IntentDescription("Configure usage activity.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
     @Parameter(title: "Period", default: .today) var period: UsagePeriod
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .usagePulse, style: style, theme: theme, period: period, dashboardArrangement: .balanced)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .usagePulse, style: value.style, theme: value.theme, period: period, dashboardArrangement: .balanced)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\UsagePulseIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset; \.$period }
+        } otherwise: {
+            When(\UsagePulseIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme; \.$period }
+            } otherwise: {
+                Summary { \.$preset; \.$period }
+            }
+        }
     }
 }
 
 struct CostLensIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Cost Lens"
     static var description = IntentDescription("Configure API-equivalent estimates.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
     @Parameter(title: "Period", default: .today) var period: UsagePeriod
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .costLens, style: style, theme: theme, period: period, dashboardArrangement: .balanced)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .costLens, style: value.style, theme: value.theme, period: period, dashboardArrangement: .balanced)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\CostLensIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset; \.$period }
+        } otherwise: {
+            When(\CostLensIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme; \.$period }
+            } otherwise: {
+                Summary { \.$preset; \.$period }
+            }
+        }
     }
 }
 
 struct ModelMixIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Model Mix"
     static var description = IntentDescription("Configure model attribution.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
     @Parameter(title: "Period", default: .today) var period: UsagePeriod
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .modelMix, style: style, theme: theme, period: period, dashboardArrangement: .balanced)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .modelMix, style: value.style, theme: value.theme, period: period, dashboardArrangement: .balanced)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\ModelMixIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset; \.$period }
+        } otherwise: {
+            When(\ModelMixIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme; \.$period }
+            } otherwise: {
+                Summary { \.$preset; \.$period }
+            }
+        }
     }
 }
 
 struct HeadroomImpactIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Headroom Impact"
     static var description = IntentDescription("Configure local compression savings.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
     @Parameter(title: "Period", default: .today) var period: UsagePeriod
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .headroomImpact, style: style, theme: theme, period: period, dashboardArrangement: .balanced)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .headroomImpact, style: value.style, theme: value.theme, period: period, dashboardArrangement: .balanced)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\HeadroomImpactIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset; \.$period }
+        } otherwise: {
+            When(\HeadroomImpactIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme; \.$period }
+            } otherwise: {
+                Summary { \.$preset; \.$period }
+            }
+        }
     }
 }
 
 struct SessionLiveIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Session Live"
     static var description = IntentDescription("Configure current-session presentation.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .sessionLive, style: style, theme: theme, period: .today, dashboardArrangement: .balanced)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .sessionLive, style: value.style, theme: value.theme, period: .today, dashboardArrangement: .balanced)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\SessionLiveIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset }
+        } otherwise: {
+            When(\SessionLiveIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme }
+            } otherwise: {
+                Summary { \.$preset }
+            }
+        }
     }
 }
 
 struct DashboardIntent: CodexWidgetIntent {
     static var title: LocalizedStringResource = "Modular Dashboard"
     static var description = IntentDescription("Configure the modular dashboard.")
+    @Parameter(title: "Preset", default: .summer) var preset: WidgetPresetMode
+    @Parameter(title: "Saved Preset") var savedPreset: SavedWidgetPresetEntity?
     @Parameter(title: "Style", default: .precisionInstrument) var style: CodexWidgetStyle
     @Parameter(title: "Theme", default: .crimson) var theme: WidgetTheme
     @Parameter(title: "Period", default: .today) var period: UsagePeriod
     @Parameter(title: "Arrangement", default: .balanced) var arrangement: DashboardArrangement
 
     var displayConfiguration: WidgetDisplayConfiguration {
-        .init(family: .dashboard, style: style, theme: theme, period: period, dashboardArrangement: arrangement)
+        let value = presentation(preset: preset, savedPreset: savedPreset, customStyle: style, customTheme: theme)
+        return .init(family: .dashboard, style: value.style, theme: value.theme, period: period, dashboardArrangement: arrangement)
+    }
+
+    static var parameterSummary: some ParameterSummary {
+        When(\DashboardIntent.$preset, .equalTo, .saved) {
+            Summary { \.$preset; \.$savedPreset; \.$period; \.$arrangement }
+        } otherwise: {
+            When(\DashboardIntent.$preset, .equalTo, .custom) {
+                Summary { \.$preset; \.$style; \.$theme; \.$period; \.$arrangement }
+            } otherwise: {
+                Summary { \.$preset; \.$period; \.$arrangement }
+            }
+        }
     }
 }
 
@@ -345,5 +491,17 @@ extension DashboardArrangement: AppEnum {
         .balanced: "Balanced",
         .limitsFirst: "Limits First",
         .activityFirst: "Activity First"
+    ]
+}
+
+extension WidgetPresetMode: AppEnum {
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Widget Preset")
+    static var caseDisplayRepresentations: [Self: DisplayRepresentation] = [
+        .summer: "Summer",
+        .darkGlass: "Dark Glass",
+        .frosted: "Frosted Coast",
+        .signal: "Signal",
+        .saved: "Saved Preset",
+        .custom: "Custom"
     ]
 }
