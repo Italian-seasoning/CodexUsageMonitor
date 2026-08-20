@@ -2,22 +2,7 @@ import Foundation
 
 enum CodexWidgetKind {
     static let primary = "CodexUsageWidget"
-    static let limits = "CodexUsageWidget.limits"
-    static let costLens = "CodexUsageWidget.costLens"
-    static let modelMix = "CodexUsageWidget.modelMix"
-    static let headroomImpact = "CodexUsageWidget.headroomImpact"
-    static let sessionLive = "CodexUsageWidget.sessionLive"
-    static let dashboard = "CodexUsageWidget.dashboard"
-
-    static let all: Set<String> = [
-        primary,
-        limits,
-        costLens,
-        modelMix,
-        headroomImpact,
-        sessionLive,
-        dashboard,
-    ]
+    static let all: Set<String> = [primary]
 }
 
 enum CodexWidgetFamily: String, Codable, CaseIterable, Identifiable, Sendable {

@@ -36,4 +36,4 @@ pluginkit -a "$PLUGIN"
 
 echo "Installed $DEST"
 echo "Registered $PLUGIN"
-pluginkit -m -A -i com.codexusage.CodexUsageMonitor.widget 2>/dev/null || true
+pluginkit -m -A -i com.codexusage.CodexUsageMonitor.widget3 2>/dev/null || true

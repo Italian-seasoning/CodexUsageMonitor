@@ -77,31 +77,10 @@ struct CodexUsageWidget: Widget {
     }
 }
 
-private struct LegacyCodexUsageWidget: Widget {
-    var kind = CodexWidgetKind.dashboard
-    var name: LocalizedStringKey = "Modular Dashboard"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: CodexUsageProvider()) { entry in
-            CodexUsageWidgetView(entry: entry)
-        }
-        .configurationDisplayName(name)
-        .description("Now configured by size in the Codex Usage app.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-        .contentMarginsDisabled()
-    }
-}
-
 @main
 struct CodexUsageWidgets: WidgetBundle {
     var body: some Widget {
         CodexUsageWidget()
-        LegacyCodexUsageWidget(kind: CodexWidgetKind.limits, name: "Limits")
-        LegacyCodexUsageWidget(kind: CodexWidgetKind.costLens, name: "Cost Lens")
-        LegacyCodexUsageWidget(kind: CodexWidgetKind.modelMix, name: "Model Mix")
-        LegacyCodexUsageWidget(kind: CodexWidgetKind.headroomImpact, name: "Headroom Impact")
-        LegacyCodexUsageWidget(kind: CodexWidgetKind.sessionLive, name: "Session Live")
-        LegacyCodexUsageWidget(kind: CodexWidgetKind.dashboard, name: "Modular Dashboard")
     }
 }
 

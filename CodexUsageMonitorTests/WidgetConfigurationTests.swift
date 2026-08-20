@@ -51,7 +51,7 @@ struct WidgetConfigurationTests {
         let widgetBundle = try #require(
             Bundle(url: plugInsURL.appendingPathComponent("CodexUsageWidget.appex"))
         )
-        #expect(widgetBundle.bundleIdentifier == "com.codexusage.CodexUsageMonitor.debug.widget")
+        #expect(widgetBundle.bundleIdentifier == "com.codexusage.CodexUsageMonitor.debug.widget3")
         #endif
     }
 
@@ -112,18 +112,10 @@ struct WidgetConfigurationTests {
         #expect(try JSONDecoder().decode(DesktopWidgetConfigurations.self, from: encoded) == configurations)
     }
 
-    @Test("Version 2 widget identities remain registered during the 3.0 upgrade")
-    func legacyWidgetKindsRemainStable() {
+    @Test("Desktop picker registers one widget with three system sizes")
+    func desktopPickerRegistersOneWidgetKind() {
         #expect(CodexWidgetKind.primary == "CodexUsageWidget")
-        #expect(CodexWidgetKind.limits == "CodexUsageWidget.limits")
-        #expect(CodexWidgetKind.costLens == "CodexUsageWidget.costLens")
-        #expect(CodexWidgetKind.modelMix == "CodexUsageWidget.modelMix")
-        #expect(CodexWidgetKind.headroomImpact == "CodexUsageWidget.headroomImpact")
-        #expect(CodexWidgetKind.sessionLive == "CodexUsageWidget.sessionLive")
-        #expect(CodexWidgetKind.dashboard == "CodexUsageWidget.dashboard")
-        #expect(CodexWidgetKind.all.count == 7)
-        #expect(CodexWidgetKind.all.contains(CodexWidgetKind.primary))
-        #expect(CodexWidgetKind.all.contains(CodexWidgetKind.dashboard))
+        #expect(CodexWidgetKind.all == [CodexWidgetKind.primary])
     }
 
     @Test("App widget appearance overrides presentation without changing content choices")
