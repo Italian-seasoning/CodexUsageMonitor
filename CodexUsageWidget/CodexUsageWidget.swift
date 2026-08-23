@@ -62,6 +62,7 @@ struct CodexUsageWidgetView: View {
                 )
             }
         }
+        .id(entry.date)
     }
 }
 

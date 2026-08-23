@@ -58,6 +58,27 @@ struct WidgetConfigurationTests {
         #expect(widget.path == "/Users/example/Library/Containers/com.codexusage.CodexUsageMonitor.widget3/Data/Library/Application Support/CodexUsageMonitor")
     }
 
+    @Test("Widget data synchronization mirrors background image deletion")
+    func widgetBackgroundDeletionSync() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("destination", isDirectory: true)
+        let staleImage = destination
+            .appendingPathComponent("widget-backgrounds", isDirectory: true)
+            .appendingPathComponent("medium.jpg")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(
+            at: staleImage.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("stale".utf8).write(to: staleImage)
+
+        #expect(WidgetDataBridge.sync(from: source, to: destination))
+        #expect(!FileManager.default.fileExists(atPath: staleImage.path))
+    }
+
     @Test("Debug builds cannot register as the production app or widget")
     func debugBundleIdentifiersAreIsolated() throws {
         #if DEBUG

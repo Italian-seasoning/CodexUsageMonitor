@@ -40,6 +40,11 @@ enum WidgetDataBridge {
 
     @discardableResult
     static func syncToWidgetExtension() -> Bool {
+        sync(from: currentDirectoryURL, to: extensionDirectoryURL)
+    }
+
+    @discardableResult
+    static func sync(from currentDirectoryURL: URL, to extensionDirectoryURL: URL) -> Bool {
         guard currentDirectoryURL != extensionDirectoryURL else { return true }
 
         do {
@@ -60,10 +65,16 @@ enum WidgetDataBridge {
             for size in CodexUsageWidgetSize.allCases {
                 let filename = "\(size.rawValue).jpg"
                 let source = sourceBackgrounds.appendingPathComponent(filename)
-                guard fileManager.fileExists(atPath: source.path) else { continue }
+                let destination = destinationBackgrounds.appendingPathComponent(filename)
+                guard fileManager.fileExists(atPath: source.path) else {
+                    if fileManager.fileExists(atPath: destination.path) {
+                        try fileManager.removeItem(at: destination)
+                    }
+                    continue
+                }
                 try fileManager.createDirectory(at: destinationBackgrounds, withIntermediateDirectories: true)
                 try Data(contentsOf: source).write(
-                    to: destinationBackgrounds.appendingPathComponent(filename),
+                    to: destination,
                     options: .atomic
                 )
             }
