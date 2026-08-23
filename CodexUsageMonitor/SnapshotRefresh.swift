@@ -8,7 +8,12 @@ extension Notification.Name {
 }
 
 enum CodexWidgetReloader {
+    private static let logger = Logger(subsystem: "com.codexusage.CodexUsageMonitor", category: "WidgetRefresh")
+
     static func reloadAll() {
+        if !WidgetDataBridge.syncToWidgetExtension() {
+            logger.error("Could not synchronize local widget data into the widget extension container")
+        }
         for kind in CodexWidgetKind.all {
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         }

@@ -472,7 +472,7 @@ private struct DesktopWidgetPreview: View {
                 snapshot: snapshot,
                 configuration: configuration,
                 size: size.cardSize,
-                monochrome: usesCustomBackground || configuration.theme == .monochrome
+                monochrome: configuration.theme == .monochrome
             )
         }
         .frame(width: size.previewFrame.width, height: size.previewFrame.height)

@@ -49,7 +49,7 @@ struct CodexUsageWidgetView: View {
             snapshot: entry.snapshot,
             configuration: entry.configuration,
             size: widgetFamily.cardSize,
-            monochrome: customBackground != nil || entry.configuration.theme == .monochrome
+            monochrome: entry.configuration.theme == .monochrome
         )
         .containerBackground(for: .widget) {
             if let customBackground {

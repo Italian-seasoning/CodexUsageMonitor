@@ -42,6 +42,22 @@ struct WidgetConfigurationTests {
         #expect(!CodexUsageSnapshotStore.snapshotURL.path.contains("/Library/Group Containers/"))
     }
 
+    @Test("Widget extension reads synchronized data from its sandbox container")
+    func widgetExtensionDataLocation() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        let host = WidgetDataBridge.dataDirectoryURL(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor",
+            homeDirectory: home
+        )
+        let widget = WidgetDataBridge.dataDirectoryURL(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor.widget3",
+            homeDirectory: home
+        )
+
+        #expect(host.path == "/Users/example/Library/Application Support/CodexUsageMonitor")
+        #expect(widget.path == "/Users/example/Library/Containers/com.codexusage.CodexUsageMonitor.widget3/Data/Library/Application Support/CodexUsageMonitor")
+    }
+
     @Test("Debug builds cannot register as the production app or widget")
     func debugBundleIdentifiersAreIsolated() throws {
         #if DEBUG

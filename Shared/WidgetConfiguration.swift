@@ -1,8 +1,90 @@
+import Darwin
 import Foundation
+import OSLog
 
 enum CodexWidgetKind {
     static let primary = "CodexUsageWidget"
     static let all: Set<String> = [primary]
+}
+
+enum WidgetDataBridge {
+    private static let productionWidgetBundleIdentifier = "com.codexusage.CodexUsageMonitor.widget3"
+
+    static let homeDirectoryURL = getpwuid(getuid())
+        .map { URL(fileURLWithPath: String(cString: $0.pointee.pw_dir), isDirectory: true) }
+        ?? FileManager.default.homeDirectoryForCurrentUser
+
+    static var currentDirectoryURL: URL {
+        dataDirectoryURL(
+            bundleIdentifier: Bundle.main.bundleIdentifier,
+            homeDirectory: homeDirectoryURL
+        )
+    }
+
+    static var extensionDirectoryURL: URL {
+        dataDirectoryURL(
+            bundleIdentifier: widgetBundleIdentifier,
+            homeDirectory: homeDirectoryURL
+        )
+    }
+
+    static func dataDirectoryURL(bundleIdentifier: String?, homeDirectory: URL) -> URL {
+        if let bundleIdentifier, bundleIdentifier.hasSuffix(".widget3") {
+            return homeDirectory
+                .appendingPathComponent("Library/Containers/\(bundleIdentifier)/Data", isDirectory: true)
+                .appendingPathComponent("Library/Application Support/CodexUsageMonitor", isDirectory: true)
+        }
+        return homeDirectory
+            .appendingPathComponent("Library/Application Support/CodexUsageMonitor", isDirectory: true)
+    }
+
+    @discardableResult
+    static func syncToWidgetExtension() -> Bool {
+        guard currentDirectoryURL != extensionDirectoryURL else { return true }
+
+        do {
+            let fileManager = FileManager.default
+            try fileManager.createDirectory(at: extensionDirectoryURL, withIntermediateDirectories: true)
+
+            for name in ["snapshot.json", "desktop-widgets.json", "widget-appearance.json"] {
+                let source = currentDirectoryURL.appendingPathComponent(name)
+                guard fileManager.fileExists(atPath: source.path) else { continue }
+                try Data(contentsOf: source).write(
+                    to: extensionDirectoryURL.appendingPathComponent(name),
+                    options: .atomic
+                )
+            }
+
+            let sourceBackgrounds = currentDirectoryURL.appendingPathComponent("widget-backgrounds", isDirectory: true)
+            let destinationBackgrounds = extensionDirectoryURL.appendingPathComponent("widget-backgrounds", isDirectory: true)
+            for size in CodexUsageWidgetSize.allCases {
+                let filename = "\(size.rawValue).jpg"
+                let source = sourceBackgrounds.appendingPathComponent(filename)
+                guard fileManager.fileExists(atPath: source.path) else { continue }
+                try fileManager.createDirectory(at: destinationBackgrounds, withIntermediateDirectories: true)
+                try Data(contentsOf: source).write(
+                    to: destinationBackgrounds.appendingPathComponent(filename),
+                    options: .atomic
+                )
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static var widgetBundleIdentifier: String {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            return productionWidgetBundleIdentifier
+        }
+        if bundleIdentifier.hasSuffix(".widget3") {
+            return bundleIdentifier
+        }
+        if bundleIdentifier.hasSuffix(".debug") {
+            return "\(bundleIdentifier).widget3"
+        }
+        return productionWidgetBundleIdentifier
+    }
 }
 
 enum CodexWidgetFamily: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -184,19 +266,24 @@ struct DesktopWidgetConfigurations: Codable, Equatable, Sendable {
 }
 
 enum DesktopWidgetConfigurationsStore {
-    static let url = URL(
-        fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
-            ?? FileManager.default.homeDirectoryForCurrentUser.path,
-        isDirectory: true
+    private static let logger = Logger(
+        subsystem: "com.codexusage.CodexUsageMonitor",
+        category: "WidgetConfiguration"
     )
-    .appendingPathComponent("Library/Application Support/CodexUsageMonitor/desktop-widgets.json")
+
+    static let url = WidgetDataBridge.currentDirectoryURL
+        .appendingPathComponent("desktop-widgets.json")
 
     static func load() -> DesktopWidgetConfigurations {
         guard let data = try? Data(contentsOf: url),
               let configurations = try? JSONDecoder().decode(DesktopWidgetConfigurations.self, from: data)
         else {
+            logger.error("Could not load desktop widget configuration")
             return .defaults(appearance: WidgetAppearanceSelectionStore.load())
         }
+        logger.notice(
+            "Loaded medium widget: \(configurations.medium.family.rawValue, privacy: .public), \(configurations.medium.style.rawValue, privacy: .public), \(configurations.medium.theme.rawValue, privacy: .public), \(configurations.medium.backgroundMode.rawValue, privacy: .public)"
+        )
         return configurations
     }
 
@@ -231,12 +318,8 @@ struct WidgetAppearanceSelection: Codable, Equatable, Sendable {
 }
 
 enum WidgetAppearanceSelectionStore {
-    static let url = URL(
-        fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
-            ?? FileManager.default.homeDirectoryForCurrentUser.path,
-        isDirectory: true
-    )
-        .appendingPathComponent("Library/Application Support/CodexUsageMonitor/widget-appearance.json")
+    static let url = WidgetDataBridge.currentDirectoryURL
+        .appendingPathComponent("widget-appearance.json")
 
     static func load() -> WidgetAppearanceSelection? {
         guard let data = try? Data(contentsOf: url) else { return nil }

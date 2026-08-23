@@ -2,7 +2,7 @@
 
 ## Current preview
 
-Version 3.0.2 is preview software. It is currently ad-hoc signed, not signed with
+Version 3.0.3 is preview software. It is currently ad-hoc signed, not signed with
 an Apple Developer ID, and not notarized by Apple. macOS may require Control-click,
 then **Open**. The DMG contains only the app and an Applications shortcut.
 
@@ -38,7 +38,7 @@ performed.
 Authenticate `gh`, then run:
 
 ```sh
-./scripts/publish_github_release.sh 3.0.2
+./scripts/publish_github_release.sh 3.0.3
 ```
 
 The script derives the version from the built app, generates and validates the

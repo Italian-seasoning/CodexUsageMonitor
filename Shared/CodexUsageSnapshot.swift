@@ -1612,13 +1612,7 @@ enum CodexUsageSnapshotStore {
     static let refreshLockURL = dataDirectoryURL.appendingPathComponent("refresh.lock")
     static let legacyHistoryURL = dataDirectoryURL.appendingPathComponent("legacy-history.json")
 
-    private static let dataDirectoryURL: URL = {
-        let home = getpwuid(getuid())
-            .map { URL(fileURLWithPath: String(cString: $0.pointee.pw_dir), isDirectory: true) }
-            ?? FileManager.default.homeDirectoryForCurrentUser
-        return home
-        .appendingPathComponent("Library/Application Support/CodexUsageMonitor")
-    }()
+    private static let dataDirectoryURL = WidgetDataBridge.currentDirectoryURL
 
     static func load() -> CodexUsageSnapshot? {
         guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
