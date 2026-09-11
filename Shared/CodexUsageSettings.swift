@@ -27,7 +27,7 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 struct CodexUsageSettings: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
     static let `default` = CodexUsageSettings(
         schemaVersion: currentSchemaVersion,
         appTheme: .crimson,
@@ -36,6 +36,7 @@ struct CodexUsageSettings: Codable, Equatable, Sendable {
         appPresence: .menuBar,
         menuBarDisplayMode: .percentage,
         notificationsEnabled: false,
+        phoneNotificationsEnabled: false,
         warningThreshold: 70,
         criticalThreshold: 90
     )
@@ -47,6 +48,7 @@ struct CodexUsageSettings: Codable, Equatable, Sendable {
     var appPresence: AppPresenceMode
     var menuBarDisplayMode: MenuBarDisplayMode
     var notificationsEnabled: Bool
+    var phoneNotificationsEnabled: Bool
     var warningThreshold: Int
     var criticalThreshold: Int
 }
@@ -191,6 +193,7 @@ private struct SettingsPayload: Decodable {
         settings.appPresence = decode(.appPresence, from: container, default: settings.appPresence, repairedFields: &repairedFields)
         settings.menuBarDisplayMode = decode(.menuBarDisplayMode, from: container, default: settings.menuBarDisplayMode, repairedFields: &repairedFields)
         settings.notificationsEnabled = decode(.notificationsEnabled, from: container, default: settings.notificationsEnabled, repairedFields: &repairedFields)
+        settings.phoneNotificationsEnabled = decode(.phoneNotificationsEnabled, from: container, default: settings.phoneNotificationsEnabled, repairedFields: &repairedFields)
         settings.warningThreshold = decode(.warningThreshold, from: container, default: settings.warningThreshold, repairedFields: &repairedFields)
         settings.criticalThreshold = decode(.criticalThreshold, from: container, default: settings.criticalThreshold, repairedFields: &repairedFields)
 
@@ -217,6 +220,7 @@ private struct SettingsPayload: Decodable {
         case appPresence
         case menuBarDisplayMode
         case notificationsEnabled
+        case phoneNotificationsEnabled
         case warningThreshold
         case criticalThreshold
     }

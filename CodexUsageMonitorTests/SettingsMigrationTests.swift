@@ -49,6 +49,7 @@ struct SettingsMigrationTests {
         #expect(result.settings.schemaVersion == CodexUsageSettings.currentSchemaVersion)
         #expect(result.settings.appTheme == .crimson)
         #expect(result.settings.backgroundRefreshEnabled)
+        #expect(!result.settings.phoneNotificationsEnabled)
         #expect(result.settings.warningThreshold == 70)
         #expect(result.repairedFields.isEmpty)
     }

@@ -65,27 +65,53 @@ struct CodexMenuBarLabel: View {
 
     var body: some View {
         let stale = model.snapshot.generatedAt.map { Date().timeIntervalSince($0) > 6 * 60 } ?? true
-        HStack(spacing: 4) {
-            Image(systemName: stale ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.50percent")
-            Text(labelText)
-        }
-        .accessibilityLabel("Codex usage")
-        .accessibilityValue(labelText)
+        let lines = labelLines
+        let image = Self.labelImage(lines: lines)
+        Image(nsImage: image)
+            .resizable()
+            .frame(width: image.size.width, height: image.size.height)
+            .foregroundStyle(stale ? .secondary : .primary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Codex usage")
+            .accessibilityValue(lines.joined(separator: ", "))
     }
 
-    private var labelText: String {
-        guard let limits = model.snapshot.rateLimits,
-              let window = limits.weekly ?? limits.fiveHour
-        else { return "—" }
-        let prefix = limits.weekly == nil ? "5h" : "W"
-        switch settingsModel.settings.menuBarDisplayMode {
+    private static func labelImage(lines: [String]) -> NSImage {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white,
+        ]
+        let sizes = lines.map { ($0 as NSString).size(withAttributes: attributes) }
+        let size = NSSize(width: ceil(sizes.map(\.width).max() ?? 1), height: 18)
+        let image = NSImage(size: size, flipped: true) { _ in
+            (lines[0] as NSString).draw(at: NSPoint(x: 0, y: 0), withAttributes: attributes)
+            (lines[1] as NSString).draw(at: NSPoint(x: 0, y: 9), withAttributes: attributes)
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    private var labelLines: [String] {
+        let limits = model.snapshot.rateLimits
+        let mode = settingsModel.settings.menuBarDisplayMode
+        return [
+            Self.labelText(prefix: "5H", window: limits?.fiveHour, mode: mode),
+            Self.labelText(prefix: "W", window: limits?.weekly, mode: mode),
+        ]
+    }
+
+    static func labelText(prefix: String, window: RateLimitWindow?, mode: MenuBarDisplayMode) -> String {
+        guard let window else { return "\(prefix) —" }
+        switch mode {
         case .percentage:
             return "\(prefix) \(Int(window.remainingPercent.rounded()))%"
         case .meter:
             let filled = min(5, max(0, Int(ceil(window.remainingPercent / 20))))
             return "\(prefix) " + String(repeating: "●", count: filled) + String(repeating: "○", count: 5 - filled)
         case .reset:
-            return window.resetText()
+            return "\(prefix) \(window.resetText())"
         case .hidden:
             return ""
         }
@@ -97,9 +123,9 @@ struct CodexMenuBarView: View {
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            limitRow(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour)
-            limitRow(title: "Weekly", window: model.snapshot.rateLimits?.weekly)
+        VStack(alignment: .leading, spacing: 6) {
+            limitRows(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour)
+            limitRows(title: "Weekly", window: model.snapshot.rateLimits?.weekly)
 
             if let limits = model.snapshot.rateLimits {
                 Divider()
@@ -143,22 +169,16 @@ struct CodexMenuBarView: View {
     }
 
     @ViewBuilder
-    private func limitRow(title: String, window: RateLimitWindow?) -> some View {
+    private func limitRows(title: String, window: RateLimitWindow?) -> some View {
         if let window {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(title).fontWeight(.semibold)
-                    Spacer()
-                    Text("\(Int(window.remainingPercent.rounded()))% left")
-                        .monospacedDigit()
-                }
-                ProgressView(value: window.remainingPercent, total: 100)
-                Text("Resets in \(window.resetText())")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text("\(title) · \(Int(window.remainingPercent.rounded()))% left")
+                .fontWeight(.semibold)
+                .monospacedDigit()
+            Text("Resets in \(window.resetText())")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         } else {
-            LabeledContent(title, value: "Unavailable")
+            Text("\(title) · Unavailable")
                 .foregroundStyle(.secondary)
         }
     }

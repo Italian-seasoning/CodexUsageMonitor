@@ -13,7 +13,7 @@ Codex rate limits, and make the most useful status visible from the menu bar.
 
 - Add one onboarding choice for background widget updates and install the bundled
   refresh agent only after consented onboarding.
-- Run the signed main app in background mode every three minutes from its stable
+- Run the signed main app in background mode every minute from its stable
   path in `/Applications`; no separate helper process remains resident.
 - Reinstall or repair the agent after an app update or move.
 - Refresh Codex and Headroom data, atomically save the shared snapshot, then call

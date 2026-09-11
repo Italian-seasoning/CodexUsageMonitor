@@ -22,7 +22,7 @@ API-equivalent cost estimates, Headroom savings, and configurable desktop widget
 - Headroom tokens saved, savings rate, and estimated cost avoided
 - Five-hour and weekly Codex limits, reset times, pace, and seven-day history
 - A native menu bar meter with percentage, meter, and reset-countdown modes
-- Low-resource background widget snapshots every three minutes while the app is closed
+- Background widget snapshots every minute while the app is closed
 - Independent settings for small, medium, and large widgets
 
 ## Privacy
@@ -48,6 +48,6 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current preview: **3.0.4**
+Current preview: **3.1.0**
 
 Codex Usage Monitor is independent software and is not affiliated with OpenAI.

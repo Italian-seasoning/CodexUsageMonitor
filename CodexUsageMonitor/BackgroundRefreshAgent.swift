@@ -23,14 +23,14 @@ struct BackgroundRefreshAgentStatus: Sendable {
             return installed ? "Managed by the installed app" : "Move the app to Applications first"
         }
         if !installed || !loaded { return "Needs repair" }
-        guard let lastSuccess else { return "Scheduled every 3 minutes" }
+        guard let lastSuccess else { return "Scheduled every minute" }
         return "Last refreshed \(lastSuccess.formatted(date: .omitted, time: .shortened))"
     }
 }
 
 enum BackgroundRefreshAgent {
     static let identifier = "com.codexusage.CodexUsageMonitor.refresh"
-    static let interval: TimeInterval = 180
+    static let interval: TimeInterval = 60
 
     static var isStableInstall: Bool {
         let path = Bundle.main.bundleURL.standardizedFileURL.path

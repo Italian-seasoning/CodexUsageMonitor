@@ -3,14 +3,14 @@
   --bg: #08090a;
   --surface: #0d0f11;
   --surface-raised: #121518;
-  --ink: #f4f5f5;
+  --ink: #eee7d5;
   --muted: #a2a7aa;
   --quiet: #73797d;
   --line: rgba(255, 255, 255, .11);
   --line-bright: rgba(255, 255, 255, .18);
-  --sea: #45dfd0;
+  --sea: #75c8bd;
   --deep-sea: #0b7175;
-  --sun: #ffc95b;
+  --sun: #f2b85b;
   --max: 1200px;
   --display: "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
   --body: "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
@@ -152,6 +152,17 @@ nav a:hover, footer a:hover { color: white; }
   margin: 0 auto;
   text-align: center;
 }
+.hero-mark { margin: 0 auto 24px; }
+.pricing-update { width: min(calc(100% - 48px), 960px); margin: 0 auto 120px; }
+.pricing-update h2 { margin: 20px 0; font-size: clamp(2.2rem, 5vw, 4rem); }
+.pricing-update p:not(.section-kicker) { color: var(--muted); line-height: 1.65; max-width: 760px; }
+.pricing-update a { color: var(--sea); text-decoration: underline; text-underline-offset: 4px; }
+.pricing-scroll { overflow-x: auto; }
+.pricing-update table { width: 100%; border-collapse: collapse; margin: 28px 0; text-align: left; }
+.pricing-update caption { text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 16px; }
+.pricing-update th, .pricing-update td { padding: 16px 12px; border-bottom: 1px solid var(--line); }
+.pricing-update td { font-variant-numeric: tabular-nums; }
+.pricing-update thead { color: var(--muted); font-size: 12px; }
 .release-note, .section-kicker {
   margin: 0;
   color: #b7bcbe;

@@ -48,6 +48,16 @@ struct ModelsView: View {
 
             ScrollView {
                 VStack(spacing: 10) {
+                    InspectorSection(title: "Astra & Reserve", subtitle: "Local model usage · Standard API-equivalent estimates") {
+                        Text("Reserve uses GPT-5.6 Luna. Luna tokens appear under their recorded model below; they do not measure your remaining Reserve allowance.")
+                            .font(.system(size: AppTypeScale.caption))
+                            .foregroundStyle(.secondary)
+                        Text("Per 1M tokens · Astra: $10 input / $1 cached / $50 output. Luna: $0.20 / $0.02 / $1.20. Long-context rates apply above the monitor's 272K boundary. Estimates exclude cache-write and service-tier premiums.")
+                            .font(.system(size: AppTypeScale.caption))
+                            .foregroundStyle(.secondary)
+                        Link("OpenAI pricing · checked September 6, 2026", destination: URL(string: ModelPricingCatalog.sourceURL)!)
+                            .font(.system(size: AppTypeScale.caption))
+                    }
                     InspectorSection(
                         title: "Model share",
                         subtitle: "\(period.title) attribution from local session logs"

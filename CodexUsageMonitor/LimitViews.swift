@@ -1,4 +1,5 @@
 import Charts
+import AppKit
 import SwiftUI
 
 struct LimitSummaryStrip: View {
@@ -104,10 +105,12 @@ struct LimitPreferencesView: View {
         loaded: false,
         lastSuccess: nil
     )
+    @State private var phoneTopicURL = PhoneResetNotificationManager.topicURL
+    @State private var phoneTestStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Refresh in background", isOn: $settingsModel.settings.backgroundRefreshEnabled)
+            Toggle("Continue monitoring after you quit", isOn: $settingsModel.settings.backgroundRefreshEnabled)
                 .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
                     updateAgentStatus { _ = BackgroundRefreshAgent.setEnabled(enabled) }
                 }
@@ -151,9 +154,12 @@ struct LimitPreferencesView: View {
             }
 
             Divider()
-            Toggle("Limit notifications", isOn: $settingsModel.settings.notificationsEnabled)
+            Toggle("Desktop reset and limit alerts", isOn: $settingsModel.settings.notificationsEnabled)
                 .onChange(of: settingsModel.settings.notificationsEnabled) { _, enabled in
-                    guard enabled else { return }
+                    guard enabled else {
+                        LimitNotificationManager.cancelScheduledResets()
+                        return
+                    }
                     Task {
                         if !(await LimitNotificationManager.requestAuthorization()) {
                             settingsModel.settings.notificationsEnabled = false
@@ -175,6 +181,49 @@ struct LimitPreferencesView: View {
                     }
                     .labelsHidden()
                     .frame(width: 76)
+                }
+            }
+
+            Divider()
+            Toggle("iPhone 5-hour reset alerts", isOn: $settingsModel.settings.phoneNotificationsEnabled)
+                .onChange(of: settingsModel.settings.phoneNotificationsEnabled) { _, enabled in
+                    if enabled {
+                        phoneTopicURL = PhoneResetNotificationManager.ensureTopic().map { "https://ntfy.sh/\($0)" }
+                        settingsModel.settings.backgroundRefreshEnabled = true
+                        updateAgentStatus { _ = BackgroundRefreshAgent.install() }
+                    } else {
+                        Task { await PhoneResetNotificationManager.cancelScheduled() }
+                    }
+                }
+
+            if settingsModel.settings.phoneNotificationsEnabled {
+                Text("Install ntfy on your iPhone, then subscribe to this private topic. The topic is stored in Keychain.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                if let phoneTopicURL {
+                    Text(phoneTopicURL)
+                        .font(.system(size: 10, design: .monospaced))
+                        .textSelection(.enabled)
+                    HStack {
+                        Button("Copy topic URL") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(phoneTopicURL, forType: .string)
+                        }
+                        Button("Send phone test") {
+                            phoneTestStatus = "Sending…"
+                            Task {
+                                phoneTestStatus = await PhoneResetNotificationManager.sendTest()
+                                    ? "Sent"
+                                    : "Could not send"
+                            }
+                        }
+                        if let phoneTestStatus {
+                            Text(phoneTestStatus)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.link)
                 }
             }
         }

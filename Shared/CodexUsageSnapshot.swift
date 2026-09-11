@@ -106,13 +106,15 @@ struct ModelPricing: Equatable {
 }
 
 enum ModelPricingCatalog {
-    static let version = "OpenAI Standard API · 2026-07-10"
+    static let version = "OpenAI Standard API · Astra/Luna refreshed 2026-09-06"
     static let sourceURL = "https://developers.openai.com/api/docs/pricing"
 
     private static let prices: [String: ModelPricing] = [
+        // Uses the monitor's existing 272K context boundary for API-equivalent estimates.
+        "gpt-6-astra": ModelPricing(inputPerMillion: 10, cachedInputPerMillion: 1, outputPerMillion: 50, longInputPerMillion: 20, longCachedInputPerMillion: 2, longOutputPerMillion: 75, longContextThreshold: 272_000),
         "gpt-5.6-sol": ModelPricing(inputPerMillion: 5, cachedInputPerMillion: 0.5, outputPerMillion: 30, longInputPerMillion: 10, longCachedInputPerMillion: 1, longOutputPerMillion: 45, longContextThreshold: 272_000),
         "gpt-5.6-terra": ModelPricing(inputPerMillion: 2.5, cachedInputPerMillion: 0.25, outputPerMillion: 15, longInputPerMillion: 5, longCachedInputPerMillion: 0.5, longOutputPerMillion: 22.5, longContextThreshold: 272_000),
-        "gpt-5.6-luna": ModelPricing(inputPerMillion: 1, cachedInputPerMillion: 0.1, outputPerMillion: 6, longInputPerMillion: 2, longCachedInputPerMillion: 0.2, longOutputPerMillion: 9, longContextThreshold: 272_000),
+        "gpt-5.6-luna": ModelPricing(inputPerMillion: 0.2, cachedInputPerMillion: 0.02, outputPerMillion: 1.2, longInputPerMillion: 0.4, longCachedInputPerMillion: 0.04, longOutputPerMillion: 1.8, longContextThreshold: 272_000),
         "gpt-5.5": ModelPricing(inputPerMillion: 5, cachedInputPerMillion: 0.5, outputPerMillion: 30, longInputPerMillion: 10, longCachedInputPerMillion: 1, longOutputPerMillion: 45, longContextThreshold: 272_000),
         "gpt-5.5-pro": ModelPricing(inputPerMillion: 30, cachedInputPerMillion: 30, outputPerMillion: 180, longInputPerMillion: 60, longCachedInputPerMillion: 60, longOutputPerMillion: 270, longContextThreshold: 272_000),
         "gpt-5.4": ModelPricing(inputPerMillion: 2.5, cachedInputPerMillion: 0.25, outputPerMillion: 15, longInputPerMillion: 5, longCachedInputPerMillion: 0.5, longOutputPerMillion: 22.5, longContextThreshold: 272_000),
@@ -996,6 +998,7 @@ struct CodexUsageReader {
         let sessions = groupedSessions(files)
         let startOfToday = calendar.startOfDay(for: now)
         let startOfLast7Days = calendar.date(byAdding: .day, value: -6, to: startOfToday) ?? startOfToday
+        let startOfLast30Days = calendar.date(byAdding: .day, value: -29, to: startOfToday) ?? startOfToday
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? startOfToday
         var lifetime = TokenUsage.zero
         var byDay: [Date: DayAggregate] = [:]
@@ -1092,7 +1095,7 @@ struct CodexUsageReader {
         }.sorted { $0.date < $1.date }
         let recentSessions = recentSessionSummaries(
             from: sessions,
-            since: startOfLast7Days,
+            since: startOfLast30Days,
             through: now
         )
 
@@ -1132,36 +1135,48 @@ struct CodexUsageReader {
         since startDate: Date,
         through endDate: Date
     ) -> [CodexSessionSummary] {
-        sessions.compactMap { session in
-            guard let updatedAt = session.latestSample?.timestamp,
-                  updatedAt >= startDate,
-                  updatedAt <= endDate
-            else { return nil }
-
-            var tokensByModel: [String: Int] = [:]
-            var estimatedCostUSD = 0.0
-            var hasPricedUsage = false
-            for sample in session.samples {
-                let model = sample.model ?? "Unknown"
-                tokensByModel[model, default: 0] += sample.usage.total
-                if let pricing = ModelPricingCatalog.pricing(for: sample.model) {
-                    estimatedCostUSD += pricing.estimatedCost(for: sample.usage)
-                    hasPricedUsage = true
-                }
+        sessions.flatMap { session in
+            let samplesByDay = Dictionary(grouping: session.samples.filter {
+                $0.timestamp >= startDate && $0.timestamp <= endDate
+            }) {
+                calendar.startOfDay(for: $0.timestamp)
             }
-            let primaryModel = tokensByModel.sorted {
-                $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
-            }.first?.key ?? "Unknown"
 
-            return CodexSessionSummary(
-                id: session.id,
-                startedAt: session.startedAt ?? session.samples.first?.timestamp ?? updatedAt,
-                updatedAt: updatedAt,
-                usage: session.total,
-                turns: session.samples.count,
-                model: primaryModel,
-                estimatedCostUSD: hasPricedUsage ? estimatedCostUSD : nil
-            )
+            return samplesByDay.compactMap { (day, samples) -> CodexSessionSummary? in
+                let samples = samples.sorted { $0.timestamp < $1.timestamp }
+                guard let first = samples.first, let last = samples.last else { return nil }
+
+                var usage = TokenUsage.zero
+                var tokensByModel: [String: Int] = [:]
+                var estimatedCostUSD = 0.0
+                var hasPricedUsage = false
+                for sample in samples {
+                    usage.add(sample.usage)
+                    let model = sample.model ?? "Unknown"
+                    tokensByModel[model, default: 0] += sample.usage.total
+                    if let pricing = ModelPricingCatalog.pricing(for: sample.model) {
+                        estimatedCostUSD += pricing.estimatedCost(for: sample.usage)
+                        hasPricedUsage = true
+                    }
+                }
+
+                let primaryModel = tokensByModel.sorted {
+                    $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+                }.first?.key ?? "Unknown"
+                let startedAt = session.startedAt.map {
+                    calendar.isDate($0, inSameDayAs: day) ? $0 : first.timestamp
+                } ?? first.timestamp
+
+                return CodexSessionSummary(
+                    id: "\(session.id)#\(Int(day.timeIntervalSinceReferenceDate))",
+                    startedAt: startedAt,
+                    updatedAt: last.timestamp,
+                    usage: usage,
+                    turns: samples.count,
+                    model: primaryModel,
+                    estimatedCostUSD: hasPricedUsage ? estimatedCostUSD : nil
+                )
+            }
         }
         .sorted { $0.updatedAt > $1.updatedAt }
     }

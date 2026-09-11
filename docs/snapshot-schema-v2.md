@@ -23,7 +23,7 @@ Codex Usage Monitor writes one local JSON snapshot for the macOS app, menu bar, 
 - Unavailable: no valid usage source was found.
 - Permission blocked and refresh errors are stored in the separate background refresh status record, not inferred from zero usage.
 
-Widget timelines request a new shared snapshot every three minutes. WidgetKit may delay the visible redraw after a reload request.
+Widget timelines request a new shared snapshot every minute. WidgetKit may delay the visible redraw after a reload request.
 
 ## Root fields
 

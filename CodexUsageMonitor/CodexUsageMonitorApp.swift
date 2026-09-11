@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             Task.detached(priority: .utility) {
                 let result = await RefreshCoordinator.shared.refresh(trigger: .backgroundAgent)
+                await PhoneResetNotificationManager.scheduleIfNeeded(result.snapshot)
                 exit(result.outcome == .failed ? EXIT_FAILURE : EXIT_SUCCESS)
             }
             return

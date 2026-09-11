@@ -11,7 +11,7 @@
   <meta property="og:image" content="https://italian-seasoning.github.io/CodexUsageMonitor/assets/site-preview.png">
   <meta name="twitter:card" content="summary_large_image">
   <title>Codex Usage Monitor</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/monitor-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <script src="site.js" defer></script>
 </head>
@@ -21,7 +21,7 @@
   <header class="site-header">
     <div class="header-inner">
       <a class="brand" href="#top" aria-label="Codex Usage Monitor home">
-        <img src="assets/app-icon.png" alt="" width="30" height="30">
+        <img src="assets/monitor-mark.svg" alt="" width="30" height="30">
         <span>Codex Usage</span>
       </a>
       <nav aria-label="Main navigation">
@@ -46,9 +46,10 @@
       </div>
 
       <div class="hero-copy">
+        <img class="hero-mark" src="assets/monitor-mark.svg" alt="" width="104" height="104">
         <p class="release-note"><span></span> Version 2.0.6 · macOS 14+</p>
-        <h1>Know exactly what<br>Codex is doing.</h1>
-        <p class="hero-detail">Usage, limits, models, and cost estimates—read locally from your Mac and kept visible with native desktop widgets.</p>
+        <h1>A little clarity.<br> For every token.</h1>
+        <p class="hero-detail">Keep your Codex usage, model activity, and API-equivalent estimates in view. A private, native companion for your Mac.</p>
         <div class="hero-actions">
           <a class="primary-action download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">
             <span class="button-icon" aria-hidden="true">↓</span>
@@ -68,8 +69,8 @@
           <span class="live-indicator"><i></i> Local</span>
         </div>
         <img src="assets/analysis.jpg" alt="Codex Usage Monitor Analysis screen showing token activity, model share, API estimate, sessions, and remaining limits.">
-        <div class="stage-note stage-note-left"><b>87%</b><span>weekly allowance left</span></div>
-        <div class="stage-note stage-note-right"><b>3 min</b><span>native widget refresh</span></div>
+        <div class="stage-note stage-note-left"><b>On your Mac</b><span>your local usage history</span></div>
+        <div class="stage-note stage-note-right"><b>At a glance</b><span>native desktop widgets</span></div>
       </div>
     </section>
 
@@ -83,7 +84,7 @@
       <div class="feature-copy">
         <p class="section-kicker">Model attribution</p>
         <h2>See the work behind the total.</h2>
-        <p>Ranked model share, request counts, and recorded API-equivalent estimates make every period easy to understand.</p>
+        <p>Follow Astra and Luna alongside your other models. Ranked token share, request counts, and API-equivalent estimates make each period easy to understand.</p>
         <ul class="feature-list">
           <li><span>01</span> Period-aware model mix</li>
           <li><span>02</span> Recorded pricing estimates</li>
@@ -94,6 +95,21 @@
         <div class="feature-glow" aria-hidden="true"></div>
         <img src="assets/models.jpg" alt="Models screen with ranked horizontal model share bars and attributed usage details." loading="lazy">
       </div>
+    </section>
+
+    <section class="pricing-update" aria-labelledby="pricing-heading">
+      <p class="section-kicker">September update · In development</p>
+      <h2 id="pricing-heading">Astra precision. Luna headroom.</h2>
+      <p>Updated Standard API-equivalent rates, checked against OpenAI on September 6, 2026. These estimate token value; they are not ChatGPT subscription charges.</p>
+      <div class="pricing-scroll">
+        <table>
+          <caption>USD per million tokens · short context</caption>
+          <thead><tr><th scope="col">Model</th><th scope="col">Input</th><th scope="col">Cached input</th><th scope="col">Output</th></tr></thead>
+          <tbody><tr><th scope="row">GPT-6 Astra</th><td>$10.00</td><td>$1.00</td><td>$50.00</td></tr><tr><th scope="row">GPT-5.6 Luna · Reserve</th><td>$0.20</td><td>$0.02</td><td>$1.20</td></tr></tbody>
+        </table>
+      </div>
+      <p>Reserve uses Luna. Model activity comes from local logs; it does not indicate a remaining Reserve allowance. Long-context rates differ. Cache-write and service-tier premiums are excluded from estimates.</p>
+      <a href="https://developers.openai.com/api/docs/pricing">View OpenAI pricing ↗</a>
     </section>
 
     <section class="feature feature-widgets reveal" id="widgets">
@@ -128,7 +144,7 @@
     </section>
 
     <section class="final-cta reveal">
-      <img src="assets/app-icon.png" alt="" width="88" height="88">
+      <img src="assets/monitor-mark.svg" alt="" width="88" height="88">
       <p class="section-kicker">Codex Usage Monitor 2.0.6</p>
       <h2>Keep your Codex work in view.</h2>
       <a class="primary-action download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg">
@@ -140,7 +156,7 @@
   </main>
 
   <footer>
-    <a class="brand" href="#top"><img src="assets/app-icon.png" alt="" width="28" height="28"><span>Codex Usage</span></a>
+    <a class="brand" href="#top"><img src="assets/monitor-mark.svg" alt="" width="28" height="28"><span>Codex Usage</span></a>
     <p>Independent software. Not affiliated with OpenAI.</p>
     <div><a href="privacy.html">Privacy</a><a href="https://github.com/Italian-seasoning/CodexUsageMonitor/issues">Support</a></div>
   </footer>

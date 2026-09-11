@@ -4,15 +4,18 @@ struct SessionsView: View {
     var snapshot: CodexUsageSnapshot
     var health: SnapshotHealth
 
-    @State private var range = SessionRange.sevenDays
-    @State private var sortOrder = [
-        KeyPathComparator(\CodexSessionSummary.updatedAt, order: .reverse)
-    ]
+    @State private var range = SessionRange.thirtyDays
 
     private var sessions: [CodexSessionSummary] {
         snapshot.recentSessions
             .filter { range.includes($0.updatedAt) }
-            .sorted(using: sortOrder)
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private var sessionDays: [SessionDay] {
+        Dictionary(grouping: sessions) { Calendar.current.startOfDay(for: $0.updatedAt) }
+            .map { SessionDay(date: $0.key, sessions: $0.value) }
+            .sorted { $0.date > $1.date }
     }
 
     private var totalTokens: Int {
@@ -32,7 +35,7 @@ struct SessionsView: View {
             VStack(spacing: 10) {
                 HStack(spacing: 12) {
                     Label(
-                        "\(sessions.count) \(sessions.count == 1 ? "session" : "sessions")",
+                        "\(sessions.count) \(sessions.count == 1 ? "chat period" : "chat periods")",
                         systemImage: "rectangle.stack"
                     )
                     Spacer()
@@ -51,37 +54,22 @@ struct SessionsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .appGlassPanel(cornerRadius: 16)
                 } else {
-                    Table(sessions, sortOrder: $sortOrder) {
-                        TableColumn("Last active", value: \CodexSessionSummary.updatedAt) { session in
-                            Text(session.updatedAt, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                    List {
+                        ForEach(sessionDays) { day in
+                            Section {
+                                ForEach(day.sessions) { session in
+                                    SessionRow(session: session)
+                                }
+                            } header: {
+                                Text(day.headerTitle)
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .accessibilityLabel(day.headerTitle)
+                                    .accessibilityAddTraits(.isHeader)
+                            }
                         }
-                        .width(min: 165, ideal: 190)
-
-                        TableColumn("Model", value: \CodexSessionSummary.model) { session in
-                            Text(ModelPricingCatalog.displayName(for: session.model))
-                                .lineLimit(1)
-                        }
-                        .width(min: 130, ideal: 170)
-
-                        TableColumn("Requests", value: \CodexSessionSummary.turns) { session in
-                            Text(session.turns.formatted())
-                                .monospacedDigit()
-                        }
-                        .width(min: 72, ideal: 82)
-
-                        TableColumn("Tokens", value: \CodexSessionSummary.usage.total) { session in
-                            Text(session.usage.total.compactTokenString)
-                                .monospacedDigit()
-                        }
-                        .width(min: 78, ideal: 92)
-
-                        TableColumn("Est. API cost", value: \CodexSessionSummary.sortableEstimatedCostUSD) { session in
-                            Text(session.estimatedCostUSD?.compactCurrencyString ?? "Unpriced")
-                                .monospacedDigit()
-                        }
-                        .width(min: 92, ideal: 110)
                     }
-                    .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    .listStyle(.inset)
                     .scrollContentBackground(.hidden)
                     .appGlassPanel(cornerRadius: 16)
                 }
@@ -96,18 +84,77 @@ struct SessionsView: View {
     }
 }
 
+private struct SessionDay: Identifiable {
+    var date: Date
+    var sessions: [CodexSessionSummary]
+
+    var id: Date { date }
+    var totalTokens: Int { sessions.reduce(0) { $0 + $1.usage.total } }
+    var headerTitle: String {
+        "\(date.formatted(.dateTime.weekday(.wide).month(.wide).day())) · \(sessions.count) \(sessions.count == 1 ? "chat" : "chats") · \(totalTokens.compactTokenString) tokens"
+    }
+}
+
+private struct SessionRow: View {
+    var session: CodexSessionSummary
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(timeRange)
+                    .font(.system(size: AppTypeScale.label, weight: .semibold))
+                    .monospacedDigit()
+                Text("\(ModelPricingCatalog.displayName(for: session.model)) · \(session.turns.formatted()) \(session.turns == 1 ? "request" : "requests")")
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("\(session.usage.total.compactTokenString) tokens")
+                    .font(.system(size: AppTypeScale.label, weight: .semibold))
+                    .monospacedDigit()
+                Text(session.estimatedCostUSD?.compactCurrencyString ?? "Unpriced")
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var timeRange: String {
+        let start = session.startedAt.formatted(date: .omitted, time: .shortened)
+        let end = session.updatedAt.formatted(date: .omitted, time: .shortened)
+        return start == end ? start : "\(start)–\(end)"
+    }
+}
+
 private enum SessionRange: String, CaseIterable, Identifiable {
     case today
     case sevenDays
+    case thirtyDays
 
     var id: Self { self }
-    var title: String { self == .today ? "Today" : "7 Days" }
+    var title: String {
+        switch self {
+        case .today: "Today"
+        case .sevenDays: "7 Days"
+        case .thirtyDays: "30 Days"
+        }
+    }
 
     func includes(_ date: Date, calendar: Calendar = .current, now: Date = .now) -> Bool {
         let today = calendar.startOfDay(for: now)
-        let start = self == .today
-            ? today
-            : calendar.date(byAdding: .day, value: -6, to: today) ?? today
+        let days = switch self {
+        case .today: 1
+        case .sevenDays: 7
+        case .thirtyDays: 30
+        }
+        let start = calendar.date(byAdding: .day, value: 1 - days, to: today) ?? today
         return date >= start && date <= now
     }
 }
