@@ -27,26 +27,90 @@ func menuBarLabelFormatsBothLimitRows() {
     #expect(CodexMenuBarLabel.labelText(prefix: "W", window: nil, mode: .percentage) == "W —")
 }
 
-@Test("Phone reset request is delayed to the authoritative five-hour reset")
-func phoneResetRequestUsesCodexResetTime() throws {
+@Test("Phone reset request is sent only after a confirmed five-hour reset")
+func phoneResetRequestRequiresConfirmedReset() throws {
     let now = try #require(ISO8601DateFormatter().date(from: "2026-08-30T12:00:00Z"))
-    let reset = now.addingTimeInterval(3_600)
     let window = RateLimitWindow(
-        usedPercent: 45,
+        usedPercent: 1,
         windowMinutes: 300,
-        resetsAt: reset,
+        resetsAt: now.addingTimeInterval(5 * 3_600),
         observedAt: now
     )
 
-    let request = try #require(PhoneResetNotificationManager.scheduledRequest(
+    let request = try #require(PhoneResetNotificationManager.confirmedResetRequest(
         topic: "codex-private-topic",
         window: window,
+        previousReset: now.addingTimeInterval(-1).timeIntervalSince1970,
         now: now
     ))
 
-    #expect(request.url?.absoluteString == "https://ntfy.sh/codex-private-topic/codex-five-hour-reset")
+    #expect(request.url?.absoluteString == "https://ntfy.sh/codex-private-topic")
     #expect(request.httpMethod == "POST")
-    #expect(request.value(forHTTPHeaderField: "At") == String(Int(reset.timeIntervalSince1970)))
+    #expect(request.value(forHTTPHeaderField: "At") == nil)
+}
+
+@Test("Reset notification state ignores timestamp jitter and older windows")
+func resetNotificationStateRejectsDuplicateWindows() throws {
+    let reset = try #require(ISO8601DateFormatter().date(from: "2026-08-30T13:00:00Z"))
+    let stored = reset.timeIntervalSince1970
+
+    #expect(LimitNotificationManager.isNewReset(reset, after: 0))
+    #expect(!LimitNotificationManager.isNewReset(reset.addingTimeInterval(1), after: stored))
+    #expect(!LimitNotificationManager.isNewReset(reset.addingTimeInterval(-3_600), after: stored))
+    #expect(LimitNotificationManager.isNewReset(reset.addingTimeInterval(5 * 3_600), after: stored))
+}
+
+@Test("Legacy reset alert state migrates without sending again")
+func legacyResetNotificationStateIsRecognized() throws {
+    let suiteName = "CodexUsageMonitorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    defaults.set(true, forKey: "CodexUsageMonitor.notified.300.1788226971.80")
+
+    #expect(LimitNotificationManager.previousNotifiedReset(
+        defaults: defaults,
+        windowMinutes: 300,
+        threshold: 80
+    ) == 1_788_226_971)
+    #expect(LimitNotificationManager.previousNotifiedReset(
+        defaults: defaults,
+        windowMinutes: 300,
+        threshold: 95
+    ) == 0)
+}
+
+@Test("Reset notifications require an observed window transition")
+func resetNotificationsRequireObservedTransition() throws {
+    let now = try #require(ISO8601DateFormatter().date(from: "2026-08-30T12:00:00Z"))
+    let fiveHour = RateLimitWindow(
+        usedPercent: 1,
+        windowMinutes: 300,
+        resetsAt: now.addingTimeInterval(5 * 3_600),
+        observedAt: now
+    )
+    let weekly = RateLimitWindow(
+        usedPercent: 77,
+        windowMinutes: 10_080,
+        resetsAt: now.addingTimeInterval(6 * 86_400),
+        observedAt: now
+    )
+
+    #expect(LimitNotificationManager.isConfirmedReset(
+        previousReset: now.addingTimeInterval(-1).timeIntervalSince1970,
+        window: fiveHour,
+        now: now
+    ))
+    #expect(!LimitNotificationManager.isConfirmedReset(
+        previousReset: weekly.resetsAt.timeIntervalSince1970,
+        window: weekly,
+        now: now
+    ))
+    #expect(PhoneResetNotificationManager.confirmedResetRequest(
+        topic: "codex-private-topic",
+        window: fiveHour,
+        previousReset: fiveHour.resetsAt.timeIntervalSince1970,
+        now: now
+    ) == nil)
 }
 
 @Test("Reader splits a chat across active days")
