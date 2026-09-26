@@ -124,7 +124,7 @@ struct HeadroomSavingsCollectorCheck {
               "calls": 4,
               "savings_percent": 62.5
             },
-            "all_time": {
+            "last_30_days": {
               "tokens_saved": 1000,
               "tokens_before": 1600,
               "cost_usd": 0.003,

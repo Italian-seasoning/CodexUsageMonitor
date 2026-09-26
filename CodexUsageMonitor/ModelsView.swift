@@ -6,6 +6,14 @@ struct ModelsView: View {
     var health: SnapshotHealth
 
     @State private var period = UsagePeriod.sevenDays
+    @State private var comparison = Comparison.tokens
+
+    private enum Comparison: String, CaseIterable, Identifiable {
+        case tokens = "Tokens"
+        case apiCost = "API cost"
+
+        var id: String { rawValue }
+    }
 
     private var models: [ModelUsage] {
         let dates = Set(
@@ -34,6 +42,14 @@ struct ModelsView: View {
         models.reduce(0) { $0 + $1.usage.total }
     }
 
+    private var totalCost: Double {
+        models.reduce(0) { $0 + $1.estimatedCostUSD }
+    }
+
+    private var comparedModels: [ModelUsage] {
+        comparison == .tokens ? models : models.sorted { $0.estimatedCostUSD > $1.estimatedCostUSD }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             AppSectionHeader(section: .models) {
@@ -52,16 +68,23 @@ struct ModelsView: View {
                         Text("Reserve uses GPT-5.6 Luna. Luna tokens appear under their recorded model below; they do not measure your remaining Reserve allowance.")
                             .font(.system(size: AppTypeScale.caption))
                             .foregroundStyle(.secondary)
-                        Text("Per 1M tokens · Astra: $10 input / $1 cached / $50 output. Luna: $0.20 / $0.02 / $1.20. Long-context rates apply above the monitor's 272K boundary. Estimates exclude cache-write and service-tier premiums.")
+                        Text("Per 1M tokens · Astra: $10 input / $1 cached / $50 output. Long-context rates apply above 272K input tokens per request. API-equivalent estimates exclude cache-write and service-tier premiums.")
                             .font(.system(size: AppTypeScale.caption))
                             .foregroundStyle(.secondary)
-                        Link("OpenAI pricing · checked September 6, 2026", destination: URL(string: ModelPricingCatalog.sourceURL)!)
+                        Link("OpenAI pricing · checked September 26, 2026", destination: URL(string: ModelPricingCatalog.sourceURL)!)
                             .font(.system(size: AppTypeScale.caption))
                     }
                     InspectorSection(
-                        title: "Model share",
+                        title: "Model comparison",
                         subtitle: "\(period.title) attribution from local session logs"
                     ) {
+                        Picker("Compare by", selection: $comparison) {
+                            ForEach(Comparison.allCases) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
                         if models.isEmpty {
                             ContentUnavailableView(
                                 "No attributed models",
@@ -72,19 +95,19 @@ struct ModelsView: View {
                         } else {
                             HStack(alignment: .firstTextBaseline) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(ModelPricingCatalog.displayName(for: models.first?.model))
+                                    Text(ModelPricingCatalog.displayName(for: comparedModels.first?.model))
                                         .font(.system(size: AppTypeScale.value, weight: .semibold, design: .rounded))
-                                    Text("\(share(models[0])) of selected usage")
+                                    Text("\(share(comparedModels[0])) of selected \(comparison == .tokens ? "tokens" : "API cost")")
                                         .font(.system(size: AppTypeScale.caption, weight: .medium))
                                         .foregroundStyle(AppPalette.muted)
                                 }
                                 Spacer()
-                                modelValue(totalTokens.compactTokenString, label: "total tokens")
+                                modelValue(comparison == .tokens ? totalTokens.compactTokenString : totalCost.compactCurrencyString, label: comparison == .tokens ? "total tokens" : "API est.")
                             }
 
-                            Chart(Array(models.prefix(6))) { model in
+                            Chart(Array(comparedModels.prefix(6))) { model in
                                 BarMark(
-                                    x: .value("Scale", totalTokens),
+                                    x: .value("Scale", comparison == .tokens ? Double(totalTokens) : totalCost),
                                     y: .value("Model", ModelPricingCatalog.displayName(for: model.model)),
                                     height: .fixed(16),
                                     stacking: .unstacked
@@ -93,12 +116,12 @@ struct ModelsView: View {
                                 .cornerRadius(5)
 
                                 BarMark(
-                                    x: .value("Tokens", model.usage.total),
+                                    x: .value(comparison.rawValue, comparison == .tokens ? Double(model.usage.total) : model.estimatedCostUSD),
                                     y: .value("Model", ModelPricingCatalog.displayName(for: model.model)),
                                     height: .fixed(16),
                                     stacking: .unstacked
                                 )
-                                .foregroundStyle(model.id == models.first?.id ? AppPalette.accent : AppPalette.chartMuted)
+                                .foregroundStyle(model.id == comparedModels.first?.id ? AppPalette.accent : AppPalette.chartMuted)
                                 .cornerRadius(5)
                                 .annotation(position: .trailing, spacing: 8) {
                                     Text(share(model))
@@ -117,7 +140,7 @@ struct ModelsView: View {
                                 plot.padding(.trailing, 42)
                             }
                             .frame(height: max(132, CGFloat(min(models.count, 6)) * 38))
-                            .accessibilityLabel("Model token share for \(period.title)")
+                            .accessibilityLabel("Model \(comparison.rawValue.lowercased()) share for \(period.title)")
                         }
                     }
 
@@ -125,7 +148,7 @@ struct ModelsView: View {
                         title: "Attributed models",
                         subtitle: "Tokens, share, requests, and recorded API-equivalent estimate"
                     ) {
-                        ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
+                        ForEach(Array(comparedModels.enumerated()), id: \.element.id) { index, model in
                             HStack(spacing: 12) {
                                 Text("\(index + 1)")
                                     .font(.system(size: AppTypeScale.caption, weight: .semibold))
@@ -148,7 +171,7 @@ struct ModelsView: View {
                             }
                             .padding(.vertical, 7)
 
-                            if model.id != models.last?.id {
+                            if model.id != comparedModels.last?.id {
                                 Divider().overlay(AppPalette.divider)
                             }
                         }
@@ -161,6 +184,11 @@ struct ModelsView: View {
     }
 
     private func share(_ model: ModelUsage) -> String {
+        if comparison == .apiCost {
+            guard totalCost > 0 else { return "0%" }
+            return (model.estimatedCostUSD / totalCost)
+                .formatted(.percent.precision(.fractionLength(0)))
+        }
         guard totalTokens > 0 else { return "0%" }
         return (Double(model.usage.total) / Double(totalTokens))
             .formatted(.percent.precision(.fractionLength(0)))

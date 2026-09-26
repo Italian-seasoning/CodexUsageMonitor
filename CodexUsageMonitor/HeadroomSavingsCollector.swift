@@ -187,12 +187,10 @@ private struct SavingsReport: Decodable {
 private struct SavingsWindows: Decodable {
     var today: SavingsBucket
     var last7Days: SavingsBucket
-    var allTime: SavingsBucket
 
     enum CodingKeys: String, CodingKey {
         case today
         case last7Days = "last_7_days"
-        case allTime = "all_time"
     }
 }
 

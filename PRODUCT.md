@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Nolan uses this on macOS while working in Codex. The job is to glance at current-session and local lifetime usage without opening logs or a browser.
+The app is used on macOS while working in Codex. The job is to glance at current-session and local lifetime usage without opening logs or a browser.
 
 ## Product Purpose
 

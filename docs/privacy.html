@@ -17,16 +17,16 @@
   </header>
   <main class="legal-page">
     <p class="release-note"><span></span> Privacy policy</p>
-    <h1>Your Codex data stays local.</h1>
+    <h1>Your session history stays local.</h1>
     <div class="legal-copy">
       <h2>Data access</h2>
-      <p>Codex Usage Monitor reads local Codex session logs and, when installed, the local Headroom database. macOS asks for permission before the app reads another app’s protected data.</p>
+      <p>Codex Usage Monitor reads local Codex session logs and, when installed, the local Headroom database. macOS asks for permission before the app reads another app’s protected data. If ChatGPT desktop or the Codex CLI is installed, the monitor also requests account lifetime totals and current limits through Codex's app-server.</p>
       <h2>Data collection</h2>
-      <p>The app does not collect, transmit, sell, or share prompts, responses, token usage, model history, session history, or Headroom statistics. It does not include analytics or advertising SDKs.</p>
+      <p>The app does not upload, sell, or share prompts, responses, local session history, model history, or Headroom statistics. It does not include analytics or advertising SDKs.</p>
       <h2>Storage</h2>
       <p>Usage snapshots and widget settings are stored locally in Application Support. Removing the app and its local support data removes this cached history.</p>
       <h2>Network access</h2>
-      <p>Sparkle connects to GitHub Releases to check for app updates. Update archives are verified with an EdDSA signature before installation. No Codex usage data is included in update requests.</p>
+      <p>Codex's app-server may contact OpenAI using your existing sign-in to return account usage and limits. The monitor does not send local session logs or Headroom data through that request. Sparkle connects to GitHub Releases to check for app updates. Update archives are verified with an EdDSA signature before installation. No Codex usage data is included in update requests.</p>
       <h2>Contact</h2>
       <p>Questions and issues can be filed in the project’s <a href="https://github.com/Italian-seasoning/CodexUsageMonitor/issues">GitHub issue tracker</a>.</p>
       <p class="legal-date">Effective July 11, 2026</p>

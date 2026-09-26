@@ -106,13 +106,15 @@ struct ModelPricing: Equatable {
 }
 
 enum ModelPricingCatalog {
-    static let version = "OpenAI Standard API · Astra/Luna refreshed 2026-09-06"
+    static let version = "OpenAI Standard API · checked 2026-09-26"
     static let sourceURL = "https://developers.openai.com/api/docs/pricing"
 
     private static let prices: [String: ModelPricing] = [
         // Uses the monitor's existing 272K context boundary for API-equivalent estimates.
         "gpt-6-astra": ModelPricing(inputPerMillion: 10, cachedInputPerMillion: 1, outputPerMillion: 50, longInputPerMillion: 20, longCachedInputPerMillion: 2, longOutputPerMillion: 75, longContextThreshold: 272_000),
-        "gpt-5.6-sol": ModelPricing(inputPerMillion: 5, cachedInputPerMillion: 0.5, outputPerMillion: 30, longInputPerMillion: 10, longCachedInputPerMillion: 1, longOutputPerMillion: 45, longContextThreshold: 272_000),
+        "gpt-6-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.2, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.4, longOutputPerMillion: 15, longContextThreshold: 272_000),
+        "gpt-6-luna": ModelPricing(inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5, longInputPerMillion: 0.2, longCachedInputPerMillion: 0.02, longOutputPerMillion: 0.75, longContextThreshold: 272_000),
+        "gpt-5.6-sol": ModelPricing(inputPerMillion: 4, cachedInputPerMillion: 0.4, outputPerMillion: 20, longInputPerMillion: 8, longCachedInputPerMillion: 0.8, longOutputPerMillion: 30, longContextThreshold: 272_000),
         "gpt-5.6-terra": ModelPricing(inputPerMillion: 2.5, cachedInputPerMillion: 0.25, outputPerMillion: 15, longInputPerMillion: 5, longCachedInputPerMillion: 0.5, longOutputPerMillion: 22.5, longContextThreshold: 272_000),
         "gpt-5.6-luna": ModelPricing(inputPerMillion: 0.2, cachedInputPerMillion: 0.02, outputPerMillion: 1.2, longInputPerMillion: 0.4, longCachedInputPerMillion: 0.04, longOutputPerMillion: 1.8, longContextThreshold: 272_000),
         "gpt-5.5": ModelPricing(inputPerMillion: 5, cachedInputPerMillion: 0.5, outputPerMillion: 30, longInputPerMillion: 10, longCachedInputPerMillion: 1, longOutputPerMillion: 45, longContextThreshold: 272_000),
@@ -285,6 +287,7 @@ struct CodexUsageSnapshot: Codable, Equatable {
     var unpricedTokens: Int? = nil
     var pricingVersion: String? = nil
     var rateLimits: CodexRateLimits? = nil
+    var accountLifetimeTokens: Int? = nil
     var recentSessions: [CodexSessionSummary] = []
 
     static let empty = CodexUsageSnapshot(
@@ -346,6 +349,7 @@ extension CodexUsageSnapshot {
         case unpricedTokens
         case pricingVersion
         case rateLimits
+        case accountLifetimeTokens
         case recentSessions
     }
 
@@ -377,6 +381,7 @@ extension CodexUsageSnapshot {
         unpricedTokens = try values.decodeIfPresent(Int.self, forKey: .unpricedTokens)
         pricingVersion = try values.decodeIfPresent(String.self, forKey: .pricingVersion)
         rateLimits = try values.decodeIfPresent(CodexRateLimits.self, forKey: .rateLimits)
+        accountLifetimeTokens = try values.decodeIfPresent(Int.self, forKey: .accountLifetimeTokens)
         recentSessions = try values.decodeIfPresent([CodexSessionSummary].self, forKey: .recentSessions) ?? []
     }
 }
@@ -628,7 +633,7 @@ enum PrimaryMetric: String, Codable, CaseIterable, Identifiable {
         case .currentSession: snapshot.currentSession.total
         case .today: snapshot.today.total
         case .last7Days: snapshot.last7DaysUsage.total
-        case .lifetime: snapshot.lifetime.total
+        case .lifetime: snapshot.accountLifetimeTokens ?? snapshot.lifetime.total
         case .peakDay: snapshot.peakDay?.usage.total ?? 0
         case .headroomSaved: snapshot.headroom?.lifetimeTokensSaved ?? 0
         case .estimatedCost: Int((snapshot.estimatedCostUSD * 1_000_000).rounded())

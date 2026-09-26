@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
@@ -8,6 +9,7 @@ struct ContentView: View {
     @State private var refreshRecord = BackgroundRefreshAgent.loadRecord()
     @State private var isRefreshing = false
     @State private var presentsDataHealth = false
+    private let snapshotTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     private var health: SnapshotHealth {
         SnapshotHealth(snapshot: snapshot, record: refreshRecord, isRefreshing: isRefreshing)
@@ -64,6 +66,10 @@ struct ContentView: View {
         .tint(AppPalette.accent)
         .id(settingsModel.settings.appTheme)
         .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in
+            snapshot = CodexUsageSnapshotStore.load() ?? snapshot
+            refreshRecord = BackgroundRefreshAgent.loadRecord()
+        }
+        .onReceive(snapshotTimer) { _ in
             snapshot = CodexUsageSnapshotStore.load() ?? snapshot
             refreshRecord = BackgroundRefreshAgent.loadRecord()
         }

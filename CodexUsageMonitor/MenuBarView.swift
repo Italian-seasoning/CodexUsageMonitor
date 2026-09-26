@@ -35,7 +35,7 @@ final class MenuBarSnapshotModel: ObservableObject {
     private var timer: Timer?
 
     init() {
-        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.reload() }
         }
     }

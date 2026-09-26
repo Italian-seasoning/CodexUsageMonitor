@@ -4,6 +4,17 @@ import Testing
 
 @Suite
 struct UsageMetricsTests {
+    @Test("Account lifetime takes priority in the lifetime widget")
+    func accountLifetimeTakesPriority() throws {
+        var snapshot = usageMetricsFixture().snapshot
+        snapshot.accountLifetimeTokens = 7_500
+        let saved = try JSONEncoder().encode(snapshot)
+        let restored = try JSONDecoder().decode(CodexUsageSnapshot.self, from: saved)
+
+        #expect(PrimaryMetric.lifetime.value(in: restored) == 7_500)
+        #expect(restored.lifetime.total == 5_000)
+    }
+
     @Test("Period summaries use deterministic calendar boundaries")
     func periodSummariesUseDeterministicCalendarBoundaries() {
         let fixture = usageMetricsFixture()
@@ -81,7 +92,7 @@ struct UsageMetricsTests {
         ]
 
         let pricing = try #require(ModelPricingCatalog.pricing(for: "gpt-5.6-sol"))
-        #expect(abs(pricing.estimatedCost(for: aggregate) - 4) < 0.000_001)
+        #expect(abs(pricing.estimatedCost(for: aggregate) - 3.2) < 0.000_001)
         #expect(abs(snapshot.summary(for: .today, calendar: fixture.calendar, now: fixture.now).estimatedCostUSD - 2) < 0.000_001)
     }
 

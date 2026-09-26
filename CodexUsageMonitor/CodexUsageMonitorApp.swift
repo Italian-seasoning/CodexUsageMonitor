@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func scheduleWidgetRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: BackgroundRefreshAgent.interval, repeats: true) { _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
             Task { _ = await RefreshCoordinator.shared.refresh(trigger: .fallbackTimer) }
         }
     }

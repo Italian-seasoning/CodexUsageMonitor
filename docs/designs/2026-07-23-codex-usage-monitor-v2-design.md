@@ -245,7 +245,7 @@ Instruments is used to measure rather than guess:
 
 ## Signing and Distribution
 
-Debug, test, and preview release builds use Xcode automatic signing with Nolan's Apple Development certificate and Personal Team. The app, widget extension, Sparkle framework, and nested helper code must pass deep strict signature verification.
+Debug and test builds use Xcode automatic signing with a development certificate and team. The app, widget extension, Sparkle framework, and nested helper code must pass deep strict signature verification.
 
 Personal Team signing improves bundle integrity and local launch behavior, but it is not Developer ID distribution or Apple notarization. It does not promise warning-free installation on another person's Mac, and it may require renewed development provisioning. Public release notes must continue to identify the app as a preview and must not claim notarization. Sparkle update archives remain separately signed with the existing Sparkle EdDSA key.
 

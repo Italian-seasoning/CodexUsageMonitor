@@ -14,21 +14,24 @@ API-equivalent cost estimates, Headroom savings, and configurable desktop widget
 
 ## What it tracks
 
-- Session, today, seven-day, month, and lifetime token usage
+- Local session, today, seven-day, and month token usage; account lifetime tokens when the Codex CLI is available
 - Input, cached input, output, and reasoning tokens
 - Requests, sessions, streaks, context use, and visible chart peaks
 - Recorded models and API-equivalent cost estimates by model
 - Top model today, seven days, this month, and lifetime
 - Headroom tokens saved, savings rate, and estimated cost avoided
-- Five-hour and weekly Codex limits, reset times, pace, and seven-day history
+- Live account five-hour and weekly Codex limits, reset times, pace, and local seven-day history
 - A native menu bar meter with percentage, meter, and reset-countdown modes
 - Background widget snapshots every minute while the app is closed
 - Independent settings for small, medium, and large widgets
 
 ## Privacy
 
-Codex Usage Monitor reads local Codex logs and the local Headroom database. It
-does not upload prompts, responses, usage history, or pricing data. GitHub is
+Codex Usage Monitor reads local Codex logs and the local Headroom database. When
+the Codex CLI or ChatGPT desktop app is installed, it also asks Codex's
+app-server for account lifetime usage and current limits. The app-server may
+contact OpenAI using your existing sign-in. The monitor does not upload prompts,
+responses, or local session history. GitHub is
 used only for optional Sparkle updates. See the full [privacy policy](docs/privacy.html).
 
 ## Requirements
@@ -36,6 +39,7 @@ used only for optional Sparkle updates. See the full [privacy policy](docs/priva
 - macOS 14 or later
 - Apple silicon or Intel Mac
 - Codex local session logs in `~/.codex/sessions`
+- ChatGPT desktop app or Codex CLI signed in to the same account for profile lifetime totals and live limits; otherwise local estimates are shown
 - Headroom is optional
 
 ## Build

@@ -124,6 +124,13 @@ struct AnalysisView: View {
     @ViewBuilder
     private var modules: some View {
         MetricModule(
+            eyebrow: snapshot.accountLifetimeTokens == nil ? "Local lifetime" : "Account lifetime",
+            value: (snapshot.accountLifetimeTokens ?? snapshot.lifetime.total).compactTokenString,
+            detail: snapshot.accountLifetimeTokens == nil ? "Local history estimate" : "Codex account total",
+            symbol: "sum",
+            state: health
+        )
+        MetricModule(
             eyebrow: "Top model",
             value: ModelPricingCatalog.displayName(for: summary.topModel?.model),
             detail: modelShareText,
