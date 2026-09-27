@@ -69,7 +69,7 @@ struct AnalysisView: View {
     private func metricColumns(for width: CGFloat) -> [GridItem] {
         Array(
             repeating: GridItem(.flexible(), spacing: 10),
-            count: width >= 900 ? 4 : 2
+            count: width >= 1500 ? 5 : width >= 900 ? 4 : 2
         )
     }
 

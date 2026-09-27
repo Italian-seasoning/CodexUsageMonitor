@@ -106,6 +106,11 @@ struct DataHealthView: View {
             healthRow("Last success", date: record?.lastSuccess)
             healthRow("Snapshot", date: snapshot.generatedAt)
             healthRow("Widget reload", date: record?.widgetReloadRequestedAt)
+            if record?.widgetSyncPending == true {
+                Text("Widget sync failed; the next refresh will retry.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             LabeledContent("Source") {
                 Text(sourceLabel)
                     .foregroundStyle(.secondary)

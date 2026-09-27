@@ -9,6 +9,7 @@ struct BackgroundRefreshRecord: Codable, Equatable {
     var error: String?
     var sourceFingerprint: String? = nil
     var widgetReloadRequestedAt: Date? = nil
+    var widgetSyncPending: Bool? = nil
 }
 
 struct BackgroundRefreshAgentStatus: Sendable {

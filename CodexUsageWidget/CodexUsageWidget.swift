@@ -19,8 +19,8 @@ struct CodexUsageProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CodexUsageEntry>) -> Void) {
         let now = Date()
-        let next = Calendar.current.date(byAdding: .minute, value: 3, to: now)
-            ?? now.addingTimeInterval(180)
+        let next = Calendar.current.date(byAdding: .minute, value: 1, to: now)
+            ?? now.addingTimeInterval(60)
         completion(Timeline(entries: [entry(at: now, family: context.family)], policy: .after(next)))
     }
 

@@ -81,6 +81,13 @@ struct RefreshCoordinatorTests {
 
         #expect(result.outcome == .unchanged)
     }
+
+    @Test("Widget sync retries after failure and refreshes on launch")
+    func widgetSyncRetry() {
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: true))
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .launch, syncPending: false))
+        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false))
+    }
 }
 
 private struct RecordedCall: Equatable {

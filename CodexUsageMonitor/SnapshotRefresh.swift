@@ -10,11 +10,14 @@ extension Notification.Name {
 enum CodexWidgetReloader {
     private static let logger = Logger(subsystem: "com.codexusage.CodexUsageMonitor", category: "WidgetRefresh")
 
-    static func reloadAll() {
-        if !WidgetDataBridge.syncToWidgetExtension() {
+    @discardableResult
+    static func reloadAll() -> Bool {
+        guard WidgetDataBridge.syncToWidgetExtension() else {
             logger.error("Could not synchronize local widget data into the widget extension container")
+            return false
         }
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: CodexWidgetKind.primary)
+        return true
     }
 }
 
@@ -129,15 +132,21 @@ enum SnapshotRefresh {
             return RefreshResult(outcome: .failed, snapshot: previous, message: message)
         }
 
-        if outcome == .updated { CodexWidgetReloader.reloadAll() }
-        let widgetReloadRequestedAt = outcome == .updated ? Date() : nil
+        let shouldReloadWidget = shouldReloadWidget(
+            outcome: outcome,
+            trigger: trigger,
+            syncPending: previousRecord?.widgetSyncPending == true
+        )
+        let widgetReloaded = shouldReloadWidget && CodexWidgetReloader.reloadAll()
+        let widgetReloadRequestedAt = widgetReloaded ? Date() : nil
         LimitNotificationManager.evaluate(candidate)
         saveRecord(
             startedAt: startedAt,
             outcome: outcome,
             message: nil,
             fingerprint: fingerprint,
-            widgetReloadRequestedAt: widgetReloadRequestedAt
+            widgetReloadRequestedAt: widgetReloadRequestedAt,
+            widgetSyncPending: shouldReloadWidget && !widgetReloaded
         )
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
@@ -158,12 +167,21 @@ enum SnapshotRefresh {
         !force && hasSnapshot && previousFingerprint == currentFingerprint
     }
 
+    static func shouldReloadWidget(
+        outcome: RefreshOutcome,
+        trigger: RefreshTrigger,
+        syncPending: Bool
+    ) -> Bool {
+        outcome == .updated || syncPending || trigger == .launch || trigger == .wake
+    }
+
     private static func saveRecord(
         startedAt: Date,
         outcome: RefreshOutcome,
         message: String?,
         fingerprint: String?,
-        widgetReloadRequestedAt: Date?
+        widgetReloadRequestedAt: Date?,
+        widgetSyncPending: Bool? = nil
     ) {
         let previous = BackgroundRefreshAgent.loadRecord()
         BackgroundRefreshAgent.saveRecord(
@@ -176,7 +194,8 @@ enum SnapshotRefresh {
                 durationSeconds: Date().timeIntervalSince(startedAt),
                 error: message,
                 sourceFingerprint: fingerprint ?? previous?.sourceFingerprint,
-                widgetReloadRequestedAt: widgetReloadRequestedAt
+                widgetReloadRequestedAt: widgetReloadRequestedAt ?? previous?.widgetReloadRequestedAt,
+                widgetSyncPending: widgetSyncPending ?? previous?.widgetSyncPending
             )
         )
     }
