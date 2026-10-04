@@ -28,6 +28,10 @@ enum SnapshotRefresh {
     )
 
     static func run(trigger: RefreshTrigger, force: Bool = false) -> RefreshResult {
+        autoreleasepool { performRefresh(trigger: trigger, force: force) }
+    }
+
+    private static func performRefresh(trigger: RefreshTrigger, force: Bool) -> RefreshResult {
         let startedAt = Date()
         if !OnboardingStateStore.hasCurrentCodexDataAccess() {
             let message = "Codex data access has not been approved."

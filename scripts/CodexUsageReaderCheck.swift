@@ -305,8 +305,8 @@ struct CodexUsageReaderCheck {
             else {
                 throw CheckFailure(message: "missing current daily model pricing fixture")
             }
-            try expectNear(dailyModel.estimatedCostUSD, 2, tolerance: 0.000_001, "per-sample daily model cost")
-            try expectNear(pricing.estimatedCost(for: dailyModel.usage), 4, tolerance: 0.000_001, "aggregate repricing")
+            try expectNear(dailyModel.estimatedCostUSD, 1.6, tolerance: 0.000_001, "per-sample daily model cost")
+            try expectNear(pricing.estimatedCost(for: dailyModel.usage), 3.2, tolerance: 0.000_001, "aggregate repricing")
         }
     }
 
@@ -343,12 +343,12 @@ struct CodexUsageReaderCheck {
             try expectEqual(snapshot.modelUsage?.first { $0.model == "gpt-5.6-sol" }?.turns, Optional(1), "Sol turns")
             try expectEqual(snapshot.modelUsage?.first { $0.model == "gpt-5.6-terra" }?.usage, Optional(terra), "Terra usage")
 
-            // Sol short context: 60k uncached × $5 + 40k cached × $0.50 + 10k output × $30 = $0.62.
+            // Sol short context: 60k uncached × $4 + 40k cached × $0.40 + 10k output × $20 = $0.456.
             // Terra long context: 200k uncached × $5 + 100k cached × $0.50 + 20k output × $22.50 = $1.50.
             // Reasoning is already included in output and must not be added a second time.
-            try expectNear(snapshot.estimatedCostUSD, 2.12, tolerance: 0.000_000_1, "model-aware estimated cost")
-            try expectNear(snapshot.todayEstimatedCostUSD, 2.12, tolerance: 0.000_000_1, "daily estimated cost")
-            try expectEqual(snapshot.activityDays.last?.estimatedCostMicros, Optional(2_120_000), "daily cost micros")
+            try expectNear(snapshot.estimatedCostUSD, 1.956, tolerance: 0.000_000_1, "model-aware estimated cost")
+            try expectNear(snapshot.todayEstimatedCostUSD, 1.956, tolerance: 0.000_000_1, "daily estimated cost")
+            try expectEqual(snapshot.activityDays.last?.estimatedCostMicros, Optional(1_956_000), "daily cost micros")
             try expectEqual(snapshot.pricingVersion, Optional(ModelPricingCatalog.version), "pricing provenance")
         }
     }

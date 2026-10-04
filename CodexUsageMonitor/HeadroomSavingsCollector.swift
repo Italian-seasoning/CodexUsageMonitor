@@ -118,29 +118,34 @@ struct HeadroomSavingsCollector {
     }
 
     private func loadCodexEvents() -> [SavingsEvent] {
-        guard let contents = try? String(contentsOf: ledgerURL, encoding: .utf8) else { return [] }
-        return contents.split(separator: "\n").compactMap { line in
-            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  (object["client"] as? String)?.lowercased() == "codex",
-                  let timestamp = parseDate(object["ts"] as? String),
-                  let before = object["before"] as? Int,
-                  let after = object["after"] as? Int,
-                  let saved = object["saved"] as? Int,
-                  before >= 0, after >= 0, saved > 0,
-                  saved == max(before - after, 0)
-            else {
-                return nil
-            }
+        var events: [SavingsEvent] = []
+        do {
+            try JSONLFileReader.forEachRow(at: ledgerURL) { object in
+                guard
+                      (object["client"] as? String)?.lowercased() == "codex",
+                      let timestamp = parseDate(object["ts"] as? String),
+                      let before = object["before"] as? Int,
+                      let after = object["after"] as? Int,
+                      let saved = object["saved"] as? Int,
+                      before >= 0, after >= 0, saved > 0,
+                      saved == max(before - after, 0)
+                else {
+                    return
+                }
 
-            let cost = max(0, object["cost_usd"] as? Double ?? 0)
-            return SavingsEvent(
-                timestamp: timestamp,
-                before: before,
-                saved: saved,
-                costUSD: cost,
-                model: object["model"] as? String ?? "Unknown"
-            )
+                let cost = max(0, object["cost_usd"] as? Double ?? 0)
+                events.append(SavingsEvent(
+                    timestamp: timestamp,
+                    before: before,
+                    saved: saved,
+                    costUSD: cost,
+                    model: object["model"] as? String ?? "Unknown"
+                ))
+            }
+        } catch {
+            return []
         }
+        return events
     }
 
     private func aggregate(events: [SavingsEvent]) -> SavingsBucket {

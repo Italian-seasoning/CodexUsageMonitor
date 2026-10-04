@@ -1,6 +1,50 @@
 import Darwin
 import Foundation
 
+enum JSONLFileReader {
+    // Transcript size must not determine refresh memory. Only a partial row is
+    // carried between fixed-size reads; JSON objects are released after each row.
+    static func forEachRow(
+        at url: URL,
+        chunkSize: Int = 64 * 1024,
+        _ visit: ([String: Any]) -> Void
+    ) throws {
+        precondition(chunkSize > 0)
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var pending = Data()
+
+        func consume(_ data: Data) {
+            autoreleasepool {
+                guard !data.isEmpty,
+                      let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else { return }
+                visit(row)
+            }
+        }
+
+        while let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: chunkSize) }),
+              !chunk.isEmpty {
+            var start = chunk.startIndex
+            while let newline = chunk[start...].firstIndex(of: 10) {
+                if pending.isEmpty {
+                    consume(chunk.subdata(in: start..<newline))
+                } else {
+                    pending.append(contentsOf: chunk[start..<newline])
+                    consume(pending)
+                    pending = Data()
+                }
+                start = chunk.index(after: newline)
+            }
+            if start < chunk.endIndex {
+                pending.append(contentsOf: chunk[start...])
+            }
+        }
+        // Codex may leave a valid final JSON row without a terminating newline.
+        consume(pending)
+    }
+}
+
 struct TokenUsage: Codable, Equatable, Hashable, Sendable {
     var input: Int
     var cachedInput: Int
@@ -106,11 +150,12 @@ struct ModelPricing: Equatable {
 }
 
 enum ModelPricingCatalog {
-    static let version = "OpenAI Standard API · checked 2026-09-26"
+    static let version = "OpenAI Standard API · GPT-6.1 Sol added 2026-10-04"
     static let sourceURL = "https://developers.openai.com/api/docs/pricing"
 
     private static let prices: [String: ModelPricing] = [
         // Uses the monitor's existing 272K context boundary for API-equivalent estimates.
+        "gpt-6.1-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.1, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.2, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-astra": ModelPricing(inputPerMillion: 10, cachedInputPerMillion: 1, outputPerMillion: 50, longInputPerMillion: 20, longCachedInputPerMillion: 2, longOutputPerMillion: 75, longContextThreshold: 272_000),
         "gpt-6-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.2, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.4, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-luna": ModelPricing(inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5, longInputPerMillion: 0.2, longCachedInputPerMillion: 0.02, longOutputPerMillion: 0.75, longContextThreshold: 272_000),
@@ -997,6 +1042,12 @@ struct CodexUsageReader {
     }
 
     func snapshot(now: Date = Date(), headroomActivity: HeadroomActivity? = nil) -> CodexUsageSnapshot {
+        // Detached tasks do not provide a per-refresh Foundation autorelease pool.
+        // Keep only the returned value alive after parsing and cache serialization.
+        autoreleasepool { makeSnapshot(now: now, headroomActivity: headroomActivity) }
+    }
+
+    private func makeSnapshot(now: Date, headroomActivity: HeadroomActivity?) -> CodexUsageSnapshot {
         let parsedFiles = parsedFilesUsingCache()
         let files = deduplicatedFiles(parsedFiles.filter { !$0.samples.isEmpty && !$0.isSubagent })
         let rateLimits = rateLimitSnapshot(from: parsedFiles.flatMap(\.rateLimits), now: now)
@@ -1314,7 +1365,7 @@ struct CodexUsageReader {
     }
 
     private func parsedFilesUsingCache() -> [ParsedFile] {
-        let existingCache = loadReaderCache()
+        let existingCache = autoreleasepool { loadReaderCache() }
         var nextEntries: [String: CachedFile] = [:]
         var parsedFiles: [ParsedFile] = []
 
@@ -1341,7 +1392,9 @@ struct CodexUsageReader {
             if let parsed { parsedFiles.append(parsed) }
         }
 
-        saveReaderCache(ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: nextEntries))
+        autoreleasepool {
+            saveReaderCache(ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: nextEntries))
+        }
         return parsedFiles
     }
 
@@ -1380,10 +1433,6 @@ struct CodexUsageReader {
     }
 
     private func parseSessionFile(_ file: URL) -> ParsedFile? {
-        guard let data = try? String(contentsOf: file, encoding: .utf8) else {
-            return nil
-        }
-
         var sessionID = file.deletingPathExtension().lastPathComponent
         var startedAt: Date?
         var primaryID: String?
@@ -1395,85 +1444,86 @@ struct CodexUsageReader {
         var lastRateLimitByWindow: [Int: RateLimitSample] = [:]
         var isSubagent = false
 
-        for line in data.split(separator: "\n") {
-            guard let row = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
-                continue
-            }
-
-            if row["type"] as? String == "session_meta", let metadata = row["payload"] as? [String: Any] {
-                if metadata["thread_source"] as? String == "subagent" { isSubagent = true }
-                if let id = metadata["id"] as? String { lineageIDs.insert(id) }
-                if let id = metadata["session_id"] as? String { lineageIDs.insert(id) }
-                if primaryID == nil {
-                    let threadSource = metadata["thread_source"] as? String
-                    primaryID = metadata["id"] as? String ?? sessionID
-                    sessionID = metadata["session_id"] as? String
-                        ?? (threadSource == "subagent" ? metadata["parent_thread_id"] as? String : nil)
-                        ?? metadata["id"] as? String
-                        ?? sessionID
-                    startedAt = parseDate(metadata["timestamp"] as? String)
+        do {
+            try JSONLFileReader.forEachRow(at: file) { row in
+                if row["type"] as? String == "session_meta", let metadata = row["payload"] as? [String: Any] {
+                    if metadata["thread_source"] as? String == "subagent" { isSubagent = true }
+                    if let id = metadata["id"] as? String { lineageIDs.insert(id) }
+                    if let id = metadata["session_id"] as? String { lineageIDs.insert(id) }
+                    if primaryID == nil {
+                        let threadSource = metadata["thread_source"] as? String
+                        primaryID = metadata["id"] as? String ?? sessionID
+                        sessionID = metadata["session_id"] as? String
+                            ?? (threadSource == "subagent" ? metadata["parent_thread_id"] as? String : nil)
+                            ?? metadata["id"] as? String
+                            ?? sessionID
+                        startedAt = parseDate(metadata["timestamp"] as? String)
+                    }
+                    return
                 }
-                continue
-            }
 
-            if row["type"] as? String == "turn_context", let context = row["payload"] as? [String: Any] {
-                activeModel = context["model"] as? String ?? activeModel
-                continue
-            }
+                if row["type"] as? String == "turn_context", let context = row["payload"] as? [String: Any] {
+                    activeModel = context["model"] as? String ?? activeModel
+                    return
+                }
 
-            if let timestamp = parseDate(row["timestamp"] as? String),
-               let payload = row["payload"] as? [String: Any],
-               let limits = payload["rate_limits"] as? [String: Any] {
-                for key in ["primary", "secondary"] {
-                    guard let values = limits[key] as? [String: Any],
-                          let windowMinutes = (values["window_minutes"] as? NSNumber)?.intValue,
-                          let usedPercent = (values["used_percent"] as? NSNumber)?.doubleValue,
-                          let resetsAt = (values["resets_at"] as? NSNumber)?.doubleValue
-                    else { continue }
+                if let timestamp = parseDate(row["timestamp"] as? String),
+                   let payload = row["payload"] as? [String: Any],
+                   let limits = payload["rate_limits"] as? [String: Any] {
+                    for key in ["primary", "secondary"] {
+                        guard let values = limits[key] as? [String: Any],
+                              let windowMinutes = (values["window_minutes"] as? NSNumber)?.intValue,
+                              let usedPercent = (values["used_percent"] as? NSNumber)?.doubleValue,
+                              let resetsAt = (values["resets_at"] as? NSNumber)?.doubleValue
+                        else { continue }
 
-                    let sample = RateLimitSample(
-                        observedAt: timestamp,
-                        usedPercent: usedPercent,
-                        windowMinutes: windowMinutes,
-                        resetsAt: Date(timeIntervalSince1970: resetsAt)
-                    )
-                    if lastRateLimitByWindow[windowMinutes] != sample {
-                        rateLimitSamples.append(sample)
-                        lastRateLimitByWindow[windowMinutes] = sample
+                        let sample = RateLimitSample(
+                            observedAt: timestamp,
+                            usedPercent: usedPercent,
+                            windowMinutes: windowMinutes,
+                            resetsAt: Date(timeIntervalSince1970: resetsAt)
+                        )
+                        if lastRateLimitByWindow[windowMinutes] != sample {
+                            rateLimitSamples.append(sample)
+                            lastRateLimitByWindow[windowMinutes] = sample
+                        }
                     }
                 }
+
+                guard
+                    let payload = row["payload"] as? [String: Any],
+                    payload["type"] as? String == "token_count",
+                    let timestamp = parseDate(row["timestamp"] as? String),
+                    let info = payload["info"] as? [String: Any],
+                    let totalValues = info["total_token_usage"] as? [String: Any]
+                else {
+                    return
+                }
+
+                let cumulative = tokenUsage(from: totalValues)
+                if cumulative == previousCumulative {
+                    return
+                }
+
+                let lastUsage = (info["last_token_usage"] as? [String: Any]).map(tokenUsage(from:))
+                let usage = lastUsage?.hasUsage == true ? lastUsage! : cumulative.delta(since: previousCumulative)
+                previousCumulative = cumulative
+                guard usage.hasUsage else { return }
+
+                let contextTokens = (info["last_token_usage"] as? [String: Any])?["input_tokens"] as? Int
+                let contextWindow = info["model_context_window"] as? Int
+                samples.append(UsageSample(
+                    timestamp: timestamp,
+                    cumulative: cumulative,
+                    usage: usage,
+                    contextTokens: contextTokens,
+                    contextWindow: contextWindow,
+                    model: activeModel
+                ))
             }
-
-            guard
-                let payload = row["payload"] as? [String: Any],
-                payload["type"] as? String == "token_count",
-                let timestamp = parseDate(row["timestamp"] as? String),
-                let info = payload["info"] as? [String: Any],
-                let totalValues = info["total_token_usage"] as? [String: Any]
-            else {
-                continue
-            }
-
-            let cumulative = tokenUsage(from: totalValues)
-            if cumulative == previousCumulative {
-                continue
-            }
-
-            let lastUsage = (info["last_token_usage"] as? [String: Any]).map(tokenUsage(from:))
-            let usage = lastUsage?.hasUsage == true ? lastUsage! : cumulative.delta(since: previousCumulative)
-            previousCumulative = cumulative
-            guard usage.hasUsage else { continue }
-
-            let contextTokens = (info["last_token_usage"] as? [String: Any])?["input_tokens"] as? Int
-            let contextWindow = info["model_context_window"] as? Int
-            samples.append(UsageSample(
-                timestamp: timestamp,
-                cumulative: cumulative,
-                usage: usage,
-                contextTokens: contextTokens,
-                contextWindow: contextWindow,
-                model: activeModel
-            ))
+        } catch {
+            // Do not cache partial totals when a file cannot be read completely.
+            return nil
         }
 
         guard !samples.isEmpty || !rateLimitSamples.isEmpty else { return nil }

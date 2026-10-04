@@ -9,6 +9,7 @@ struct AstraLunaPricingCheck {
         for (model, shortCost, longCost) in [
             ("gpt-6-astra", 1.05, 4.95),
             ("gpt-6-sol", 0.21, 0.99),
+            ("gpt-6.1-sol", 0.205, 0.97),
             ("gpt-6-luna", 0.0105, 0.0495),
             ("gpt-5.6-sol", 0.42, 1.98),
             ("gpt-5.6-luna", 0.023, 0.102)

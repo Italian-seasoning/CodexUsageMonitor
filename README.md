@@ -52,6 +52,9 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current preview: **3.1.1**
+Current preview: **3.1.4**
+
+Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
+Streams session and Headroom logs to reduce refresh memory use on large histories.
 
 Codex Usage Monitor is independent software and is not affiliated with OpenAI.
