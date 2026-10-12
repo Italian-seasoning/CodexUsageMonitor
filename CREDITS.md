@@ -1,6 +1,6 @@
 # Credits and attribution
 
-Codex Usage Monitor was created by **Italian-seasoning**.
+Runway, originally named Codex Usage Monitor, was created by **Italian-seasoning**.
 
 - Creator: https://github.com/Italian-seasoning
 - Original repository: https://github.com/Italian-seasoning/CodexUsageMonitor

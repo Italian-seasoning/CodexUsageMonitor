@@ -1,7 +1,12 @@
-# Codex Usage Monitor
+# Runway
+
+**Runway — Codex Usage Monitor**
 
 A native macOS app and WidgetKit extension for local Codex usage, model-aware
 API-equivalent cost estimates, Headroom savings, and configurable desktop widgets.
+
+Previously named Codex Usage Monitor. The repository, download filenames, and
+installed app identifiers retain that name for update compatibility.
 
 **Created by [Italian-seasoning](https://github.com/Italian-seasoning).**
 Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
