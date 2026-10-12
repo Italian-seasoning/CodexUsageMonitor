@@ -28,10 +28,16 @@ struct SnapshotHealth: Equatable {
         } else if !snapshot.hasUsage {
             kind = record == nil ? .noUsage : .sourceUnavailable
             detail = record == nil ? "No recorded usage yet" : "No readable usage source was found"
+        } else if record?.widgetSyncPending == true {
+            kind = .freshPartial
+            detail = "App data is current; widget synchronization is retrying"
         } else if let generatedAt = snapshot.generatedAt,
                   Date().timeIntervalSince(generatedAt) > 10 * 60 {
             kind = .staleCached
             detail = "Showing the latest cached snapshot"
+        } else if snapshot.rateLimits?.accountObservedAt.map({ Date().timeIntervalSince($0) > 180 }) != false {
+            kind = .freshPartial
+            detail = "Local usage is current; account allowance has not been verified recently"
         } else if snapshot.rateLimits == nil || (snapshot.modelUsage ?? []).isEmpty {
             kind = .freshPartial
             detail = "Valid usage is available; some sources are missing"

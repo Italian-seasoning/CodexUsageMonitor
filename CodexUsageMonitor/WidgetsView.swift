@@ -20,7 +20,6 @@ struct WidgetsView: View {
     var body: some View {
         pageContent
             .task {
-                loadWallpaper()
                 loadCustomBackgroundImage()
                 refreshConfiguredSizes()
             }
@@ -46,23 +45,56 @@ struct WidgetsView: View {
 
     private var pageHeader: some View {
         AppSectionHeader(section: .widgets) {
-            Text("Configured in Codex Usage")
-                .font(.system(size: AppTypeScale.label, weight: .semibold))
-                .foregroundStyle(AppPalette.muted)
+            EmptyView()
         }
     }
 
     private var workspace: some View {
-        ScrollView {
-            HStack(alignment: .top, spacing: 12) {
-                controls
-                    .frame(width: 310)
-
-                preview
-                    .frame(maxWidth: .infinity, minHeight: 448)
+        GeometryReader { geometry in
+            if geometry.size.width < 650 {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        sizeControls
+                        compactPreview(height: min(selectedSize.previewFrame.height, geometry.size.width - 28))
+                        contentControls
+                        appearanceControls
+                    }
+                    .padding(14)
+                }
+            } else {
+                ScrollView {
+                    HStack(alignment: .top, spacing: 12) {
+                        controls.frame(width: 310)
+                        preview.frame(maxWidth: .infinity, minHeight: 448)
+                    }
+                    .padding(16)
+                }
+                .task { await loadWallpaper() }
             }
-            .padding(16)
         }
+    }
+
+    private func compactPreview(height: CGFloat) -> some View {
+        GeometryReader { geometry in
+            let frame = selectedSize.previewFrame
+            let scale = min(1, geometry.size.width / frame.width, height / frame.height)
+            ZStack {
+                if currentConfiguration.backgroundMode == .customImage, let customBackgroundImage {
+                    CodexWidgetCustomImageBackground(image: customBackgroundImage)
+                } else {
+                    CodexWidgetStyleBackground(style: currentConfiguration.style,
+                        theme: currentConfiguration.theme, monochrome: currentConfiguration.theme == .monochrome)
+                }
+                CodexWidgetFamilyView(snapshot: snapshot, configuration: currentConfiguration,
+                    size: selectedSize.cardSize, monochrome: currentConfiguration.theme == .monochrome)
+            }
+            .frame(width: frame.width, height: frame.height)
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .scaleEffect(scale)
+            .position(x: geometry.size.width / 2, y: height / 2)
+        }
+        .frame(height: height)
+        .accessibilityLabel("\(selectedSize.title) widget preview")
     }
 
     private var preview: some View {
@@ -85,26 +117,24 @@ struct WidgetsView: View {
     }
 
     private var sizeControls: some View {
-        InspectorSection(
-            title: "Desktop size",
-            subtitle: "Each size keeps its own content and appearance."
-        ) {
-                Picker("Desktop size", selection: sizeBinding) {
-                    ForEach(CodexUsageWidgetSize.allCases) { size in
-                        Text(size.title).tag(size)
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Size").font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Circle()
+                    .fill(configuredSizes.contains(selectedSize) ? AppPalette.positive : AppPalette.muted)
+                    .frame(width: 6, height: 6)
+                Text(configuredSizes.contains(selectedSize) ? "Detected on this Mac" : "Preview only")
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+            }
+            Picker("Desktop size", selection: sizeBinding) {
+                ForEach(CodexUsageWidgetSize.allCases) { size in
+                    Text(size.title).tag(size)
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(configuredSizes.contains(selectedSize) ? AppPalette.positive : AppPalette.muted)
-                        .frame(width: 6, height: 6)
-                    Text(configuredSizes.contains(selectedSize) ? "Detected on this Mac" : "Preview only")
-                        .font(.system(size: AppTypeScale.caption, weight: .medium))
-                        .foregroundStyle(AppPalette.muted)
-                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
         }
     }
 
@@ -336,11 +366,19 @@ struct WidgetsView: View {
         preset = .custom
     }
 
-    private func loadWallpaper() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first,
+    @MainActor private func loadWallpaper() async {
+        guard wallpaper == nil,
+              let screen = NSScreen.main ?? NSScreen.screens.first,
               let url = NSWorkspace.shared.desktopImageURL(for: screen)
         else { return }
-        wallpaper = NSImage(contentsOf: url)
+        let data = await Task.detached(priority: .utility) {
+            guard url.isFileURL,
+                  (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+            else { return Optional<Data>.none }
+            return try? Data(contentsOf: url)
+        }.value
+        guard !Task.isCancelled, let data else { return }
+        wallpaper = NSImage(data: data)
     }
 
     private func loadCustomBackgroundImage(for size: CodexUsageWidgetSize? = nil) {
@@ -441,7 +479,7 @@ private struct DesktopWidgetPreview: View {
         }
         .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Top-left desktop preview for the (size.title) Codex Usage widget")
+        .accessibilityLabel("Top-left desktop preview for the \(size.title) Codex Usage widget")
     }
 
     @ViewBuilder
@@ -650,6 +688,8 @@ private extension CodexWidgetStyle {
 private extension WidgetPresetMode {
     var title: String {
         switch self {
+        case .rain: "Vancouver Rain"
+        case .autumn: "Autumn Glass"
         case .summer: "Summer"
         case .classicRed: "Classic Red"
         case .darkGlass: "Dark Glass"

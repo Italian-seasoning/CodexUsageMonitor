@@ -5,27 +5,54 @@ struct AnalysisView: View {
     var snapshot: CodexUsageSnapshot
     var health: SnapshotHealth
     @Binding var selection: AnalysisSelection
+    var section: AppSection = .analysis
+    @State private var hoveredDate: Date?
+
+    private var hoveredPoint: AnalysisChartPoint? {
+        guard let hoveredDate else { return nil }
+        return chartPoints.first { Calendar.current.isDate($0.date, equalTo: hoveredDate, toGranularity: chartPeriod == .lifetime ? .weekOfYear : .day) }
+    }
 
     private var summary: PeriodUsageSummary {
-        snapshot.summary(for: selection.period)
+        selection.usesCustomDates
+            ? snapshot.summary(from: selection.startDate, through: selection.endDate)
+            : snapshot.summary(for: selection.period)
+    }
+
+    private var periodLabel: String {
+        selection.usesCustomDates
+            ? "\(selection.startDate.formatted(.dateTime.month(.abbreviated).day())) – \(selection.endDate.formatted(.dateTime.month(.abbreviated).day().year()))"
+            : selection.period.title
+    }
+
+    private var chartPeriod: UsagePeriod {
+        selection.usesCustomDates ? (summary.days.count > 90 ? .lifetime : .month) : selection.period
+    }
+
+    private var periodBinding: Binding<UsagePeriod?> {
+        Binding(get: { selection.usesCustomDates ? nil : selection.period }, set: {
+            selection.usesCustomDates = $0 == nil
+            if let period = $0 { selection.period = period }
+        })
     }
 
     private var chartPoints: [AnalysisChartPoint] {
         AnalysisChartData.points(
             from: summary.days,
-            period: selection.period,
+            period: chartPeriod,
             measure: selection.measure
         )
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            AppSectionHeader(section: .analysis) {
+            AppSectionHeader(section: section) {
                 HStack(spacing: 8) {
-                    Picker("Period", selection: $selection.period) {
+                    Picker("Period", selection: periodBinding) {
                         ForEach(UsagePeriod.allCases) { period in
-                            Text(period.title).tag(period)
+                            Text(period.title).tag(Optional(period))
                         }
+                        Text("Custom dates…").tag(nil as UsagePeriod?)
                     }
                     .labelsHidden()
                     .frame(width: 130)
@@ -40,58 +67,97 @@ struct AnalysisView: View {
                 }
             }
 
-            GeometryReader { geometry in
-                ScrollView {
-                    VStack(spacing: 10) {
-                        activityChart
+            if selection.usesCustomDates {
+                HStack(spacing: 12) {
+                    DatePicker("From", selection: $selection.startDate, in: ...selection.endDate, displayedComponents: .date)
+                    DatePicker("To", selection: $selection.endDate, in: selection.startDate...max(selection.startDate, Date()), displayedComponents: .date)
+                }
+                .datePickerStyle(.field)
+                .font(.system(size: 11))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 8)
+            }
 
-                        LazyVGrid(columns: metricColumns(for: geometry.size.width), spacing: 10) {
+            MagneticScrollView { height in
+                activityChart(height: max(80, height - 116))
+            } details: {
+                    VStack(spacing: 10) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 10)], spacing: 10) {
                             modules
                         }
 
                         LimitSummaryStrip(snapshot: snapshot)
 
-                        InspectorSection(
-                            title: "Limit history",
-                            subtitle: "Remaining allowance over the last recorded week"
-                        ) {
-                            LimitHistoryChart(history: snapshot.rateLimits?.history ?? [])
-                                .frame(minHeight: 125)
+                        InspectorSection(title: "More detail") {
+                            DisclosureGroup("Token breakdown") {
+                                VStack(spacing: 8) {
+                                    dataRow("Input", summary.usage.input.compactTokenString)
+                                    dataRow("Cached input", summary.usage.cachedInput.compactTokenString)
+                                    dataRow("Output", summary.usage.output.compactTokenString)
+                                    dataRow("Unpriced lifetime tokens", (snapshot.unpricedTokens ?? 0).compactTokenString)
+                                }.padding(.top, 8)
+                            }
+                            DisclosureGroup("Headroom savings") {
+                                if let headroom = snapshot.headroom, headroom.isAvailable {
+                                    VStack(spacing: 8) {
+                                        dataRow("Today", headroom.todayTokensSaved.compactTokenString)
+                                        dataRow("7 days", headroom.last7DaysTokensSaved.compactTokenString)
+                                        dataRow("Lifetime", headroom.lifetimeTokensSaved.compactTokenString)
+                                        dataRow("Requests compressed", headroom.lifetimeRequests.formatted())
+                                        dataRow("Lifetime API equivalent avoided", headroom.costSavedUSD.compactCurrencyString)
+                                    }.padding(.top, 8)
+                                } else { Text("No Headroom data recorded").foregroundStyle(.secondary) }
+                            }
+                            DisclosureGroup("Statistics") {
+                                VStack(spacing: 8) {
+                                    dataRow("Current streak", "\(snapshot.currentStreak) days")
+                                    dataRow("Longest streak", "\(snapshot.longestStreak) days")
+                                    dataRow("Peak day", snapshot.peakDay?.usage.total.compactTokenString ?? "—")
+                                    dataRow("Peak date", snapshot.peakDay?.date.formatted(date: .abbreviated, time: .omitted) ?? "—")
+                                }.padding(.top, 8)
+                            }
+                            DisclosureGroup("Limit history") {
+                                LimitHistoryChart(history: snapshot.rateLimits?.history ?? [])
+                                    .frame(height: 125).padding(.top, 8)
+                            }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                }
             }
         }
     }
 
-    private func metricColumns(for width: CGFloat) -> [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(), spacing: 10),
-            count: width >= 1500 ? 5 : width >= 900 ? 4 : 2
-        )
-    }
-
-    private var activityChart: some View {
-        InspectorSection(
-            title: "\(selection.measure.title) activity",
-            subtitle: "\(selection.period.title) · \(formatted(summary.value(for: selection.measure))) total",
-            subtitleInline: true
-        ) {
+    private func activityChart(height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(hoveredPoint.map { chartPeriod == .lifetime ? "Week of \($0.date.formatted(date: .abbreviated, time: .omitted))" : $0.date.formatted(date: .abbreviated, time: .omitted) } ?? periodLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(hoveredPoint.map { exactValue($0.value) } ?? formatted(summary.value(for: selection.measure)))
+                        .font(.system(size: 30, weight: .semibold)).tracking(-0.7)
+                        .monospacedDigit().minimumScaleFactor(0.65).lineLimit(1)
+                    Text(selection.measure.title.lowercased())
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(AppPalette.muted)
+                }
+            }
             Chart(chartPoints) { point in
                 BarMark(
-                    x: .value("Period", point.date, unit: .day),
+                    x: .value("Period", point.date, unit: chartPeriod == .lifetime ? .weekOfYear : .day),
                     yStart: .value("Baseline", 0),
                     yEnd: .value(selection.measure.title, point.value),
-                    width: barWidth
+                    width: chartPoints.count == 1 ? .fixed(48) : .ratio(0.68)
                 )
-                .foregroundStyle(isHighlighted(point) ? AppPalette.accent : AppPalette.chartMuted)
+                .foregroundStyle((hoveredPoint?.id == point.id || (hoveredPoint == nil && isHighlighted(point))) ? AppPalette.accent : AppPalette.chartMuted)
                 .cornerRadius(6)
+                .accessibilityLabel(point.date.formatted(date: .abbreviated, time: .omitted))
+                .accessibilityValue(exactValue(point.value))
             }
             .chartXAxis {
-                AxisMarks(values: xAxisDates.map(dayMidpoint)) {
-                    AxisValueLabel(format: xAxisFormat)
+                if chartPoints.count > 1 {
+                    AxisMarks(values: xAxisDates) {
+                        AxisValueLabel(format: xAxisFormat)
+                            .foregroundStyle(AppPalette.muted)
+                    }
                 }
             }
             .chartYAxis {
@@ -100,6 +166,7 @@ struct AnalysisView: View {
                     AxisValueLabel {
                         if let value = value.as(Double.self) {
                             Text(axisLabel(value))
+                                .foregroundStyle(AppPalette.muted)
                         }
                     }
                 }
@@ -107,7 +174,21 @@ struct AnalysisView: View {
             .chartPlotStyle { plot in
                 plot.padding(.horizontal, 8)
             }
-            .frame(height: 182)
+            .frame(height: height)
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                guard let plotFrame = proxy.plotFrame else { hoveredDate = nil; return }
+                                let frame = geometry[plotFrame]
+                                hoveredDate = frame.contains(location) ? proxy.value(atX: location.x - frame.minX, as: Date.self) : nil
+                            case .ended: hoveredDate = nil
+                            }
+                        }
+                }
+            }
             .overlay {
                 if chartPoints.isEmpty {
                     ContentUnavailableView(
@@ -117,16 +198,32 @@ struct AnalysisView: View {
                     )
                 }
             }
-            .accessibilityLabel("\(selection.measure.title) activity for \(selection.period.title)")
+            .accessibilityLabel("\(selection.measure.title) activity for \(periodLabel)")
+            if chartPoints.count == 1, let point = chartPoints.first {
+                Text(point.date, format: xAxisFormat)
+                    .font(.system(size: AppTypeScale.caption))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
         }
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        .onChange(of: selection.period) { hoveredDate = nil }
+        .onChange(of: selection.measure) { hoveredDate = nil }
+    }
+
+    private func exactValue(_ value: Double) -> String {
+        selection.measure == .apiEquivalentCost
+            ? value.formatted(.currency(code: "USD"))
+            : Int(value).formatted()
     }
 
     @ViewBuilder
     private var modules: some View {
         MetricModule(
-            eyebrow: snapshot.accountLifetimeTokens == nil ? "Local lifetime" : "Account lifetime",
-            value: (snapshot.accountLifetimeTokens ?? snapshot.lifetime.total).compactTokenString,
-            detail: snapshot.accountLifetimeTokens == nil ? "Local history estimate" : "Codex account total",
+            eyebrow: selection.usesCustomDates ? "Range tokens" : snapshot.accountLifetimeTokens == nil ? "Local lifetime" : "Account lifetime",
+            value: (selection.usesCustomDates ? summary.usage.total : snapshot.accountLifetimeTokens ?? snapshot.lifetime.total).compactTokenString,
+            detail: selection.usesCustomDates ? "Recorded within selected dates" : snapshot.accountLifetimeTokens == nil ? "Local history estimate" : "Codex account total",
             symbol: "sum",
             state: health
         )
@@ -154,7 +251,7 @@ struct AnalysisView: View {
         MetricModule(
             eyebrow: "Sessions",
             value: summary.sessionCount.formatted(),
-            detail: "\(summary.requestCount.formatted()) requests · \(comparisonText)",
+            detail: ["\(summary.requestCount.formatted()) requests", comparisonText].compactMap { $0 }.joined(separator: " · "),
             symbol: "rectangle.stack",
             state: health
         )
@@ -166,41 +263,38 @@ struct AnalysisView: View {
     }
 
     private var headroomValue: String {
-        guard let headroom = snapshot.headroom, headroom.isAvailable else { return "—" }
-        let value = selection.period == .today
-            ? headroom.todayTokensSaved
-            : selection.period == .sevenDays
-                ? headroom.last7DaysTokensSaved
-                : headroom.lifetimeTokensSaved
-        return value.compactTokenString
+        if selection.usesCustomDates {
+            let values = summary.days.compactMap(\.headroomSaved)
+            return values.isEmpty ? "—" : values.reduce(0, +).compactTokenString
+        }
+        return snapshot.headroomTokensSaved(for: selection.period)?.compactTokenString ?? "—"
     }
 
     private var headroomDetail: String {
         guard let headroom = snapshot.headroom, headroom.isAvailable else {
             return "Headroom source unavailable"
         }
-        return "\(headroom.savingsPercent.compactPercentString) savings · \(headroom.costSavedUSD.compactCurrencyString) avoided"
+        return "\(headroom.savingsPercent.compactPercentString) lifetime savings"
     }
 
-    private var comparisonText: String {
-        guard selection.period == .sevenDays, let delta = snapshot.last7DaysDeltaPercent else {
-            return health.title
+    private func dataRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title).foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(value).monospacedDigit()
+        }.font(.system(size: 11))
+    }
+
+    private var comparisonText: String? {
+        guard !selection.usesCustomDates, selection.period == .sevenDays, let delta = snapshot.last7DaysDeltaPercent else {
+            return nil
         }
         return "\(delta >= 0 ? "+" : "")\(delta.formatted(.percent.precision(.fractionLength(0)))) vs prior"
     }
 
-    private var barWidth: MarkDimension {
-        switch chartPoints.count {
-        case 0...1: .fixed(68)
-        case 2...7: .fixed(42)
-        case 8...18: .fixed(24)
-        default: .fixed(12)
-        }
-    }
-
     private var xAxisDates: [Date] {
         let dates = chartPoints.map(\.date)
-        if selection.period == .lifetime {
+        if chartPeriod == .lifetime {
             var months: [Date] = []
             for date in dates where months.last.map({
                 !Calendar.current.isDate($0, equalTo: date, toGranularity: .month)
@@ -217,7 +311,7 @@ struct AnalysisView: View {
     }
 
     private var xAxisFormat: Date.FormatStyle {
-        switch selection.period {
+        switch chartPeriod {
         case .today, .month:
             .dateTime.month(.abbreviated).day()
         case .sevenDays:
@@ -248,9 +342,6 @@ struct AnalysisView: View {
         }
     }
 
-    private func dayMidpoint(_ date: Date) -> Date {
-        Calendar.current.date(byAdding: .hour, value: 12, to: date) ?? date
-    }
 }
 
 struct AnalysisChartPoint: Identifiable, Equatable {

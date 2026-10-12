@@ -35,7 +35,12 @@ enum WidgetDataBridge {
                 .appendingPathComponent("Library/Application Support/CodexUsageMonitor", isDirectory: true)
         }
         return homeDirectory
-            .appendingPathComponent("Library/Application Support/CodexUsageMonitor", isDirectory: true)
+            .appendingPathComponent(
+                bundleIdentifier?.hasSuffix(".debug") == true
+                    ? "Library/Application Support/CodexUsageMonitor-Debug"
+                    : "Library/Application Support/CodexUsageMonitor",
+                isDirectory: true
+            )
     }
 
     @discardableResult
@@ -54,10 +59,7 @@ enum WidgetDataBridge {
             for name in ["snapshot.json", "desktop-widgets.json", "widget-appearance.json"] {
                 let source = currentDirectoryURL.appendingPathComponent(name)
                 guard fileManager.fileExists(atPath: source.path) else { continue }
-                try Data(contentsOf: source).write(
-                    to: extensionDirectoryURL.appendingPathComponent(name),
-                    options: .atomic
-                )
+                try syncFile(from: source, to: extensionDirectoryURL.appendingPathComponent(name))
             }
 
             let sourceBackgrounds = currentDirectoryURL.appendingPathComponent("widget-backgrounds", isDirectory: true)
@@ -73,15 +75,19 @@ enum WidgetDataBridge {
                     continue
                 }
                 try fileManager.createDirectory(at: destinationBackgrounds, withIntermediateDirectories: true)
-                try Data(contentsOf: source).write(
-                    to: destination,
-                    options: .atomic
-                )
+                try syncFile(from: source, to: destination)
             }
             return true
         } catch {
             return false
         }
+    }
+
+    private static func syncFile(from source: URL, to destination: URL) throws {
+        // Most refreshes only change the snapshot. Do not rewrite images/settings.
+        let data = try Data(contentsOf: source, options: .mappedIfSafe)
+        if (try? Data(contentsOf: destination, options: .mappedIfSafe)) == data { return }
+        try data.write(to: destination, options: .atomic)
     }
 
     private static var widgetBundleIdentifier: String {
@@ -127,6 +133,8 @@ enum DashboardArrangement: String, Codable, CaseIterable, Identifiable, Sendable
 }
 
 enum WidgetPresetMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case rain
+    case autumn
     case summer
     case classicRed
     case darkGlass
@@ -143,6 +151,8 @@ enum WidgetPresetMode: String, Codable, CaseIterable, Identifiable, Sendable {
         customTheme: WidgetTheme = .crimson
     ) -> (style: CodexWidgetStyle, theme: WidgetTheme) {
         switch self {
+        case .rain: (.nativeGlass, .rain)
+        case .autumn: (.nativeGlass, .autumn)
         case .summer: (.precisionInstrument, .crimson)
         case .classicRed: (.precisionInstrument, .classicRed)
         case .darkGlass: (.nativeGlass, .darkGlass)

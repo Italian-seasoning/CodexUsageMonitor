@@ -10,6 +10,8 @@ struct BackgroundRefreshRecord: Codable, Equatable {
     var sourceFingerprint: String? = nil
     var widgetReloadRequestedAt: Date? = nil
     var widgetSyncPending: Bool? = nil
+    var lastAccountAttempt: Date? = nil
+    var lastAccountSuccess: Date? = nil
 }
 
 struct BackgroundRefreshAgentStatus: Sendable {

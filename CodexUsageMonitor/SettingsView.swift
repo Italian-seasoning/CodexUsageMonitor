@@ -11,22 +11,22 @@ struct SettingsView: View {
             }
 
             ScrollView {
-                VStack(spacing: 14) {
-                InspectorSection(title: "Appearance", subtitle: "The Widgets page controls desktop widgets.") {
-                        LabeledContent("App accent") {
-                            Picker("App accent", selection: $settingsModel.settings.appTheme) {
+                VStack(spacing: 12) {
+                    InspectorSection(title: "Appearance") {
+                        LabeledContent("App theme") {
+                            Picker("App theme", selection: $settingsModel.settings.appTheme) {
                                 ForEach(AppTheme.allCases) { Text($0.label).tag($0) }
                             }
                             .labelsHidden()
-                            .frame(width: 165)
+                            .frame(width: 145)
                         }
-                }
-
-                    InspectorSection(title: "Application behavior", subtitle: "Menu bar, Dock, background refresh, and notifications") {
-                        LimitPreferencesView()
                     }
 
-                    InspectorSection(title: "Setup and updates") {
+                    InspectorSection(title: "Monitoring") {
+                        LimitPreferencesView()
+                    }
+                    DisclosureGroup("Setup and updates") {
+                        VStack(spacing: 12) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Codex data access").font(.system(size: AppTypeScale.body, weight: .semibold))
@@ -43,7 +43,7 @@ struct SettingsView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Software updates").font(.system(size: AppTypeScale.body, weight: .semibold))
-                                Text("Check the configured Sparkle update channel.")
+                                Text("Check for a newer version.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -53,12 +53,24 @@ struct SettingsView: View {
                             }
                             .disabled(!updater.canCheckForUpdates)
                         }
+                        LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
+                        LabeledContent("Built", value: buildDate)
+                        }.padding(.top, 10)
                     }
                 }
                 .frame(maxWidth: 720)
-                .padding(20)
                 .frame(maxWidth: .infinity)
+                .padding(14)
             }
         }
+        .font(.system(size: 12))
+        .controlSize(.small)
+    }
+
+    private var buildDate: String {
+        guard let executable = Bundle.main.executableURL,
+              let values = try? executable.resourceValues(forKeys: [.contentModificationDateKey]),
+              let date = values.contentModificationDate else { return "—" }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 }

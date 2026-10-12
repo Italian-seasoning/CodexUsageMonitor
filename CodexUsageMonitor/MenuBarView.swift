@@ -32,7 +32,12 @@ extension MenuBarDisplayMode {
 final class MenuBarSnapshotModel: ObservableObject {
     @Published private(set) var snapshot = CodexUsageSnapshotStore.load() ?? .empty
     @Published private(set) var isRefreshing = false
+    @Published private(set) var refreshRecord = BackgroundRefreshAgent.loadRecord()
     private var timer: Timer?
+
+    var health: SnapshotHealth {
+        SnapshotHealth(snapshot: snapshot, record: refreshRecord, isRefreshing: isRefreshing)
+    }
 
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -46,6 +51,7 @@ final class MenuBarSnapshotModel: ObservableObject {
 
     func reload() {
         snapshot = CodexUsageSnapshotStore.load() ?? snapshot
+        refreshRecord = BackgroundRefreshAgent.loadRecord()
     }
 
     func refresh() {
@@ -64,7 +70,7 @@ struct CodexMenuBarLabel: View {
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
 
     var body: some View {
-        let stale = model.snapshot.generatedAt.map { Date().timeIntervalSince($0) > 6 * 60 } ?? true
+        let stale = model.health.kind != .freshComplete && model.health.kind != .freshPartial
         let lines = labelLines
         let image = Self.labelImage(lines: lines)
         Image(nsImage: image)
@@ -77,16 +83,16 @@ struct CodexMenuBarLabel: View {
     }
 
     private static func labelImage(lines: [String]) -> NSImage {
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .semibold)
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
         ]
         let sizes = lines.map { ($0 as NSString).size(withAttributes: attributes) }
-        let size = NSSize(width: ceil(sizes.map(\.width).max() ?? 1), height: 18)
+        let size = NSSize(width: ceil(sizes.map(\.width).max() ?? 1), height: 22)
         let image = NSImage(size: size, flipped: true) { _ in
             (lines[0] as NSString).draw(at: NSPoint(x: 0, y: 0), withAttributes: attributes)
-            (lines[1] as NSString).draw(at: NSPoint(x: 0, y: 9), withAttributes: attributes)
+            (lines[1] as NSString).draw(at: NSPoint(x: 0, y: 11), withAttributes: attributes)
             return true
         }
         image.isTemplate = true
@@ -121,65 +127,79 @@ struct CodexMenuBarLabel: View {
 struct CodexMenuBarView: View {
     @ObservedObject var model: MenuBarSnapshotModel
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
+    @State private var showsDetails = false
+
+    private var activity: CodexSessionActivity? {
+        model.snapshot.sessionActivity.first { $0.status() == "Working" } ?? model.snapshot.sessionActivity.first
+    }
+    private var accent: Color { settingsModel.settings.appTheme.accent }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            limitRows(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour)
-            limitRows(title: "Weekly", window: model.snapshot.rateLimits?.weekly)
-
-            if let limits = model.snapshot.rateLimits {
+        ZStack {
+            WindowBackdrop()
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label("Codex Usage", systemImage: "terminal")
+                        .font(.system(size: 12, weight: .semibold))
+                    Spacer()
+                    Text(activity?.status() ?? "Last recorded")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(ModelPricingCatalog.displayName(for: activity?.model ?? model.snapshot.currentModel))
+                        .font(.system(size: 21, weight: .semibold)).lineLimit(1)
+                    Text(activity?.project ?? "Local Codex activity")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                SessionUsageChart(points: activity?.usageHistory ?? [], accent: accent).frame(height: 80)
+                let usage = activity?.usage ?? model.snapshot.currentSession
+                HStack {
+                    Text("\(usage.total.compactTokenString) tokens").fontWeight(.semibold)
+                    Spacer()
+                    Text("\(activity?.requests ?? model.snapshot.currentSessionTurns ?? 0) requests")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.system(size: 11)).monospacedDigit()
                 Divider()
-                LabeledContent("Pace", value: limits.pace.label)
-                if let reset = limits.nearestReset {
-                    LabeledContent("Next reset", value: reset.resetText())
-                }
-            }
-
-            Picker("Menu label", selection: $settingsModel.settings.menuBarDisplayMode) {
-                ForEach(MenuBarDisplayMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-
-            Picker("Show app in", selection: $settingsModel.settings.appPresence) {
-                ForEach(AppPresenceMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-            .onChange(of: settingsModel.settings.appPresence) { _, value in
-                AppPresenceMode.apply(value)
-            }
-
-            Divider()
-            Button("Open Codex Usage") {
-                NSApp.setActivationPolicy(.regular)
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first { $0.identifier?.rawValue == "CodexUsageMonitor.MainWindow" }?
-                    .makeKeyAndOrderFront(nil)
-            }
-            Button(model.isRefreshing ? "Refreshing…" : "Refresh now") { model.refresh() }
-                .disabled(model.isRefreshing)
-            Button("Quit Codex Usage") { NSApp.terminate(nil) }
+                CompactLimitRow(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour, accent: accent)
+                CompactLimitRow(title: "Weekly", window: model.snapshot.rateLimits?.weekly, accent: accent)
+                DisclosureGroup("More details", isExpanded: $showsDetails) {
+                    VStack(spacing: 8) {
+                        LabeledContent("Tools", value: (activity?.toolCalls ?? 0).formatted())
+                        LabeledContent("Cached input", value: usage.input > 0 ? (Double(usage.cachedInput) / Double(usage.input) * 100).compactPercentString : "—")
+                        LabeledContent("Reasoning", value: activity?.reasoningEffort?.capitalized ?? "—")
+                        Picker("Menu label", selection: $settingsModel.settings.menuBarDisplayMode) {
+                            ForEach(MenuBarDisplayMode.allCases) { Text($0.label).tag($0) }
+                        }
+                    }.font(.system(size: 11)).padding(.top, 8)
+                }.font(.system(size: 11))
+                HStack {
+                    Circle().fill(model.health.color).frame(width: 5, height: 5)
+                    Text(model.health.title)
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .help(model.health.detail)
+                    Spacer()
+                    Button { model.refresh() } label: {
+                        Image(systemName: "arrow.clockwise").rotationEffect(.degrees(model.isRefreshing ? 180 : 0))
+                    }
+                    .disabled(model.isRefreshing).help("Refresh now").accessibilityLabel("Refresh now")
+                    Button { NotificationCenter.default.post(name: .showCodexUsageCompactPreview, object: nil) } label: {
+                        Image(systemName: "arrow.up.forward.app")
+                    }
+                    .help("Open workspace").accessibilityLabel("Open workspace")
+                    Menu {
+                        Button("Open workspace") {
+                            NotificationCenter.default.post(name: .showCodexUsageCompactPreview, object: nil)
+                        }
+                        Button("Quit Codex Usage") { NSApp.terminate(nil) }
+                    } label: { Image(systemName: "ellipsis") }
+                    .menuStyle(.borderlessButton).fixedSize()
+                }.buttonStyle(.plain)
+            }.padding(20)
         }
-        .frame(width: 240)
-        .padding(10)
-        .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in
-            model.reload()
-        }
-    }
-
-    @ViewBuilder
-    private func limitRows(title: String, window: RateLimitWindow?) -> some View {
-        if let window {
-            Text("\(title) · \(Int(window.remainingPercent.rounded()))% left")
-                .fontWeight(.semibold)
-                .monospacedDigit()
-            Text("Resets in \(window.resetText())")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } else {
-            Text("\(title) · Unavailable")
-                .foregroundStyle(.secondary)
-        }
+        .frame(width: 330)
+        .preferredColorScheme(.dark)
+        .tint(accent)
+        .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in model.reload() }
     }
 }

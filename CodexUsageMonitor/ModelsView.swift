@@ -1,4 +1,3 @@
-import Charts
 import SwiftUI
 
 struct ModelsView: View {
@@ -33,7 +32,7 @@ struct ModelsView: View {
             }
         }
         if period == .lifetime && result.isEmpty {
-            return snapshot.modelUsage ?? []
+            return (snapshot.modelUsage ?? []).sorted { $0.usage.total > $1.usage.total }
         }
         return result.values.sorted { $0.usage.total > $1.usage.total }
     }
@@ -43,11 +42,16 @@ struct ModelsView: View {
     }
 
     private var totalCost: Double {
-        models.reduce(0) { $0 + $1.estimatedCostUSD }
+        models.compactMap(\.availableCostEstimateUSD).reduce(0, +)
+    }
+
+    private var totalCostText: String {
+        models.contains { $0.availableCostEstimateUSD != nil } ? totalCost.compactCurrencyString : "—"
     }
 
     private var comparedModels: [ModelUsage] {
-        comparison == .tokens ? models : models.sorted { $0.estimatedCostUSD > $1.estimatedCostUSD }
+        comparison == .tokens ? models : models.filter { $0.availableCostEstimateUSD != nil }
+            .sorted { $0.estimatedCostUSD > $1.estimatedCostUSD }
     }
 
     var body: some View {
@@ -62,21 +66,10 @@ struct ModelsView: View {
                 .frame(width: 130)
             }
 
-            ScrollView {
-                VStack(spacing: 10) {
-                    InspectorSection(title: "Astra & Reserve", subtitle: "Local model usage · Standard API-equivalent estimates") {
-                        Text("Reserve uses GPT-5.6 Luna. Luna tokens appear under their recorded model below; they do not measure your remaining Reserve allowance.")
-                            .font(.system(size: AppTypeScale.caption))
-                            .foregroundStyle(.secondary)
-                        Text("Per 1M tokens · Astra: $10 input / $1 cached / $50 output. Long-context rates apply above 272K input tokens per request. API-equivalent estimates exclude cache-write and service-tier premiums.")
-                            .font(.system(size: AppTypeScale.caption))
-                            .foregroundStyle(.secondary)
-                        Link("OpenAI pricing · checked September 26, 2026", destination: URL(string: ModelPricingCatalog.sourceURL)!)
-                            .font(.system(size: AppTypeScale.caption))
-                    }
+            MagneticScrollView { height in
                     InspectorSection(
                         title: "Model comparison",
-                        subtitle: "\(period.title) attribution from local session logs"
+                        subtitle: "\(period.title) · \(comparison == .tokens ? totalTokens.compactTokenString + " tokens" : totalCostText + " API equivalent")"
                     ) {
                         Picker("Compare by", selection: $comparison) {
                             ForEach(Comparison.allCases) { option in
@@ -84,90 +77,69 @@ struct ModelsView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .labelsHidden()
                         .frame(width: 220)
-                        if models.isEmpty {
+                        if comparedModels.isEmpty {
                             ContentUnavailableView(
-                                "No attributed models",
+                                comparison == .tokens ? "No attributed models" : "No priced models",
                                 systemImage: "square.stack.3d.up.slash",
                                 description: Text(health.detail)
                             )
-                            .frame(height: 220)
+                            .frame(height: max(80, height - 100))
                         } else {
-                            HStack(alignment: .firstTextBaseline) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(ModelPricingCatalog.displayName(for: comparedModels.first?.model))
-                                        .font(.system(size: AppTypeScale.value, weight: .semibold, design: .rounded))
-                                    Text("\(share(comparedModels[0])) of selected \(comparison == .tokens ? "tokens" : "API cost")")
-                                        .font(.system(size: AppTypeScale.caption, weight: .medium))
-                                        .foregroundStyle(AppPalette.muted)
-                                }
-                                Spacer()
-                                modelValue(comparison == .tokens ? totalTokens.compactTokenString : totalCost.compactCurrencyString, label: comparison == .tokens ? "total tokens" : "API est.")
-                            }
-
-                            Chart(Array(comparedModels.prefix(6))) { model in
-                                BarMark(
-                                    x: .value("Scale", comparison == .tokens ? Double(totalTokens) : totalCost),
-                                    y: .value("Model", ModelPricingCatalog.displayName(for: model.model)),
-                                    height: .fixed(16),
-                                    stacking: .unstacked
-                                )
-                                .foregroundStyle(AppPalette.chartTrack)
-                                .cornerRadius(5)
-
-                                BarMark(
-                                    x: .value(comparison.rawValue, comparison == .tokens ? Double(model.usage.total) : model.estimatedCostUSD),
-                                    y: .value("Model", ModelPricingCatalog.displayName(for: model.model)),
-                                    height: .fixed(16),
-                                    stacking: .unstacked
-                                )
-                                .foregroundStyle(model.id == comparedModels.first?.id ? AppPalette.accent : AppPalette.chartMuted)
-                                .cornerRadius(5)
-                                .annotation(position: .trailing, spacing: 8) {
-                                    Text(share(model))
-                                        .font(.system(size: AppTypeScale.caption, weight: .semibold))
-                                        .foregroundStyle(AppPalette.muted)
+                            VStack(spacing: 10) {
+                                ForEach(Array(comparedModels.prefix(height < 350 ? 4 : 6))) { model in
+                                    VStack(spacing: 5) {
+                                        HStack(spacing: 8) {
+                                            Text(ModelPricingCatalog.displayName(for: model.model))
+                                                .lineLimit(1)
+                                                .help(ModelPricingCatalog.displayName(for: model.model))
+                                            Spacer(minLength: 0)
+                                            Text(share(model)).monospacedDigit().fixedSize()
+                                        }
+                                        .font(.system(size: AppTypeScale.label, weight: model.id == comparedModels.first?.id ? .semibold : .medium))
+                                        ProgressView(
+                                            value: comparison == .tokens ? Double(model.usage.total) : model.estimatedCostUSD,
+                                            total: comparison == .tokens ? Double(max(1, totalTokens)) : max(totalCost, Double.leastNonzeroMagnitude)
+                                        )
+                                        .tint(AppPalette.accent)
+                                        .accessibilityHidden(true)
+                                    }
+                                    .frame(maxHeight: .infinity)
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel("\(ModelPricingCatalog.displayName(for: model.model)), \(share(model)) of selected \(comparison == .tokens ? "tokens" : "API cost")")
                                 }
                             }
-                            .chartXAxis(.hidden)
-                            .chartYAxis {
-                                AxisMarks(position: .leading) {
-                                    AxisValueLabel()
-                                        .foregroundStyle(AppPalette.muted)
-                                }
-                            }
-                            .chartPlotStyle { plot in
-                                plot.padding(.trailing, 42)
-                            }
-                            .frame(height: max(132, CGFloat(min(models.count, 6)) * 38))
+                            .frame(height: max(100, height - 125))
+                            .accessibilityElement(children: .contain)
                             .accessibilityLabel("Model \(comparison.rawValue.lowercased()) share for \(period.title)")
                         }
                     }
-
+            } details: {
+                VStack(spacing: 10) {
                     InspectorSection(
                         title: "Attributed models",
                         subtitle: "Tokens, share, requests, and recorded API-equivalent estimate"
                     ) {
+                        if models.contains(where: { $0.availableCostEstimateUSD == nil }) {
+                            Text("Unpriced models have no recorded rate and are excluded from API cost comparisons.")
+                                .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
+                        }
                         ForEach(Array(comparedModels.enumerated()), id: \.element.id) { index, model in
-                            HStack(spacing: 12) {
-                                Text("\(index + 1)")
-                                    .font(.system(size: AppTypeScale.caption, weight: .semibold))
-                                    .foregroundStyle(AppPalette.muted)
-                                    .frame(width: 26)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(ModelPricingCatalog.displayName(for: model.model))
-                                        .font(.system(size: AppTypeScale.body, weight: .semibold))
-                                    Text(model.model)
-                                        .font(.system(size: AppTypeScale.caption))
-                                        .foregroundStyle(.tertiary)
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("\(index + 1). \(ModelPricingCatalog.displayName(for: model.model))")
+                                        .font(.system(size: AppTypeScale.body, weight: .semibold)).lineLimit(1)
+                                    Spacer(minLength: 6)
+                                    Text(model.usage.total.compactTokenString).monospacedDigit()
                                 }
-
-                                Spacer()
-                                modelValue(model.usage.total.compactTokenString, label: "tokens")
-                                modelValue(share(model), label: "share")
-                                modelValue(model.turns.formatted(), label: "requests")
-                                modelValue(model.estimatedCostUSD.compactCurrencyString, label: "API est.")
+                                HStack {
+                                    modelValue(share(model), label: "share")
+                                    Spacer(minLength: 0)
+                                    modelValue(model.turns.formatted(), label: "requests")
+                                    Spacer(minLength: 0)
+                                    modelValue(model.availableCostEstimateUSD?.compactCurrencyString ?? "Unpriced", label: "API est.")
+                                }
                             }
                             .padding(.vertical, 7)
 
@@ -176,17 +148,26 @@ struct ModelsView: View {
                             }
                         }
                     }
+                    DisclosureGroup("Pricing and Reserve notes") {
+                        Text("Reserve uses GPT-5.6 Luna. Luna tokens appear under their recorded model below; they do not measure your remaining Reserve allowance.")
+                            .font(.system(size: AppTypeScale.caption))
+                            .foregroundStyle(.secondary)
+                        Text("Standard API rates per 1M tokens · GPT-6.1 Sol: $2 input / $0.10 cached / $10 output; above 272K input: $4 / $0.20 / $15. Astra: $10 input / $1 cached / $50 output. API-equivalent estimates exclude cache-write and service-tier premiums and do not represent subscription charges.")
+                            .font(.system(size: AppTypeScale.caption))
+                            .foregroundStyle(.secondary)
+                        Link("OpenAI pricing", destination: URL(string: ModelPricingCatalog.sourceURL)!)
+                            .font(.system(size: AppTypeScale.caption))
+                    }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
             }
         }
     }
 
     private func share(_ model: ModelUsage) -> String {
         if comparison == .apiCost {
+            guard let estimate = model.availableCostEstimateUSD else { return "—" }
             guard totalCost > 0 else { return "0%" }
-            return (model.estimatedCostUSD / totalCost)
+            return (estimate / totalCost)
                 .formatted(.percent.precision(.fractionLength(0)))
         }
         guard totalTokens > 0 else { return "0%" }

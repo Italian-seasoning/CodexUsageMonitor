@@ -33,8 +33,10 @@ struct WidgetConfigurationTests {
 
     @Test("Widget snapshots live outside protected app containers")
     func sharedSnapshotLocation() {
+        let folder = Bundle.main.bundleIdentifier?.hasSuffix(".debug") == true
+            ? "CodexUsageMonitor-Debug" : "CodexUsageMonitor"
         let expected = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/CodexUsageMonitor/snapshot.json")
+            .appendingPathComponent("Library/Application Support/\(folder)/snapshot.json")
             .standardizedFileURL
 
         #expect(CodexUsageSnapshotStore.snapshotURL.standardizedFileURL == expected)
@@ -55,6 +57,10 @@ struct WidgetConfigurationTests {
         )
 
         #expect(host.path == "/Users/example/Library/Application Support/CodexUsageMonitor")
+        let debug = WidgetDataBridge.dataDirectoryURL(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor.debug", homeDirectory: home
+        )
+        #expect(debug != host)
         #expect(widget.path == "/Users/example/Library/Containers/com.codexusage.CodexUsageMonitor.widget3/Data/Library/Application Support/CodexUsageMonitor")
     }
 
@@ -246,6 +252,23 @@ struct WidgetConfigurationTests {
         #expect(hero(.dashboard).heroValue == 1_234.compactTokenString)
     }
 
+    @Test("Allowance widgets exclude expired limit windows")
+    func expiredLimitWindows() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        var snapshot = widgetFixture(now: now)
+        snapshot.rateLimits?.fiveHour?.resetsAt = now.addingTimeInterval(-1)
+        let configuration = WidgetDisplayConfiguration(family: .limits, style: .nativeGlass,
+            theme: .rain, period: .today, dashboardArrangement: .balanced)
+        let weekly = WidgetFamilySemanticBuilder.content(snapshot: snapshot, configuration: configuration, now: now)
+        #expect(weekly.heroValue == "60%")
+        #expect(weekly.heroLabel == "Weekly remaining")
+
+        snapshot.rateLimits?.weekly?.resetsAt = now.addingTimeInterval(-1)
+        let expired = WidgetFamilySemanticBuilder.content(snapshot: snapshot, configuration: configuration, now: now)
+        #expect(expired.heroValue == "—")
+        #expect(expired.heroLabel == "No current limit window")
+    }
+
     @MainActor
     @Test("Widget foreground stays transparent for macOS vibrant rendering")
     func widgetForegroundLayerRemainsTransparent() throws {
@@ -280,6 +303,7 @@ struct WidgetConfigurationTests {
         for family in CodexWidgetFamily.allCases {
             for style in CodexWidgetStyle.allCases {
                 for size in CodexUsageCardSize.allCases {
+                  for theme in [WidgetTheme.darkGlass, .rain, .autumn] {
                     let frame = switch size {
                     case .small: CGSize(width: 170, height: 170)
                     case .medium: CGSize(width: 340, height: 170)
@@ -291,7 +315,7 @@ struct WidgetConfigurationTests {
                             configuration: WidgetDisplayConfiguration(
                                 family: family,
                                 style: style,
-                                theme: .crimson,
+                                theme: theme,
                                 period: .sevenDays,
                                 dashboardArrangement: .balanced
                             ),
@@ -304,6 +328,7 @@ struct WidgetConfigurationTests {
                     renderer.scale = 1
 
                     #expect(try #require(renderer.cgImage).width == Int(frame.width))
+                  }
                 }
             }
         }

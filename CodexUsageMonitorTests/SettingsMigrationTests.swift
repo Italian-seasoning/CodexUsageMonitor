@@ -47,7 +47,7 @@ struct SettingsMigrationTests {
         let result = CodexUsageSettingsStore.load(data: data, legacy: .empty)
 
         #expect(result.settings.schemaVersion == CodexUsageSettings.currentSchemaVersion)
-        #expect(result.settings.appTheme == .crimson)
+        #expect(result.settings.appTheme == .rain)
         #expect(result.settings.backgroundRefreshEnabled)
         #expect(!result.settings.phoneNotificationsEnabled)
         #expect(result.settings.warningThreshold == 70)

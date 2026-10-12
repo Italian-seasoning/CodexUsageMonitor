@@ -10,6 +10,7 @@ final class SourceChangeMonitor {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let paths = [
             home.appendingPathComponent(".codex/sessions").path,
+            home.appendingPathComponent(".codex/archived_sessions").path,
             HeadroomSavingsCollector().ledgerURL.deletingLastPathComponent().path,
         ].filter { FileManager.default.fileExists(atPath: $0) }
         guard !paths.isEmpty else { return }
@@ -57,8 +58,10 @@ final class SourceChangeMonitor {
     }
 
     private func scheduleRefresh() {
-        debounceWorkItem?.cancel()
-        let workItem = DispatchWorkItem {
+        // Coalesce without postponing forever while Codex continuously writes.
+        guard debounceWorkItem == nil else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.debounceWorkItem = nil
             Task {
                 _ = await RefreshCoordinator.shared.refresh(trigger: .sourceChange)
             }

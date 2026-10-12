@@ -52,7 +52,7 @@ struct CodexUsageCardPreview: View {
 
     private var dark: Bool {
         switch settings.theme {
-        case .crimson, .classicRed, .darkGlass: true
+        case .crimson, .classicRed, .darkGlass, .rain, .autumn: true
         case .frostedWhite: false
         case .monochrome: colorScheme == .dark
         }

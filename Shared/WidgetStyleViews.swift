@@ -26,7 +26,7 @@ struct CodexWidgetStyledContainer<Content: View>: View {
                 WidgetGridTexture(color: palette.separator)
             }
             content
-                .padding(style == .signalGrid ? 12 : 15)
+                .padding(14)
         }
         .foregroundStyle(palette.primary)
     }
@@ -62,6 +62,10 @@ struct CodexWidgetStyleBackground: View {
                 [Color(red: 0.025, green: 0.25, blue: 0.28), Color(red: 0.015, green: 0.08, blue: 0.13)]
             case .classicRed:
                 [Color(red: 0.065, green: 0.058, blue: 0.062), Color(red: 0.018, green: 0.018, blue: 0.022)]
+            case .rain:
+                [Color(red: 0.08, green: 0.19, blue: 0.24), Color(red: 0.03, green: 0.07, blue: 0.10)]
+            case .autumn:
+                [Color(red: 0.24, green: 0.14, blue: 0.08), Color(red: 0.09, green: 0.055, blue: 0.04)]
             default:
                 [Color(red: 0.055, green: 0.058, blue: 0.07), Color(red: 0.025, green: 0.028, blue: 0.035)]
             }
@@ -75,6 +79,8 @@ struct CodexWidgetStyleBackground: View {
             case .frostedWhite where colorScheme == .light: Color(red: 0.95, green: 0.96, blue: 0.98)
             case .crimson: Color(red: 0.035, green: 0.19, blue: 0.22)
             case .classicRed: Color(red: 0.095, green: 0.09, blue: 0.10)
+            case .rain: Color(red: 0.16, green: 0.26, blue: 0.32)
+            case .autumn: Color(red: 0.28, green: 0.23, blue: 0.18)
             default: Color(red: 0.13, green: 0.14, blue: 0.17)
             }
             ZStack {
@@ -93,6 +99,8 @@ struct CodexWidgetStyleBackground: View {
             switch theme {
             case .crimson: Color(red: 0.018, green: 0.12, blue: 0.16)
             case .classicRed: Color(red: 0.028, green: 0.027, blue: 0.032)
+            case .rain: Color(red: 0.035, green: 0.085, blue: 0.12)
+            case .autumn: Color(red: 0.13, green: 0.075, blue: 0.04)
             default: Color(red: 0.045, green: 0.05, blue: 0.062)
             }
         }
@@ -130,6 +138,8 @@ extension WidgetStylePalette {
             accent = switch theme {
             case .crimson: Color(red: 0.12, green: 0.82, blue: 0.79)
             case .classicRed: Color(red: 1, green: 0.18, blue: 0.23)
+            case .rain: Color(red: 0.48, green: 0.76, blue: 0.91)
+            case .autumn: Color(red: 0.96, green: 0.64, blue: 0.35)
             default: Color(red: 0.34, green: 0.64, blue: 1)
             }
         }

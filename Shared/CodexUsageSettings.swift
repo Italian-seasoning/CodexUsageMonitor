@@ -5,6 +5,8 @@ enum AppTheme: String, Codable, CaseIterable, Identifiable, Sendable {
     case crimson
     case classicRed
     case graphite
+    case rain
+    case autumn
 
     var id: String { rawValue }
 }
@@ -30,7 +32,7 @@ struct CodexUsageSettings: Codable, Equatable, Sendable {
     static let currentSchemaVersion = 3
     static let `default` = CodexUsageSettings(
         schemaVersion: currentSchemaVersion,
-        appTheme: .crimson,
+        appTheme: .rain,
         defaultWidgetTheme: .crimson,
         backgroundRefreshEnabled: false,
         appPresence: .menuBar,

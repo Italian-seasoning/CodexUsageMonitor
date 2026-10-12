@@ -104,6 +104,10 @@ struct ModelUsage: Codable, Equatable, Identifiable, Sendable {
     var estimatedCostUSD: Double
 
     var id: String { model }
+
+    var availableCostEstimateUSD: Double? {
+        estimatedCostUSD > 0 || ModelPricingCatalog.pricing(for: model) != nil ? estimatedCostUSD : nil
+    }
 }
 
 struct DailyModelUsage: Codable, Equatable, Identifiable, Sendable {
@@ -121,6 +125,10 @@ struct CodexSessionSummary: Codable, Equatable, Identifiable, Sendable {
     var turns: Int
     var model: String
     var estimatedCostUSD: Double?
+    var title: String? = nil
+
+    var sessionID: String { String(id.split(separator: "#", maxSplits: 1).first ?? Substring(id)) }
+    var displayTitle: String { title ?? "Session \(sessionID.prefix(8))" }
 
     var sortableEstimatedCostUSD: Double { estimatedCostUSD ?? -1 }
 }
@@ -157,6 +165,7 @@ enum ModelPricingCatalog {
         // Uses the monitor's existing 272K context boundary for API-equivalent estimates.
         "gpt-6.1-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.1, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.2, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-astra": ModelPricing(inputPerMillion: 10, cachedInputPerMillion: 1, outputPerMillion: 50, longInputPerMillion: 20, longCachedInputPerMillion: 2, longOutputPerMillion: 75, longContextThreshold: 272_000),
+        "gpt-6.1-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.1, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.2, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.2, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.4, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-luna": ModelPricing(inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5, longInputPerMillion: 0.2, longCachedInputPerMillion: 0.02, longOutputPerMillion: 0.75, longContextThreshold: 272_000),
         "gpt-5.6-sol": ModelPricing(inputPerMillion: 4, cachedInputPerMillion: 0.4, outputPerMillion: 20, longInputPerMillion: 8, longCachedInputPerMillion: 0.8, longOutputPerMillion: 30, longContextThreshold: 272_000),
@@ -295,6 +304,9 @@ struct CodexRateLimits: Codable, Equatable {
     var fiveHour: RateLimitWindow?
     var weekly: RateLimitWindow?
     var history: [RateLimitHistoryPoint]
+    // Actual observation timestamps and reset boundaries, independent of hourly charts.
+    var consumptionSamples: [RateLimitWindow]? = nil
+    var accountObservedAt: Date? = nil
 
     var preferredWindow: RateLimitWindow? { fiveHour ?? weekly }
 
@@ -303,6 +315,97 @@ struct CodexRateLimits: Codable, Equatable {
     }
 
     var pace: LimitPace { preferredWindow?.pace() ?? .unknown }
+}
+
+struct CodexTokenPoint: Codable, Equatable, Identifiable, Sendable {
+    var date: Date
+    var totalTokens: Int
+    var id: Date { date }
+}
+
+/// Operational metadata only: never prompts, responses, commands or tool arguments.
+struct CodexSessionActivity: Codable, Equatable, Identifiable, Sendable {
+    var id: String
+    var project: String? = nil
+    var title: String? = nil
+    var model: String? = nil
+    var provider: String? = nil
+    var cliVersion: String? = nil
+    var reasoningEffort: String? = nil
+    var approvalPolicy: String? = nil
+    var sandboxMode: String? = nil
+    var state = "unknown"
+    var observedAt: Date? = nil
+    var turnStartedAt: Date? = nil
+    var turnDurationSeconds: Double? = nil
+    var firstTokenSeconds: Double? = nil
+    var lastTool: String? = nil
+    var toolCalls: Int? = nil
+    var toolFailures: Int? = nil
+    var usage: TokenUsage = .zero
+    var requests: Int = 0
+    var contextTokens: Int? = nil
+    var contextWindow: Int? = nil
+    var usageHistory: [CodexTokenPoint]? = nil
+
+    var displayTitle: String { title ?? project ?? "Session \(id.prefix(8))" }
+
+    func status(at now: Date = .now) -> String {
+        if state == "running" {
+            return observedAt.map { now.timeIntervalSince($0) <= 120 } == true
+                ? "Working" : "Last seen working"
+        }
+        switch state {
+        case "completed": return "Finished"
+        case "interrupted": return "Interrupted"
+        default: return "Last recorded"
+        }
+    }
+}
+
+/// Reads only saved chat names. Transcript contents are never used as a naming fallback.
+enum CodexSessionNames {
+    static func load(for sessionIDs: Set<String>, from url: URL) -> [String: String] {
+        guard !sessionIDs.isEmpty, let file = try? FileHandle(forReadingFrom: url) else { return [:] }
+        defer { try? file.close() }
+        var names: [String: String] = [:]
+        var line = Data()
+        var oversized = false
+        func consume() {
+            defer { line.removeAll(keepingCapacity: true); oversized = false }
+            guard !oversized,
+                  let row = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  let id = row["id"] as? String, sessionIDs.contains(id),
+                  let rawName = row["thread_name"] as? String else { return }
+            let name = rawName.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+            if name.isEmpty { names.removeValue(forKey: id) }
+            else { names[id] = String(name.prefix(240)) }
+        }
+        while let chunk = try? file.read(upToCount: 64 * 1024), !chunk.isEmpty {
+            for byte in chunk {
+                if byte == 10 { consume() }
+                else if !oversized {
+                    if line.count < 64 * 1024 { line.append(byte) }
+                    else { oversized = true; line.removeAll(keepingCapacity: true) }
+                }
+            }
+        }
+        if !line.isEmpty || oversized { consume() }
+        return names
+    }
+
+    static func applying(to snapshot: CodexUsageSnapshot, from url: URL) -> CodexUsageSnapshot {
+        var result = snapshot
+        let ids = Set(snapshot.sessionActivity.map(\.id) + snapshot.recentSessions.map(\.sessionID))
+        let names = load(for: ids, from: url)
+        for index in result.sessionActivity.indices {
+            result.sessionActivity[index].title = names[result.sessionActivity[index].id]
+        }
+        for index in result.recentSessions.indices {
+            result.recentSessions[index].title = names[result.recentSessions[index].sessionID]
+        }
+        return result
+    }
 }
 
 struct CodexUsageSnapshot: Codable, Equatable {
@@ -334,6 +437,8 @@ struct CodexUsageSnapshot: Codable, Equatable {
     var rateLimits: CodexRateLimits? = nil
     var accountLifetimeTokens: Int? = nil
     var recentSessions: [CodexSessionSummary] = []
+    var sessionActivity: [CodexSessionActivity] = []
+    var appearanceTheme: String? = nil
 
     static let empty = CodexUsageSnapshot(
         currentSession: .zero,
@@ -396,6 +501,8 @@ extension CodexUsageSnapshot {
         case rateLimits
         case accountLifetimeTokens
         case recentSessions
+        case sessionActivity
+        case appearanceTheme
     }
 
     init(from decoder: Decoder) throws {
@@ -428,6 +535,8 @@ extension CodexUsageSnapshot {
         rateLimits = try values.decodeIfPresent(CodexRateLimits.self, forKey: .rateLimits)
         accountLifetimeTokens = try values.decodeIfPresent(Int.self, forKey: .accountLifetimeTokens)
         recentSessions = try values.decodeIfPresent([CodexSessionSummary].self, forKey: .recentSessions) ?? []
+        sessionActivity = try values.decodeIfPresent([CodexSessionActivity].self, forKey: .sessionActivity) ?? []
+        appearanceTheme = try values.decodeIfPresent(String.self, forKey: .appearanceTheme)
     }
 }
 
@@ -616,6 +725,8 @@ enum WidgetTheme: String, Codable, CaseIterable, Identifiable, Sendable {
     case darkGlass
     case frostedWhite
     case monochrome
+    case rain
+    case autumn
 
     var id: String { rawValue }
 
@@ -626,6 +737,8 @@ enum WidgetTheme: String, Codable, CaseIterable, Identifiable, Sendable {
         case .darkGlass: "Graphite"
         case .frostedWhite: "Paper"
         case .monochrome: "System mono"
+        case .rain: "Vancouver Rain"
+        case .autumn: "Autumn"
         }
     }
 }
@@ -1003,6 +1116,7 @@ extension StatMetric {
 
 struct CodexUsageReader {
     var sessionsDirectory: URL
+    var archivedSessionsDirectory: URL?
     var calendar: Calendar
     var activityDayCount: Int
     var cacheURL: URL?
@@ -1011,12 +1125,16 @@ struct CodexUsageReader {
         sessionsDirectory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions"),
         calendar: Calendar = .current,
         activityDayCount: Int = 0,
-        cacheURL: URL? = nil
+        cacheURL: URL? = nil,
+        archivedSessionsDirectory: URL? = nil
     ) {
         self.sessionsDirectory = sessionsDirectory
         self.calendar = calendar
         self.activityDayCount = activityDayCount
         let defaultSessionsDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")
+        self.archivedSessionsDirectory = archivedSessionsDirectory ?? (
+            sessionsDirectory.standardizedFileURL == defaultSessionsDirectory.standardizedFileURL
+                ? defaultSessionsDirectory.deletingLastPathComponent().appendingPathComponent("archived_sessions") : nil)
         self.cacheURL = cacheURL ?? (
             sessionsDirectory.standardizedFileURL == defaultSessionsDirectory.standardizedFileURL
                 ? CodexUsageSnapshotStore.readerCacheURL
@@ -1038,7 +1156,7 @@ struct CodexUsageReader {
                 hash = (hash ^ UInt64(byte)) &* prime
             }
         }
-        return "session-summaries-v3|" + String(hash, radix: 16)
+        return "session-activity-v6|" + String(hash, radix: 16)
     }
 
     func snapshot(now: Date = Date(), headroomActivity: HeadroomActivity? = nil) -> CodexUsageSnapshot {
@@ -1049,7 +1167,8 @@ struct CodexUsageReader {
 
     private func makeSnapshot(now: Date, headroomActivity: HeadroomActivity?) -> CodexUsageSnapshot {
         let parsedFiles = parsedFilesUsingCache()
-        let files = deduplicatedFiles(parsedFiles.filter { !$0.samples.isEmpty && !$0.isSubagent })
+        let observedFiles = deduplicatedFiles(parsedFiles.filter { !$0.isSubagent })
+        let files = observedFiles.filter { !$0.samples.isEmpty }
         let rateLimits = rateLimitSnapshot(from: parsedFiles.flatMap(\.rateLimits), now: now)
         let sessions = groupedSessions(files)
         let startOfToday = calendar.startOfDay(for: now)
@@ -1154,6 +1273,27 @@ struct CodexUsageReader {
             since: startOfLast30Days,
             through: now
         )
+        let sessionByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        let latestActivity = Dictionary(grouping: observedFiles, by: \.sessionID).compactMap { id, files in
+            guard var activity = files.compactMap(\.activity).max(by: {
+                ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast)
+            }), let observedAt = activity.observedAt, observedAt <= now,
+                  observedAt >= startOfLast30Days else { return nil as CodexSessionActivity? }
+            activity.id = id
+            let session = sessionByID[id]
+            activity.usage = session?.total ?? .zero
+            activity.requests = session?.samples.count ?? 0
+            activity.contextTokens = session?.latestSample?.contextTokens
+            activity.contextWindow = activity.contextWindow ?? session?.latestSample?.contextWindow
+            var total = 0
+            let points = (session?.samples ?? []).sorted { $0.timestamp < $1.timestamp }.map { sample in
+                total += sample.usage.total
+                return CodexTokenPoint(date: sample.timestamp, totalTokens: total)
+            }
+            activity.usageHistory = Dictionary(grouping: points, by: \.date).compactMap { $0.value.last }
+                .sorted { $0.date < $1.date }.suffix(120).map { $0 }
+            return activity
+        }.sorted { ($0.observedAt ?? .distantPast) > ($1.observedAt ?? .distantPast) }
 
         return CodexUsageSnapshot(
             currentSession: newest?.total ?? .zero,
@@ -1182,7 +1322,8 @@ struct CodexUsageReader {
             unpricedTokens: unpricedTokens,
             pricingVersion: ModelPricingCatalog.version,
             rateLimits: rateLimits,
-            recentSessions: recentSessions
+            recentSessions: recentSessions,
+            sessionActivity: Array(latestActivity.prefix(12))
         )
     }
 
@@ -1272,9 +1413,24 @@ struct CodexUsageReader {
         let result = CodexRateLimits(
             fiveHour: currentWindow(minutes: 300),
             weekly: currentWindow(minutes: 10_080),
-            history: hourly.values.sorted { $0.date < $1.date }
+            history: hourly.values.sorted { $0.date < $1.date },
+            consumptionSamples: Self.consumptionSamples(from: sorted.map {
+                RateLimitWindow(usedPercent: $0.usedPercent, windowMinutes: $0.windowMinutes,
+                    resetsAt: $0.resetsAt, observedAt: $0.observedAt)
+            }, now: now)
         )
         return result.fiveHour == nil && result.weekly == nil && result.history.isEmpty ? nil : result
+    }
+
+    private static func consumptionSamples(from samples: [RateLimitWindow], now: Date) -> [RateLimitWindow] {
+        // Bound snapshot size to at most one observation per minute per allowance.
+        var minutes: [String: RateLimitWindow] = [:]
+        for sample in samples where sample.observedAt >= now.addingTimeInterval(-3_600)
+            && sample.observedAt <= now && [300, 10_080].contains(sample.windowMinutes) {
+            let key = "\(sample.windowMinutes):\(Int(sample.observedAt.timeIntervalSince1970 / 60))"
+            if minutes[key].map({ $0.observedAt <= sample.observedAt }) ?? true { minutes[key] = sample }
+        }
+        return minutes.values.sorted { $0.observedAt < $1.observedAt }
     }
 
     private func topModel(in totals: [String: Int]) -> String? {
@@ -1350,17 +1506,14 @@ struct CodexUsageReader {
     }
 
     private func jsonlFiles() -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: sessionsDirectory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
-        return enumerator.compactMap { item in
-            guard let url = item as? URL, url.pathExtension == "jsonl" else { return nil }
-            return url
+        [sessionsDirectory, archivedSessionsDirectory].compactMap { $0 }.flatMap { directory -> [URL] in
+            guard let enumerator = FileManager.default.enumerator(
+                at: directory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]) else { return [] }
+            return enumerator.compactMap { item in
+                guard let url = item as? URL, url.pathExtension == "jsonl" else { return nil }
+                return url
+            }
         }
     }
 
@@ -1443,6 +1596,9 @@ struct CodexUsageReader {
         var rateLimitSamples: [RateLimitSample] = []
         var lastRateLimitByWindow: [Int: RateLimitSample] = [:]
         var isSubagent = false
+        var activity = CodexSessionActivity(id: sessionID)
+        var hasLifecycle = false
+        var completedToolIDs = Set<String>()
 
         do {
             try JSONLFileReader.forEachRow(at: file) { row in
@@ -1458,24 +1614,78 @@ struct CodexUsageReader {
                             ?? metadata["id"] as? String
                             ?? sessionID
                         startedAt = parseDate(metadata["timestamp"] as? String)
+                        activity.id = sessionID
+                        activity.project = (metadata["cwd"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent }
+                        activity.provider = metadata["model_provider"] as? String
+                        activity.cliVersion = metadata["cli_version"] as? String
                     }
                     return
                 }
 
-                if row["type"] as? String == "turn_context", let context = row["payload"] as? [String: Any] {
-                    activeModel = context["model"] as? String ?? activeModel
-                    return
-                }
+            if row["type"] as? String == "turn_context", let context = row["payload"] as? [String: Any] {
+                activeModel = context["model"] as? String ?? activeModel
+                activity.model = activeModel
+                activity.reasoningEffort = context["effort"] as? String
+                activity.approvalPolicy = context["approval_policy"] as? String
+                activity.sandboxMode = (context["sandbox_policy"] as? [String: Any])?["type"] as? String
+                activity.project = (context["cwd"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent } ?? activity.project
+                return
+            }
 
-                if let timestamp = parseDate(row["timestamp"] as? String),
-                   let payload = row["payload"] as? [String: Any],
-                   let limits = payload["rate_limits"] as? [String: Any] {
-                    for key in ["primary", "secondary"] {
-                        guard let values = limits[key] as? [String: Any],
-                              let windowMinutes = (values["window_minutes"] as? NSNumber)?.intValue,
-                              let usedPercent = (values["used_percent"] as? NSNumber)?.doubleValue,
-                              let resetsAt = (values["resets_at"] as? NSNumber)?.doubleValue
-                        else { continue }
+            if let timestamp = parseDate(row["timestamp"] as? String),
+               row["type"] as? String == "event_msg",
+               let payload = row["payload"] as? [String: Any] {
+                switch payload["type"] as? String {
+                case "task_started", "turn_started":
+                    hasLifecycle = true
+                    activity.state = "running"
+                    activity.turnStartedAt = timestamp
+                    activity.turnDurationSeconds = nil
+                    activity.firstTokenSeconds = nil
+                    activity.lastTool = nil
+                    activity.toolCalls = 0
+                    activity.toolFailures = 0
+                    completedToolIDs.removeAll()
+                    activity.contextWindow = payload["model_context_window"] as? Int ?? activity.contextWindow
+                    activity.observedAt = timestamp
+                case "task_complete", "turn_complete":
+                    hasLifecycle = true
+                    activity.state = "completed"
+                    activity.turnDurationSeconds = (payload["duration_ms"] as? Double).map { $0 / 1000 }
+                    activity.firstTokenSeconds = (payload["time_to_first_token_ms"] as? Double).map { $0 / 1000 }
+                    activity.observedAt = timestamp
+                case "task_aborted", "turn_aborted":
+                    hasLifecycle = true
+                    activity.state = "interrupted"
+                    activity.observedAt = timestamp
+                case "item_completed":
+                    activity.observedAt = timestamp
+                    if let item = payload["item"] as? [String: Any],
+                       let type = item["type"] as? String,
+                       ["CommandExecution", "McpToolCall", "WebSearch", "FileChange"].contains(type),
+                       let id = item["id"] as? String, completedToolIDs.insert(id).inserted {
+                        activity.toolCalls = (activity.toolCalls ?? 0) + 1
+                        activity.lastTool = type == "McpToolCall" ? String((item["tool"] as? String ?? type).prefix(80)) : type
+                        let failed = item["status"] as? String == "failed"
+                            || (item["exit_code"] as? Int).map { $0 != 0 } == true
+                        activity.toolFailures = (activity.toolFailures ?? 0) + (failed ? 1 : 0)
+                    }
+                case "token_count":
+                    activity.observedAt = timestamp
+                    activity.model = activeModel
+                default: break
+                }
+            }
+
+            if let timestamp = parseDate(row["timestamp"] as? String),
+               let payload = row["payload"] as? [String: Any],
+               let limits = payload["rate_limits"] as? [String: Any] {
+                for key in ["primary", "secondary"] {
+                    guard let values = limits[key] as? [String: Any],
+                          let windowMinutes = (values["window_minutes"] as? NSNumber)?.intValue,
+                          let usedPercent = (values["used_percent"] as? NSNumber)?.doubleValue,
+                          let resetsAt = (values["resets_at"] as? NSNumber)?.doubleValue
+                    else { continue }
 
                         let sample = RateLimitSample(
                             observedAt: timestamp,
@@ -1526,7 +1736,7 @@ struct CodexUsageReader {
             return nil
         }
 
-        guard !samples.isEmpty || !rateLimitSamples.isEmpty else { return nil }
+        guard !samples.isEmpty || !rateLimitSamples.isEmpty || hasLifecycle else { return nil }
         if startedAt == nil { startedAt = samples.first?.timestamp }
         let resolvedPrimaryID = primaryID ?? sessionID
         lineageIDs.insert(resolvedPrimaryID)
@@ -1538,7 +1748,8 @@ struct CodexUsageReader {
             lineageSequence: samples.map(\.cumulative),
             samples: samples,
             rateLimits: rateLimitSamples,
-            isSubagent: isSubagent
+            isSubagent: isSubagent,
+            activity: activity.observedAt == nil ? nil : activity
         )
     }
 
@@ -1563,7 +1774,10 @@ struct CodexUsageReader {
                 let replayedCount = ancestor.lineageSequence.count
                 file.samples = Array(file.samples.dropFirst(replayedCount))
                 file.sessionID = ancestor.sessionID
-                guard !file.samples.isEmpty else { continue }
+                // A resumed turn can be working before its first new token event.
+                guard !file.samples.isEmpty
+                    || (file.activity?.turnStartedAt ?? .distantPast) > (ancestor.activity?.observedAt ?? .distantPast)
+                else { continue }
             }
             canonical.append(file)
         }
@@ -1635,6 +1849,7 @@ struct CodexUsageReader {
         var samples: [UsageSample]
         var rateLimits: [RateLimitSample]
         var isSubagent: Bool
+        var activity: CodexSessionActivity?
     }
 
     private struct RateLimitSample: Codable, Equatable {
@@ -1665,7 +1880,7 @@ struct CodexUsageReader {
     }
 
     private struct ReaderCache: Codable {
-        static let currentSchemaVersion = 4
+        static let currentSchemaVersion = 6
 
         var schemaVersion: Int
         var entries: [String: CachedFile]

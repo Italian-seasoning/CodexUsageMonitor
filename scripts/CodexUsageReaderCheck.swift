@@ -23,8 +23,9 @@ struct CodexUsageReaderCheck {
         try testFutureDatedModelsDoNotAffectPeriodLeaders()
         try testModelAwarePricingAndUnpricedUsage()
         try testLegacySnapshotDecodesWithoutNewFields()
+        try testSessionActivityBeforeTokensAndAfterCompletion()
 
-        print("CodexUsageReaderCheck passed (10 deterministic scenarios)")
+        print("CodexUsageReaderCheck passed (11 deterministic scenarios)")
 
         if arguments.contains("--live") {
             printLiveSnapshot()
@@ -411,6 +412,70 @@ struct CodexUsageReaderCheck {
                 + "currentTurns=\(snapshot.currentSessionTurns ?? 0) "
                 + "lastUpdated=\(updated)"
         )
+    }
+
+    private static func testSessionActivityBeforeTokensAndAfterCompletion() throws {
+        try withFixture(named: "session-activity") { root in
+            let start = "2026-07-04T10:00:00.000Z"
+            let rows = [
+                try jsonRow(timestamp: start, type: "session_meta", payload: [
+                    "id": "activity", "timestamp": start, "cwd": "/projects/Example",
+                    "model_provider": "openai", "cli_version": "test"
+                ]),
+                try jsonRow(timestamp: start, type: "event_msg", payload: [
+                    "type": "task_started", "model_context_window": 200
+                ]),
+                try jsonRow(timestamp: start, type: "turn_context", payload: [
+                    "model": "gpt-6-sol", "effort": "high", "approval_policy": "never",
+                    "sandbox_policy": ["type": "workspace-write"]
+                ])
+            ]
+            try writeRollout(root: root, path: "activity.jsonl", rows: rows)
+            let before = try makeSnapshot(root: root, now: "2026-07-04T10:00:10.000Z")
+            let activity = try unwrap(before.sessionActivity.first, "activity before first token event")
+            try expectEqual(activity.project, "Example", "project name, without full path")
+            try expectEqual(activity.model, "gpt-6-sol", "model before token usage")
+            try expectEqual(activity.reasoningEffort, "high", "reasoning effort")
+            try expectEqual(activity.sandboxMode, "workspace-write", "sandbox mode")
+            try expectEqual(activity.status(at: try date("2026-07-04T10:00:10.000Z")), "Working", "fresh running status")
+            try expectEqual(activity.status(at: try date("2026-07-04T10:05:00.000Z")), "Last seen working", "stale status")
+            try expectEqual(before.sessionCount, 0, "unmetered sessions do not change accounting")
+
+            let tool = try jsonRow(timestamp: "2026-07-04T10:00:20.000Z", type: "event_msg", payload: [
+                "type": "item_completed", "item": [
+                    "type": "CommandExecution", "id": "tool-1", "exit_code": 1,
+                    "command": "private command must never be exported", "stdout": "private output"
+                ]
+            ])
+            let metered = usage(input: 80, cached: 40, output: 20, total: 100)
+            let completedRows = rows + [tool, tool,
+                try tokenRow("2026-07-04T10:00:21.000Z", cumulative: metered, last: metered, contextWindow: 200),
+                try jsonRow(timestamp: "2026-07-04T10:00:30.000Z", type: "event_msg", payload: [
+                    "type": "task_complete", "duration_ms": 30000, "time_to_first_token_ms": 1200,
+                    "last_agent_message": "private answer"
+                ])
+            ]
+            try writeRollout(root: root, path: "activity.jsonl", rows: completedRows)
+            let after = try makeSnapshot(root: root, now: "2026-07-04T10:00:40.000Z")
+            let finished = try unwrap(after.sessionActivity.first, "finished activity")
+            try expectEqual(finished.state, "completed", "completion releases live activity")
+            try expectEqual(finished.toolCalls, 1, "duplicate completion is counted once")
+            try expectEqual(finished.toolFailures, 1, "failed tool outcome")
+            try expectEqual(finished.turnDurationSeconds, 30, "turn timing")
+            try expectEqual(finished.firstTokenSeconds, 1.2, "first token timing")
+            try expectEqual(finished.usage.total, 100, "existing accounting reused")
+            try expectEqual(finished.usageHistory?.last?.totalTokens, 100, "graph ends at real session total")
+            try expectEqual(finished.usageHistory?.count, 1, "replayed token event does not create another graph point")
+            let encoded = String(decoding: try JSONEncoder().encode(after), as: UTF8.self)
+            try expect(!encoded.contains("private"), "snapshot must not contain transcript or command text")
+            let decoded = try JSONDecoder().decode(CodexUsageSnapshot.self, from: Data(encoded.utf8))
+            try expectEqual(decoded.sessionActivity, after.sessionActivity, "activity snapshot round trip")
+        }
+    }
+
+    private static func unwrap<T>(_ value: T?, _ message: String) throws -> T {
+        guard let value else { throw CheckFailure(message: message) }
+        return value
     }
 
     private static func withFixture(named name: String, _ body: (URL) throws -> Void) throws {

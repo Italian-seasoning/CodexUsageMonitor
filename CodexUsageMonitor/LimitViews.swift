@@ -6,7 +6,7 @@ struct LimitSummaryStrip: View {
     var snapshot: CodexUsageSnapshot
 
     var body: some View {
-        HStack(spacing: 1) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 1)], spacing: 1) {
             LimitSummaryCell(
                 label: "5-hour",
                 value: percent(snapshot.rateLimits?.fiveHour),
@@ -98,6 +98,8 @@ struct LimitHistoryChart: View {
 }
 
 struct LimitPreferencesView: View {
+    var showsMonitoring = true
+    var showsNotifications = true
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
     @State private var agentStatus = BackgroundRefreshAgentStatus(
         enabled: CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled,
@@ -105,11 +107,12 @@ struct LimitPreferencesView: View {
         loaded: false,
         lastSuccess: nil
     )
-    @State private var phoneTopicURL = PhoneResetNotificationManager.topicURL
+    @State private var phoneTopicURL: String?
     @State private var phoneTestStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if showsMonitoring {
             Toggle("Continue monitoring after you quit", isOn: $settingsModel.settings.backgroundRefreshEnabled)
                 .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
                     updateAgentStatus { _ = BackgroundRefreshAgent.setEnabled(enabled) }
@@ -153,7 +156,10 @@ struct LimitPreferencesView: View {
                 }
             }
 
-            Divider()
+            }
+            if showsNotifications {
+            DisclosureGroup("Notifications") {
+                VStack(alignment: .leading, spacing: 10) {
             Toggle("Desktop reset and limit alerts", isOn: $settingsModel.settings.notificationsEnabled)
                 .onChange(of: settingsModel.settings.notificationsEnabled) { _, enabled in
                     guard enabled else {
@@ -224,10 +230,26 @@ struct LimitPreferencesView: View {
                         }
                     }
                     .buttonStyle(.link)
+                } else {
+                    Button("Unlock saved phone topic") {
+                        phoneTopicURL = PhoneResetNotificationManager.unlockTopicURL()
+                        if phoneTopicURL == nil { phoneTestStatus = "Topic could not be unlocked." }
+                    }
+                    .buttonStyle(.link)
+                    Text(phoneTestStatus ?? "The saved topic stays locked until you choose to unlock it.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
+                }.padding(.top, 8)
+            }
+            }
         }
-        .onAppear { updateAgentStatus() }
+        .onAppear {
+            updateAgentStatus()
+            if settingsModel.settings.phoneNotificationsEnabled {
+                phoneTopicURL = PhoneResetNotificationManager.topicURL
+            }
+        }
     }
 
     private func updateAgentStatus(action: @escaping @Sendable () -> Void = {}) {

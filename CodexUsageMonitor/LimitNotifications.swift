@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import LocalAuthentication
 import UserNotifications
 
 enum LimitNotificationManager {
@@ -136,7 +137,11 @@ enum PhoneResetNotificationManager {
     }
 
     static func ensureTopic() -> String? {
-        NtfyTopicStore.load() ?? NtfyTopicStore.create()
+        NtfyTopicStore.load(allowInteraction: true) ?? NtfyTopicStore.create()
+    }
+
+    static func unlockTopicURL() -> String? {
+        NtfyTopicStore.load(allowInteraction: true).map { "https://ntfy.sh/\($0)" }
     }
 
     static func scheduleIfNeeded(_ snapshot: CodexUsageSnapshot?, now: Date = .now) async {
@@ -243,19 +248,27 @@ enum PhoneResetNotificationManager {
     }
 }
 
-private enum NtfyTopicStore {
+enum NtfyTopicStore {
     private static let service = "com.codexusage.CodexUsageMonitor.ntfy"
     private static let account = "reset-topic"
 
-    static func load() -> String? {
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching([
+    static func readQuery(allowInteraction: Bool = false) -> [CFString: Any] {
+        let context = LAContext()
+        context.interactionNotAllowed = !allowInteraction
+        return [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: account,
             kSecReturnData: true,
             kSecMatchLimit: kSecMatchLimitOne,
-        ] as CFDictionary, &result)
+            // Settings and background refresh must never open an authentication dialog.
+            kSecUseAuthenticationContext: context,
+        ]
+    }
+
+    static func load(allowInteraction: Bool = false) -> String? {
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(readQuery(allowInteraction: allowInteraction) as CFDictionary, &result)
         guard status == errSecSuccess,
               let data = result as? Data
         else { return nil }

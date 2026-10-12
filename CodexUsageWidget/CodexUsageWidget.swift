@@ -21,7 +21,13 @@ struct CodexUsageProvider: TimelineProvider {
         let now = Date()
         let next = Calendar.current.date(byAdding: .minute, value: 1, to: now)
             ?? now.addingTimeInterval(60)
-        completion(Timeline(entries: [entry(at: now, family: context.family)], policy: .after(next)))
+        let current = entry(at: now, family: context.family)
+        // Age cached readings even when the system delays the requested reload.
+        let entries = (0...15).map { minute in
+            CodexUsageEntry(date: now.addingTimeInterval(Double(minute) * 60),
+                snapshot: current.snapshot, configuration: current.configuration)
+        }
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 
     private func entry(at date: Date, family: WidgetFamily) -> CodexUsageEntry {
@@ -49,7 +55,8 @@ struct CodexUsageWidgetView: View {
             snapshot: entry.snapshot,
             configuration: entry.configuration,
             size: widgetFamily.cardSize,
-            monochrome: entry.configuration.theme == .monochrome
+            monochrome: entry.configuration.theme == .monochrome,
+            now: entry.date
         )
         .containerBackground(for: .widget) {
             if let customBackground {
@@ -71,7 +78,7 @@ struct CodexUsageWidget: Widget {
         StaticConfiguration(kind: CodexWidgetKind.primary, provider: CodexUsageProvider()) { entry in
             CodexUsageWidgetView(entry: entry)
         }
-        .configurationDisplayName("Codex Usage")
+        .configurationDisplayName(Bundle.main.bundleIdentifier?.contains(".debug.") == true ? "Codex Usage (Debug)" : "Codex Usage")
         .description("Configure each widget size in the Codex Usage app.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
         .contentMarginsDisabled()

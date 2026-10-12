@@ -30,11 +30,11 @@ enum WidgetFamilySemanticBuilder {
             return WidgetSemanticContent(
                 eyebrow: "Cost Lens",
                 heroValue: summary.estimatedCostUSD.compactCurrencyString,
-                heroLabel: "\(configuration.period.widgetLabel) API-equivalent estimate",
+                heroLabel: "\(configuration.period.widgetLabel) API estimate",
                 secondaryValues: [
                     .init(label: "Tokens", value: summary.usage.total.compactTokenString),
                     .init(label: "Top model", value: ModelPricingCatalog.displayName(for: summary.topModel?.model)),
-                    .init(label: "Unpriced", value: (snapshot.unpricedTokens ?? 0).compactTokenString)
+                    .init(label: "Unpriced lifetime", value: snapshot.unpricedTokens?.compactTokenString ?? "—")
                 ],
                 chart: chart(summary.days) { Double($0.estimatedCostMicros ?? 0) / 1_000_000 },
                 freshness: freshness(snapshot, hasData: summary.usage.hasUsage, now: now)
@@ -53,7 +53,8 @@ enum WidgetFamilySemanticBuilder {
                     .init(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
                 ],
                 chart: chart(summary.days) { Double($0.usage.total) },
-                freshness: freshness(snapshot, hasData: summary.topModel != nil, now: now)
+                freshness: freshness(snapshot, hasData: summary.topModel != nil, now: now),
+                fraction: share
             )
         case .headroomImpact:
             return headroom(snapshot: snapshot, summary: summary, period: configuration.period, now: now)
@@ -65,18 +66,20 @@ enum WidgetFamilySemanticBuilder {
     }
 
     private static func limits(snapshot: CodexUsageSnapshot, now: Date) -> WidgetSemanticContent {
-        let preferred = snapshot.rateLimits?.fiveHour ?? snapshot.rateLimits?.weekly
+        let fiveHour = snapshot.rateLimits?.fiveHour.flatMap { $0.isCurrent(at: now) ? $0 : nil }
+        let weekly = snapshot.rateLimits?.weekly.flatMap { $0.isCurrent(at: now) ? $0 : nil }
+        let preferred = fiveHour ?? weekly
         let remaining = preferred?.remainingPercent ?? 0
-        let label = snapshot.rateLimits?.fiveHour != nil ? "5-hour remaining" : "Weekly remaining"
+        let label = fiveHour != nil ? "5-hour remaining" : "Weekly remaining"
         let history = snapshot.rateLimits?.history ?? []
         return WidgetSemanticContent(
             eyebrow: "Limits",
             heroValue: preferred.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—",
             heroLabel: preferred == nil ? "No current limit window" : label,
             secondaryValues: [
-                .init(label: "Weekly", value: snapshot.rateLimits?.weekly.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"),
-                .init(label: "Pace", value: snapshot.rateLimits?.pace.label ?? "Unavailable"),
-                .init(label: "Reset", value: snapshot.rateLimits?.nearestReset?.resetText(at: now) ?? "—")
+                .init(label: "Weekly", value: weekly.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"),
+                .init(label: "Pace", value: preferred?.pace(at: now).label ?? "Unavailable"),
+                .init(label: "Reset", value: [fiveHour, weekly].compactMap { $0 }.min { $0.resetsAt < $1.resetsAt }?.resetText(at: now) ?? "—")
             ],
             chart: WidgetChartContent(
                 points: history.suffix(14).map {
@@ -84,7 +87,8 @@ enum WidgetFamilySemanticBuilder {
                 },
                 accessibilitySummary: "Remaining allowance history, latest \(Int(remaining.rounded())) percent"
             ),
-            freshness: freshness(snapshot, hasData: preferred != nil, now: now)
+            freshness: preferred.map { now.timeIntervalSince($0.observedAt) > 180 } == true
+                ? .stale : freshness(snapshot, hasData: preferred != nil, now: now)
         )
     }
 
@@ -94,45 +98,39 @@ enum WidgetFamilySemanticBuilder {
         period: UsagePeriod,
         now: Date
     ) -> WidgetSemanticContent {
-        let saved: Int
-        switch period {
-        case .today:
-            saved = snapshot.headroom?.todayTokensSaved ?? 0
-        case .sevenDays:
-            saved = snapshot.headroom?.last7DaysTokensSaved ?? 0
-        case .month:
-            saved = summary.days.reduce(0) { $0 + ($1.headroomSaved ?? 0) }
-        case .lifetime:
-            saved = snapshot.headroom?.lifetimeTokensSaved ?? 0
-        }
+        let saved = snapshot.headroomTokensSaved(for: period)
         let headroom = snapshot.headroom
         return WidgetSemanticContent(
             eyebrow: "Headroom Impact",
-            heroValue: saved.compactTokenString,
+            heroValue: saved?.compactTokenString ?? "—",
             heroLabel: "\(period.widgetLabel) tokens saved",
             secondaryValues: [
-                .init(label: "Savings rate", value: headroom?.savingsPercent.compactPercentString ?? "—"),
-                .init(label: "Cost avoided", value: headroom?.costSavedUSD.compactCurrencyString ?? "—"),
-                .init(label: "Requests", value: (headroom?.lifetimeRequests ?? 0).formatted())
+                .init(label: "Lifetime savings", value: headroom?.savingsPercent.compactPercentString ?? "—"),
+                .init(label: "Lifetime API avoided", value: headroom?.costSavedUSD.compactCurrencyString ?? "—"),
+                .init(label: "Lifetime requests", value: headroom?.lifetimeRequests.formatted() ?? "—")
             ],
             chart: chart(summary.days) { Double($0.headroomSaved ?? 0) },
-            freshness: freshness(snapshot, hasData: headroom?.isAvailable == true, now: now)
+            freshness: freshness(snapshot, hasData: saved != nil, now: now)
         )
     }
 
     private static func session(snapshot: CodexUsageSnapshot, now: Date) -> WidgetSemanticContent {
-        let age = snapshot.currentSessionStartedAt.map { compactDuration(now.timeIntervalSince($0)) } ?? "—"
+        let activity = snapshot.sessionActivity.first { $0.status(at: now) == "Working" } ?? snapshot.sessionActivity.first
+        let age = (activity?.observedAt ?? snapshot.generatedAt).map { compactDuration(max(0, now.timeIntervalSince($0))) + " ago" } ?? "—"
         return WidgetSemanticContent(
             eyebrow: "Session Live",
-            heroValue: snapshot.currentSession.total.compactTokenString,
-            heroLabel: "Current session tokens",
+            heroValue: (activity?.usage ?? snapshot.currentSession).total.compactTokenString,
+            heroLabel: activity.map { "tokens · \($0.status(at: now))" } ?? "Current session tokens",
             secondaryValues: [
-                .init(label: "Age", value: age),
-                .init(label: "Model", value: ModelPricingCatalog.displayName(for: snapshot.currentModel)),
-                .init(label: "Requests", value: (snapshot.currentSessionTurns ?? 0).formatted())
+                .init(label: "Model", value: ModelPricingCatalog.displayName(for: activity?.model ?? snapshot.currentModel)),
+                .init(label: "Requests", value: (activity?.requests ?? snapshot.currentSessionTurns ?? 0).formatted()),
+                .init(label: "Updated", value: age)
             ],
-            chart: nil,
-            freshness: freshness(snapshot, hasData: snapshot.currentSession.hasUsage, now: now)
+            chart: activity?.usageHistory.map { points in
+                WidgetChartContent(points: points.map { WidgetChartPoint(date: $0.date, value: Double($0.totalTokens)) },
+                    accessibilitySummary: "Recorded session token history")
+            },
+            freshness: freshness(snapshot, hasData: (activity?.usage ?? snapshot.currentSession).hasUsage, now: now)
         )
     }
 
@@ -142,7 +140,8 @@ enum WidgetFamilySemanticBuilder {
         configuration: WidgetDisplayConfiguration,
         now: Date
     ) -> WidgetSemanticContent {
-        let weeklyRemaining = snapshot.rateLimits?.weekly?.remainingPercent
+        let weeklyWindow = snapshot.rateLimits?.weekly.flatMap { $0.isCurrent(at: now) ? $0 : nil }
+        let weeklyRemaining = weeklyWindow?.remainingPercent
         let usage = WidgetLabeledValue(label: "Tokens", value: summary.usage.total.compactTokenString)
         let limits = WidgetLabeledValue(label: "Weekly left", value: weeklyRemaining.map { "\(Int($0.rounded()))%" } ?? "—")
         let cost = WidgetLabeledValue(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
@@ -161,12 +160,15 @@ enum WidgetFamilySemanticBuilder {
             values = [model, cost, limits]
         }
         return WidgetSemanticContent(
-            eyebrow: "Modular Dashboard",
+            eyebrow: "Dashboard",
             heroValue: hero.value,
-            heroLabel: "\(configuration.period.widgetLabel) \(hero.label.lowercased())",
+            heroLabel: configuration.dashboardArrangement == .limitsFirst
+                ? "Weekly remaining" : "\(configuration.period.widgetLabel) \(hero.label.lowercased())",
             secondaryValues: values,
             chart: chart(summary.days) { Double($0.usage.total) },
-            freshness: freshness(snapshot, hasData: summary.usage.hasUsage, now: now)
+            freshness: configuration.dashboardArrangement == .limitsFirst
+                ? (weeklyWindow == nil ? .unavailable : now.timeIntervalSince(weeklyWindow!.observedAt) > 180 ? .stale : freshness(snapshot, hasData: true, now: now))
+                : freshness(snapshot, hasData: summary.usage.hasUsage, now: now)
         )
     }
 
@@ -233,7 +235,7 @@ struct CodexWidgetFamilyView: View {
             Group {
                 switch configuration.family {
                 case .limits:
-                    LimitsFamilyView(content: content, size: size, palette: palette)
+                    LimitsFamilyView(snapshot: snapshot, content: content, size: size, palette: palette, now: now)
                 case .usagePulse:
                     UsagePulseFamilyView(content: content, size: size, palette: palette)
                 case .costLens:
@@ -265,7 +267,7 @@ private struct WidgetFamilyHeader: View {
                 .foregroundStyle(palette.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            WidgetFreshnessLabel(freshness: content.freshness, palette: palette, compact: compact)
+            WidgetFreshnessLabel(freshness: content.freshness, palette: palette, compact: true)
         }
     }
 }
@@ -274,61 +276,85 @@ private struct MetricFamilyLayout: View {
     var content: WidgetSemanticContent
     var size: CodexUsageCardSize
     var palette: WidgetStylePalette
+    var usesDots = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: size == .small ? 7 : 9) {
+        VStack(alignment: .leading, spacing: size == .small ? 8 : 12) {
             WidgetFamilyHeader(content: content, palette: palette, compact: size == .small)
             if size == .medium {
                 HStack(alignment: .bottom, spacing: 14) {
                     WidgetHero(content: content, palette: palette, compact: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let chart = content.chart {
-                        WidgetMiniBars(chart: chart, palette: palette)
+                        trend(chart)
                             .frame(width: 108, height: 46)
                     }
                 }
+                Spacer(minLength: 4)
                 WidgetValueGrid(values: Array(content.secondaryValues.prefix(3)), palette: palette, columns: 3)
             } else {
                 WidgetHero(content: content, palette: palette, compact: size == .small)
                 if size == .large, let chart = content.chart {
-                    WidgetMiniBars(chart: chart, palette: palette)
-                        .frame(height: 104)
+                    trend(chart)
+                        .frame(maxHeight: .infinity)
+                        .frame(minHeight: 72)
                 }
-                Spacer(minLength: 1)
-                WidgetValueGrid(
-                    values: Array(content.secondaryValues.prefix(size == .small ? 1 : 4)),
-                    palette: palette,
-                    columns: size == .small ? 1 : 2
-                )
+                Spacer(minLength: 4)
+                if size == .small {
+                    if let chart = content.chart, !chart.points.isEmpty {
+                        trend(chart).frame(height: 22)
+                    }
+                    if let item = content.secondaryValues.first {
+                        WidgetInlineValue(item: item, palette: palette)
+                    }
+                } else {
+                    Rectangle().fill(palette.separator).frame(height: 0.5)
+                    WidgetValueGrid(values: Array(content.secondaryValues.prefix(3)), palette: palette, columns: 3)
+                }
             }
         }
+    }
+
+    @ViewBuilder private func trend(_ chart: WidgetChartContent) -> some View {
+        if usesDots { WidgetDotPlot(chart: chart, palette: palette) }
+        else { WidgetMiniBars(chart: chart, palette: palette) }
     }
 }
 
 private struct LimitsFamilyView: View {
+    var snapshot: CodexUsageSnapshot
     var content: WidgetSemanticContent
     var size: CodexUsageCardSize
     var palette: WidgetStylePalette
-    private var progress: Double { Double(content.heroValue.dropLast()) ?? 0 }
+    var now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             WidgetFamilyHeader(content: content, palette: palette, compact: size == .small)
-            HStack(spacing: 12) {
-                WidgetGaugeRing(progress: progress / 100, palette: palette)
-                    .frame(width: size == .small ? 66 : 82, height: size == .small ? 66 : 82)
-                if size != .small {
-                    WidgetHero(content: content, palette: palette, compact: true)
+            if size == .small {
+                WidgetAllowanceMeter(title: "5-hour left", window: snapshot.rateLimits?.fiveHour, palette: palette, compact: true, now: now)
+                WidgetAllowanceMeter(title: "Weekly left", window: snapshot.rateLimits?.weekly, palette: palette, compact: true, now: now)
+            } else {
+                HStack(alignment: .top, spacing: 20) {
+                    WidgetAllowanceMeter(title: "5-hour left", window: snapshot.rateLimits?.fiveHour, palette: palette, now: now,
+                        showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour, now: now))
+                    WidgetAllowanceMeter(title: "Weekly left", window: snapshot.rateLimits?.weekly, palette: palette, now: now,
+                        showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly, now: now))
                 }
             }
-            Spacer(minLength: 1)
-            WidgetValueGrid(
-                values: Array(content.secondaryValues.prefix(size == .small ? 1 : 3)),
-                palette: palette,
-                columns: size == .small ? 1 : 3
-            )
             if size == .large, let chart = content.chart {
-                WidgetMiniBars(chart: chart, palette: palette).frame(height: 82)
+                Text("Remaining allowance history").font(.system(size: 11)).foregroundStyle(palette.secondary)
+                WidgetSparkline(chart: chart, palette: palette, fixedDomain: 0...100).frame(maxHeight: .infinity)
+            }
+            Spacer(minLength: 0)
+            if size == .small, let reset = content.secondaryValues.first(where: { $0.label == "Reset" }) {
+                Text(reset.value == "—" ? "Awaiting current data" : "Resets \(reset.value)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(2)
+            }
+            if size != .small, let pace = content.secondaryValues.first(where: { $0.label == "Pace" }) {
+                WidgetInlineValue(item: pace, palette: palette)
             }
         }
     }
@@ -352,21 +378,68 @@ private struct ModelMixFamilyView: View {
     var content: WidgetSemanticContent
     var size: CodexUsageCardSize
     var palette: WidgetStylePalette
-    var body: some View { MetricFamilyLayout(content: content, size: size, palette: palette) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            WidgetFamilyHeader(content: content, palette: palette, compact: size == .small)
+            HStack(spacing: 12) {
+                WidgetHero(content: content, palette: palette, compact: size != .large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if size != .small {
+                    WidgetGaugeRing(progress: content.fraction, palette: palette, caption: "share")
+                        .frame(width: size == .large ? 72 : 56, height: size == .large ? 72 : 56)
+                }
+            }
+            if size == .small, let chart = content.chart {
+                WidgetMiniBars(chart: chart, palette: palette).frame(height: 22)
+            } else if size == .large, let chart = content.chart {
+                Text("Daily tokens").font(.system(size: 11)).foregroundStyle(palette.secondary)
+                WidgetMiniBars(chart: chart, palette: palette).frame(maxHeight: .infinity)
+            }
+            Spacer(minLength: 4)
+            if size == .small, let item = content.secondaryValues.first {
+                WidgetInlineValue(item: item, palette: palette)
+            } else {
+                WidgetValueGrid(values: content.secondaryValues, palette: palette, columns: 3)
+            }
+        }
+    }
 }
 
 private struct HeadroomImpactFamilyView: View {
     var content: WidgetSemanticContent
     var size: CodexUsageCardSize
     var palette: WidgetStylePalette
-    var body: some View { MetricFamilyLayout(content: content, size: size, palette: palette) }
+    var body: some View { MetricFamilyLayout(content: content, size: size, palette: palette, usesDots: true) }
 }
 
 private struct SessionLiveFamilyView: View {
     var content: WidgetSemanticContent
     var size: CodexUsageCardSize
     var palette: WidgetStylePalette
-    var body: some View { MetricFamilyLayout(content: content, size: size, palette: palette) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            WidgetFamilyHeader(content: content, palette: palette, compact: true)
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(content.secondaryValues.first?.value ?? "Codex")
+                        .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    WidgetHero(content: content, palette: palette, compact: size != .large)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                if size == .medium, let chart = content.chart, !chart.points.isEmpty {
+                    WidgetSparkline(chart: chart, palette: palette).frame(width: 108, height: 55)
+                }
+            }
+            if size != .medium, let chart = content.chart, !chart.points.isEmpty {
+                WidgetSparkline(chart: chart, palette: palette)
+                    .frame(maxHeight: size == .small ? 22 : .infinity)
+            }
+            Spacer(minLength: 0)
+            if size != .small {
+                WidgetValueGrid(values: Array(content.secondaryValues.dropFirst()), palette: palette, columns: 2)
+            }
+        }
+    }
 }
 
 private struct DashboardFamilyView: View {

@@ -4,6 +4,40 @@ import Testing
 
 @Suite
 struct RefreshCoordinatorTests {
+    @Test("Account primary weekly window is never mislabeled five-hour")
+    func accountWindowMapping() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let weekly: [String: Any] = ["usedPercent": 65.0, "windowDurationMins": 10_080,
+            "resetsAt": now.addingTimeInterval(86_400).timeIntervalSince1970]
+        let hourly: [String: Any] = ["usedPercent": 10.0, "windowDurationMins": 300,
+            "resetsAt": now.addingTimeInterval(3_600).timeIntervalSince1970]
+        let data: [String: Any] = ["rateLimits": ["primary": hourly],
+            "rateLimitsByLimitId": ["codex": ["primary": weekly, "secondary": NSNull()]]]
+        let account = try #require(CodexAccountReader.decodeRateLimits(data, now: now))
+        #expect(account.fiveHour == nil)
+        #expect(account.weekly?.remainingPercent == 35)
+        let local = CodexRateLimits(fiveHour: RateLimitWindow(usedPercent: 10, windowMinutes: 300,
+            resetsAt: now.addingTimeInterval(3_600), observedAt: now.addingTimeInterval(-10)), weekly: nil, history: [])
+        let merged = try #require(SnapshotRefresh.mergedLimits(local: local, previous: nil, account: account, now: now))
+        #expect(merged.fiveHour == nil)
+        #expect(merged.weekly?.remainingPercent == 35)
+        let cached = SnapshotRefresh.mergedLimits(local: local, previous: merged, account: nil, now: now.addingTimeInterval(15))
+        #expect(cached?.fiveHour == nil)
+        #expect(cached?.weekly?.remainingPercent == 35)
+        let reversed = try #require(CodexAccountReader.decodeRateLimits(["rateLimits": ["primary": weekly, "secondary": hourly]], now: now))
+        #expect(reversed.fiveHour?.remainingPercent == 90)
+        #expect(reversed.weekly?.remainingPercent == 35)
+    }
+
+    @Test("Frequent source changes do not relaunch account polling every time")
+    func accountPollingBudget() {
+        let now = Date()
+        #expect(!SnapshotRefresh.shouldReadAccount(lastAttempt: now.addingTimeInterval(-15), trigger: .sourceChange, now: now))
+        #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now.addingTimeInterval(-60), trigger: .fallbackTimer, now: now))
+        #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .manual, now: now))
+        #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .wake, now: now))
+    }
+
     @Test("Simultaneous refresh requests share one engine pass")
     func coalescesSimultaneousRequests() async {
         let calls = CallRecorder()
@@ -86,7 +120,11 @@ struct RefreshCoordinatorTests {
     func widgetSyncRetry() {
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: true))
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .launch, syncPending: false))
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .manual, syncPending: false))
         #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false))
+        let now = Date()
+        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now, now: now))
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now.addingTimeInterval(-60), now: now))
     }
 }
 

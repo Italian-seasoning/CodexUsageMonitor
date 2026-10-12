@@ -1,4 +1,8 @@
 import Foundation
+import AppKit
+import Security
+import LocalAuthentication
+import SwiftUI
 import Testing
 @testable import CodexUsageMonitor
 
@@ -29,6 +33,173 @@ func streamingJSONLReadFailure() {
     #expect(throws: (any Error).self) {
         try JSONLFileReader.forEachRow(at: URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString).jsonl")) { _ in }
     }
+}
+
+@Test("Saved chat names update independently, tolerate broken rows, and never load unrelated titles")
+func savedChatNames() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let index = directory.appendingPathComponent("session_index.jsonl")
+    let rows = """
+    {"id":"chat-a","thread_name":"Old name"}
+    broken row
+    {"id":"other-chat","thread_name":"Private unrelated title"}
+    {"id":"chat-a","thread_name":"  Build   the UI  "}
+    """
+    try Data(rows.utf8).write(to: index)
+    #expect(CodexSessionNames.load(for: ["chat-a"], from: index) == ["chat-a": "Build the UI"])
+    var snapshot = CodexUsageSnapshot.empty
+    snapshot.sessionActivity = [CodexSessionActivity(id: "chat-a", project: "project")]
+    snapshot.recentSessions = [CodexSessionSummary(id: "chat-a#123", startedAt: .now, updatedAt: .now,
+        usage: .zero, turns: 1, model: "gpt-6.1-sol", estimatedCostUSD: nil)]
+    let named = CodexSessionNames.applying(to: snapshot, from: index)
+    #expect(named.sessionActivity.first?.displayTitle == "Build the UI")
+    #expect(named.recentSessions.first?.displayTitle == "Build the UI")
+    #expect(named.recentSessions.first?.sessionID == "chat-a")
+    let missing = CodexSessionNames.applying(to: named, from: directory.appendingPathComponent("missing"))
+    #expect(missing.sessionActivity.first?.displayTitle == "project")
+    #expect(missing.recentSessions.first?.displayTitle == "Session chat-a")
+    // Old snapshots omit title fields; optional metadata must stay backwards compatible.
+    let legacy = try JSONEncoder().encode(snapshot)
+    #expect(try JSONDecoder().decode(CodexUsageSnapshot.self, from: legacy) == snapshot)
+    let oversized = String(repeating: "x", count: 80_000) + "\n" + rows
+    try Data(oversized.utf8).write(to: index)
+    #expect(CodexSessionNames.load(for: ["chat-a"], from: index)["chat-a"] == "Build the UI")
+}
+
+@Test("Chat browsing combines dates, names and models; unpriced estimates sort last")
+func sessionBrowserFiltering() {
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+    let a = CodexSessionSummary(id: "a#1", startedAt: now, updatedAt: now,
+        usage: TokenUsage(input: 20, cachedInput: 5, output: 10, reasoningOutput: 2, total: 30),
+        turns: 2, model: "gpt-6.1-sol", estimatedCostUSD: nil, title: "Build the UI")
+    var b = a
+    b.id = "b#1"; b.title = "Naming study"; b.estimatedCostUSD = 0
+    var old = a
+    old.id = "old#1"; old.updatedAt = now.addingTimeInterval(-32 * 86_400)
+    #expect(SessionBrowser.filtered([a, b, old], range: .thirtyDays, search: " UI ", sort: .recent, now: now).map(\.id) == [a.id])
+    #expect(SessionBrowser.filtered([a, b], range: .today, search: "sol", sort: .cost, now: now).map(\.id) == [b.id, a.id])
+    #expect(SessionBrowser.filtered([a, b], range: .today, search: "missing", sort: .recent, now: now).isEmpty)
+    #expect(!SessionRange.today.includes(now.addingTimeInterval(1), now: now))
+}
+
+@Test("Glass workspace leaves a clear gutter and stretches only at its edge")
+func glassWorkspaceKeepsTransparentCutout() {
+    let rect = CGRect(x: 0, y: 0, width: 480, height: 500)
+    let closed = WorkspaceGlassShape(pull: 0, anchor: 250).path(in: rect)
+    let stretched = WorkspaceGlassShape(pull: 1, anchor: 250).path(in: rect)
+    #expect(closed.contains(CGPoint(x: 240, y: 250)))
+    #expect(!closed.contains(CGPoint(x: 50, y: 250)))
+    #expect(stretched.contains(CGPoint(x: 50, y: 250)))
+    #expect(!stretched.contains(CGPoint(x: 50, y: 60)))
+    #expect(!closed.contains(CGPoint(x: 479, y: 499)))
+}
+
+@Test("Dock hover covers full rows and remains vertically centered at every window size")
+func glassDockHoverGeometry() {
+    for windowHeight: CGFloat in [460, 500, 720] {
+        let top = (windowHeight - WorkspaceNavigationGeometry.height) / 2
+        for (index, section) in AppSection.allCases.enumerated() {
+            let y = top + 7 + CGFloat(index) * WorkspaceNavigationGeometry.rowHeight
+            for x: CGFloat in [12.5, 20, 41, 62, 69.5] {
+                for offset: CGFloat in [0.5, 24.5, 48.5] {
+                    #expect(WorkspaceNavigationGeometry.section(at: CGPoint(x: x, y: y + offset), height: windowHeight) == section)
+                }
+            }
+        }
+        #expect(WorkspaceNavigationGeometry.section(at: CGPoint(x: 41, y: top + 1), height: windowHeight) == AppSection.allCases.first)
+        #expect(WorkspaceNavigationGeometry.section(at: CGPoint(x: 41, y: windowHeight - top - 1), height: windowHeight) == AppSection.allCases.last)
+        #expect(WorkspaceNavigationGeometry.section(at: CGPoint(x: 71, y: windowHeight / 2), height: windowHeight) == nil)
+        #expect(WorkspaceNavigationGeometry.section(at: CGPoint(x: 41, y: top - 1), height: windowHeight) == nil)
+        #expect(WorkspaceNavigationGeometry.isEdge(CGPoint(x: 80, y: windowHeight / 2), height: windowHeight))
+        #expect(!WorkspaceNavigationGeometry.isEdge(CGPoint(x: 100, y: windowHeight / 2), height: windowHeight))
+    }
+}
+
+@Test("Pointer-only edge pull snaps without a click and trackpad gestures have independent thresholds")
+@MainActor
+func glassEdgeMouseTracking() throws {
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 480, height: 500), styleMask: .borderless, backing: .buffered, defer: false)
+    let view = GlassEdgeCaptureView(frame: CGRect(x: 0, y: 0, width: 480, height: 500))
+    window.contentView = view
+    defer { view.stopMonitoring(); window.contentView = nil }
+    var revealedAt: CGFloat?
+    var pull: CGFloat = 0
+    var haptics = 0
+    view.onPull = { progress, _ in pull = progress }
+    view.onReveal = { revealedAt = $0 }
+    view.onSnapFeedback = { haptics += 1 }
+    func event(_ type: NSEvent.EventType, x: CGFloat, y: CGFloat) throws -> NSEvent {
+        try #require(NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: 500 - y), modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0))
+    }
+    #expect(view.handle(try event(.mouseMoved, x: 80, y: 250)) != nil)
+    #expect(revealedAt == nil)
+    _ = view.handle(try event(.mouseMoved, x: 64, y: 250))
+    #expect(pull == 0.5)
+    _ = view.handle(try event(.mouseMoved, x: 110, y: 250))
+    #expect(pull == 0)
+    _ = view.handle(try event(.mouseMoved, x: 80, y: 250))
+    _ = view.handle(try event(.mouseMoved, x: 48, y: 250))
+    #expect(revealedAt == 250)
+    #expect(haptics == 1)
+    _ = view.handle(try event(.mouseMoved, x: 40, y: 250))
+    #expect(haptics == 1)
+    view.railOpen = true
+    view.railOpen = false
+    revealedAt = nil
+    #expect(view.handle(try event(.leftMouseDown, x: 80, y: 250)) != nil)
+    #expect(view.handle(try event(.leftMouseDragged, x: 20, y: 250)) != nil)
+    #expect(revealedAt == nil)
+    #expect(view.hitTest(CGPoint(x: 80, y: 250)) == nil)
+    let edge = CGPoint(x: 80, y: 250)
+    #expect(!view.handleScroll(at: edge, outwardDelta: 10, verticalDelta: 30, precise: true, phase: .began, momentum: false))
+    #expect(!view.handleScroll(at: edge, outwardDelta: 50, verticalDelta: 0, precise: false, phase: .began, momentum: false))
+    #expect(!view.handleScroll(at: CGPoint(x: 200, y: 250), outwardDelta: 50, verticalDelta: 0, precise: true, phase: .began, momentum: false))
+    #expect(view.handleScroll(at: edge, outwardDelta: 24, verticalDelta: 0, precise: true, phase: .began, momentum: false))
+    #expect(pull == 0.5)
+    #expect(view.handleScroll(at: edge, outwardDelta: 0, verticalDelta: 0, precise: true, phase: .ended, momentum: false))
+    #expect(pull == 0)
+    #expect(revealedAt == nil)
+    #expect(view.handleScroll(at: edge, outwardDelta: 48, verticalDelta: 0, precise: true, phase: .began, momentum: false))
+    #expect(revealedAt == 250)
+    #expect(haptics == 2)
+    #expect(!view.handleScroll(at: edge, outwardDelta: 100, verticalDelta: 0, precise: true, phase: .changed, momentum: true))
+    #expect(haptics == 2)
+    let escape = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+        timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+        charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+    var dismissed = false
+    view.onDismiss = { dismissed = true }
+    #expect(view.handle(escape) == nil)
+    #expect(dismissed)
+    #expect(view.handle(escape) != nil)
+    #expect(view.accessibilityPerformPress())
+    #expect(haptics == 3)
+}
+
+@Test("Automatic phone-topic reads cannot display a Keychain password prompt")
+func phoneTopicReadsAreNoninteractive() {
+    #expect((NtfyTopicStore.readQuery()[kSecUseAuthenticationContext] as? LAContext)?.interactionNotAllowed == true)
+    #expect((NtfyTopicStore.readQuery(allowInteraction: true)[kSecUseAuthenticationContext] as? LAContext)?.interactionNotAllowed == false)
+}
+
+@Test("Monthly Headroom uses recorded daily savings and distinguishes missing data from zero")
+func monthlyHeadroomUsesRecordedDays() {
+    var snapshot = CodexUsageSnapshot.empty
+    let date = Date(timeIntervalSince1970: 1_705_000_000)
+    snapshot.generatedAt = date
+    #expect(snapshot.headroomTokensSaved(for: .month) == nil)
+    snapshot.headroom = .zero
+    snapshot.headroom?.lifetimeTokensSaved = 900
+    snapshot.headroom?.todayTokensSaved = 20
+    snapshot.headroom?.last7DaysTokensSaved = 70
+    #expect(snapshot.headroomTokensSaved(for: .lifetime) == 900)
+    #expect(snapshot.headroomTokensSaved(for: .today) == 20)
+    snapshot.activityDays = [.init(date: date, usage: .zero, sessions: 0, headroomSaved: 30)]
+    #expect(snapshot.headroomTokensSaved(for: .month) == 30)
+    snapshot.activityDays[0].headroomSaved = 0
+    #expect(snapshot.headroomTokensSaved(for: .month) == 0)
 }
 
 @Test("Empty snapshot starts at zero")
@@ -192,4 +363,14 @@ func sol61Pricing() throws {
     let long = TokenUsage(input: 272_001, cachedInput: 100_000, output: 10_000, reasoningOutput: 0, total: 282_001)
     #expect(abs(pricing.estimatedCost(for: short) - 0.454) < 0.000_001)
     #expect(abs(pricing.estimatedCost(for: long) - 0.858004) < 0.000_001)
+}
+
+@Test("Missing model rates remain distinct from zero and recorded estimates")
+func missingModelRatesRemainUnavailable() {
+    let unpriced = ModelUsage(model: "unknown-model", usage: .zero, turns: 0, estimatedCostUSD: 0)
+    let pricedZero = ModelUsage(model: "gpt-6-sol", usage: .zero, turns: 0, estimatedCostUSD: 0)
+    let recorded = ModelUsage(model: "retired-model", usage: .zero, turns: 0, estimatedCostUSD: 2.5)
+    #expect(unpriced.availableCostEstimateUSD == nil)
+    #expect(pricedZero.availableCostEstimateUSD == 0)
+    #expect(recorded.availableCostEstimateUSD == 2.5)
 }

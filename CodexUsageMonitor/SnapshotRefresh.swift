@@ -64,7 +64,7 @@ enum SnapshotRefresh {
             currentFingerprint: fingerprint,
             hasSnapshot: previous != nil,
             force: force
-        )
+        ) && previous?.generatedAt.map { Calendar.current.isDate($0, inSameDayAs: startedAt) } == true
         var candidate: CodexUsageSnapshot?
         var outcome: RefreshOutcome
 
@@ -85,6 +85,11 @@ enum SnapshotRefresh {
             if snapshot.hasUsage {
                 candidate = snapshot
                 outcome = .updated
+            } else if let previous, previous.hasUsage {
+                let message = "No readable Codex usage was found. Keeping the last successful snapshot."
+                saveRecord(startedAt: startedAt, outcome: .failed, message: message,
+                    fingerprint: nil, widgetReloadRequestedAt: nil)
+                return RefreshResult(outcome: .failed, snapshot: previous, message: message)
             } else {
                 candidate = previous
                 outcome = .unchanged
@@ -104,14 +109,12 @@ enum SnapshotRefresh {
             return RefreshResult(outcome: .failed, snapshot: nil, message: message)
         }
 
-        if let account = CodexAccountReader.read() {
+        let shouldReadAccount = shouldReadAccount(lastAttempt: previousRecord?.lastAccountAttempt, trigger: trigger, now: startedAt)
+        let account = shouldReadAccount ? CodexAccountReader.read() : nil
+        candidate.rateLimits = mergedLimits(local: candidate.rateLimits, previous: previous?.rateLimits,
+            account: account?.rateLimits, now: Date())
+        if let account {
             candidate.accountLifetimeTokens = account.lifetimeTokens ?? previous?.accountLifetimeTokens
-            if let accountLimits = account.rateLimits {
-                var limits = candidate.rateLimits ?? CodexRateLimits(fiveHour: nil, weekly: nil, history: [])
-                limits.fiveHour = accountLimits.fiveHour ?? limits.fiveHour
-                limits.weekly = accountLimits.weekly ?? limits.weekly
-                candidate.rateLimits = limits
-            }
             if candidate.accountLifetimeTokens != previous?.accountLifetimeTokens
                 || candidate.rateLimits?.fiveHour?.usedPercent != previous?.rateLimits?.fiveHour?.usedPercent
                 || candidate.rateLimits?.weekly?.usedPercent != previous?.rateLimits?.weekly?.usedPercent
@@ -122,7 +125,17 @@ enum SnapshotRefresh {
         } else {
             candidate.accountLifetimeTokens = previous?.accountLifetimeTokens
         }
+        if candidate.rateLimits != previous?.rateLimits { outcome = .updated }
 
+        // Refresh names even when token logs are unchanged: chat renames live in a separate index.
+        let namesURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex/session_index.jsonl")
+        let namedCandidate = CodexSessionNames.applying(to: candidate, from: namesURL)
+        if namedCandidate.sessionActivity != candidate.sessionActivity
+            || namedCandidate.recentSessions != candidate.recentSessions { outcome = .updated }
+        candidate = namedCandidate
+        candidate.appearanceTheme = CodexUsageSettingsStore.load().settings.appTheme.rawValue
+        if candidate.appearanceTheme != previous?.appearanceTheme { outcome = .updated }
         guard CodexUsageSnapshotStore.save(candidate) else {
             let message = "Could not save the refreshed snapshot."
             saveRecord(
@@ -139,9 +152,14 @@ enum SnapshotRefresh {
         let shouldReloadWidget = shouldReloadWidget(
             outcome: outcome,
             trigger: trigger,
-            syncPending: previousRecord?.widgetSyncPending == true
+            syncPending: previousRecord?.widgetSyncPending == true,
+            lastRequested: previousRecord?.widgetReloadRequestedAt
         )
-        let widgetReloaded = shouldReloadWidget && CodexWidgetReloader.reloadAll()
+        // Keep the heartbeat current even when WidgetKit does not need a redraw.
+        let widgetSynced = shouldReloadWidget
+            ? CodexWidgetReloader.reloadAll()
+            : WidgetDataBridge.syncToWidgetExtension()
+        let widgetReloaded = shouldReloadWidget && widgetSynced
         let widgetReloadRequestedAt = widgetReloaded ? Date() : nil
         LimitNotificationManager.evaluate(candidate)
         saveRecord(
@@ -150,7 +168,9 @@ enum SnapshotRefresh {
             message: nil,
             fingerprint: fingerprint,
             widgetReloadRequestedAt: widgetReloadRequestedAt,
-            widgetSyncPending: shouldReloadWidget && !widgetReloaded
+            widgetSyncPending: !widgetSynced,
+            lastAccountAttempt: shouldReadAccount ? startedAt : previousRecord?.lastAccountAttempt,
+            lastAccountSuccess: account != nil ? Date() : previousRecord?.lastAccountSuccess
         )
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
@@ -171,12 +191,46 @@ enum SnapshotRefresh {
         !force && hasSnapshot && previousFingerprint == currentFingerprint
     }
 
+    static func shouldReadAccount(lastAttempt: Date?, trigger: RefreshTrigger, now: Date) -> Bool {
+        trigger == .manual || trigger == .wake || trigger == .launch
+            || lastAttempt.map { now.timeIntervalSince($0) >= 60 } != false
+    }
+
+    static func mergedLimits(local: CodexRateLimits?, previous: CodexRateLimits?, account: CodexRateLimits?, now: Date) -> CodexRateLimits? {
+        guard local != nil || previous != nil || account != nil else { return nil }
+        var result = local ?? previous ?? CodexRateLimits(fiveHour: nil, weekly: nil, history: [])
+        if let account {
+            // Missing windows in a successful account response are authoritative.
+            result.fiveHour = account.fiveHour
+            result.weekly = account.weekly
+            result.accountObservedAt = now
+        } else if let checked = previous?.accountObservedAt {
+            result.accountObservedAt = checked
+            if result.fiveHour.map({ $0.observedAt > checked }) != true { result.fiveHour = previous?.fiveHour }
+            if result.weekly.map({ $0.observedAt > checked }) != true { result.weekly = previous?.weekly }
+        }
+        if result.fiveHour?.windowMinutes != 300 || result.fiveHour?.isCurrent(at: now) != true { result.fiveHour = nil }
+        if result.weekly?.windowMinutes != 10_080 || result.weekly?.isCurrent(at: now) != true { result.weekly = nil }
+        let samples = (previous?.consumptionSamples ?? []) + (local?.consumptionSamples ?? [])
+            + [result.fiveHour, result.weekly].compactMap { $0 }
+        var buckets: [String: RateLimitWindow] = [:]
+        for sample in samples where sample.observedAt >= now.addingTimeInterval(-3_600) && sample.observedAt <= now {
+            let key = "\(sample.windowMinutes):\(Int(sample.observedAt.timeIntervalSince1970 / 60))"
+            if buckets[key].map({ $0.observedAt <= sample.observedAt }) ?? true { buckets[key] = sample }
+        }
+        result.consumptionSamples = buckets.values.sorted { $0.observedAt < $1.observedAt }
+        return result
+    }
+
     static func shouldReloadWidget(
         outcome: RefreshOutcome,
         trigger: RefreshTrigger,
-        syncPending: Bool
+        syncPending: Bool,
+        lastRequested: Date? = nil,
+        now: Date = .now
     ) -> Bool {
-        outcome == .updated || syncPending || trigger == .launch || trigger == .wake
+        if syncPending || trigger == .launch || trigger == .wake || trigger == .manual { return true }
+        return outcome == .updated && lastRequested.map { now.timeIntervalSince($0) >= 60 } != false
     }
 
     private static func saveRecord(
@@ -185,7 +239,9 @@ enum SnapshotRefresh {
         message: String?,
         fingerprint: String?,
         widgetReloadRequestedAt: Date?,
-        widgetSyncPending: Bool? = nil
+        widgetSyncPending: Bool? = nil,
+        lastAccountAttempt: Date? = nil,
+        lastAccountSuccess: Date? = nil
     ) {
         let previous = BackgroundRefreshAgent.loadRecord()
         BackgroundRefreshAgent.saveRecord(
@@ -199,7 +255,9 @@ enum SnapshotRefresh {
                 error: message,
                 sourceFingerprint: fingerprint ?? previous?.sourceFingerprint,
                 widgetReloadRequestedAt: widgetReloadRequestedAt ?? previous?.widgetReloadRequestedAt,
-                widgetSyncPending: widgetSyncPending ?? previous?.widgetSyncPending
+                widgetSyncPending: widgetSyncPending ?? previous?.widgetSyncPending,
+                lastAccountAttempt: lastAccountAttempt ?? previous?.lastAccountAttempt,
+                lastAccountSuccess: lastAccountSuccess ?? previous?.lastAccountSuccess
             )
         )
     }
@@ -230,12 +288,12 @@ private final class RefreshLock {
     }
 }
 
-private struct CodexAccountData {
+struct CodexAccountData {
     var lifetimeTokens: Int?
     var rateLimits: CodexRateLimits?
 }
 
-private enum CodexAccountReader {
+enum CodexAccountReader {
     static func read() -> CodexAccountData? {
         let process = Process()
         let bundledCLI = [
@@ -302,22 +360,29 @@ private enum CodexAccountReader {
         send(["id": 1, "method": "account/usage/read"])
         send(["id": 2, "method": "account/rateLimits/read"])
         let usage = response(1)
-        let limits = response(2)?["rateLimits"] as? [String: Any]
+        let limits = response(2).flatMap { decodeRateLimits($0, now: Date()) }
         let lifetime = (usage?["summary"] as? [String: Any])?["lifetimeTokens"] as? Int
 
+        guard lifetime != nil || limits != nil else { return nil }
+        return CodexAccountData(lifetimeTokens: lifetime, rateLimits: limits)
+    }
+
+    static func decodeRateLimits(_ result: [String: Any], now: Date) -> CodexRateLimits? {
+        let byID = result["rateLimitsByLimitId"] as? [String: Any]
+        guard let limits = (byID?["codex"] as? [String: Any]) ?? (result["rateLimits"] as? [String: Any]) else { return nil }
+
         func window(_ key: String) -> RateLimitWindow? {
-            guard let entry = limits?[key] as? [String: Any],
+            guard let entry = limits[key] as? [String: Any],
                   let used = entry["usedPercent"] as? Double,
                   let minutes = entry["windowDurationMins"] as? Int,
-                  let reset = entry["resetsAt"] as? TimeInterval else { return nil }
+                  let reset = entry["resetsAt"] as? TimeInterval,
+                  used.isFinite, (0...100).contains(used), reset.isFinite,
+                  reset > now.timeIntervalSince1970 else { return nil }
             return RateLimitWindow(usedPercent: used, windowMinutes: minutes,
-                                   resetsAt: Date(timeIntervalSince1970: reset), observedAt: Date())
+                                   resetsAt: Date(timeIntervalSince1970: reset), observedAt: now)
         }
-        let fiveHour = window("primary")
-        let weekly = window("secondary")
-        guard lifetime != nil || fiveHour != nil || weekly != nil else { return nil }
-        let rateLimits = fiveHour == nil && weekly == nil ? nil
-            : CodexRateLimits(fiveHour: fiveHour, weekly: weekly, history: [])
-        return CodexAccountData(lifetimeTokens: lifetime, rateLimits: rateLimits)
+        let windows = [window("primary"), window("secondary")].compactMap { $0 }
+        return CodexRateLimits(fiveHour: windows.first { $0.windowMinutes == 300 },
+            weekly: windows.first { $0.windowMinutes == 10_080 }, history: [], accountObservedAt: now)
     }
 }

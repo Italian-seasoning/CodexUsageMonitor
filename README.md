@@ -3,6 +3,38 @@
 A native macOS app and WidgetKit extension for local Codex usage, model-aware
 API-equivalent cost estimates, Headroom savings, and configurable desktop widgets.
 
+**Created by [Italian-seasoning](https://github.com/Italian-seasoning).**
+Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
+
+## Forks and attribution
+
+If you fork, redesign, redistribute, or build on this project, please keep the
+original creator credit visible in your README and app credits, with a link to
+this repository. Identify your changes and your own maintainers separately;
+please do not present a derivative as the original project or imply endorsement.
+
+Copy this into your README and adapt the final sentence:
+
+> Based on **Codex Usage Monitor**, created by
+> [Italian-seasoning](https://github.com/Italian-seasoning).
+> Original source: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
+> This fork is independently maintained; its changes are described below.
+
+See [CREDITS.md](CREDITS.md) for attribution guidance. These credit requests do
+not replace a software license or third-party license notices.
+
+## v4 source preview
+
+- Apple Liquid Glass workspace on macOS 26+, with a material fallback on older systems
+- Cursor-driven sidebar reveal, threshold haptics, trackpad gestures, and hover navigation
+- Clearer charts with exact values on hover and custom date ranges
+- Remaining allowance and estimated percentage-point consumption per 15 minutes
+- Account-window accuracy fixes, archived-session history, and improved widget synchronization
+
+The source on `main` is the v4 preview. Check the release version below before
+downloading a packaged build. WidgetKit controls when desktop widgets redraw;
+rate estimates appear only when enough recent observations are available.
+
 > [!WARNING]
 > **Preview software.** The current build is not signed with an Apple Developer ID
 > or notarized by Apple. macOS may require Control-clicking the app and choosing

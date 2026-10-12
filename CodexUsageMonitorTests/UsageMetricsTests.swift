@@ -4,6 +4,115 @@ import Testing
 
 @Suite
 struct UsageMetricsTests {
+    @Test("Archiving a session preserves its usage and range totals")
+    func archivePreservesUsage() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let active = root.appendingPathComponent("sessions")
+        let archived = root.appendingPathComponent("archived_sessions")
+        try FileManager.default.createDirectory(at: active, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: archived, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let log = """
+        {"type":"session_meta","payload":{"id":"archive-test","timestamp":"2026-07-01T10:00:00Z"}}
+        {"timestamp":"2026-07-01T10:01:00Z","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":80,"output_tokens":20,"total_tokens":100},"last_token_usage":{"input_tokens":80,"output_tokens":20,"total_tokens":100}}}}
+        """
+        let file = active.appendingPathComponent("session.jsonl")
+        try Data(log.utf8).write(to: file)
+        let reader = CodexUsageReader(sessionsDirectory: active, cacheURL: root.appendingPathComponent("cache.plist"), archivedSessionsDirectory: archived)
+        let before = reader.snapshot()
+        try FileManager.default.moveItem(at: file, to: archived.appendingPathComponent("session.jsonl"))
+        let after = reader.snapshot()
+        #expect(before.lifetime.total == 100)
+        #expect(after.lifetime == before.lifetime)
+        #expect(after.activityDays == before.activityDays)
+    }
+
+    @Test("Reader retains actual minute observations alongside hourly history")
+    func readerConsumptionSamples() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let formatter = ISO8601DateFormatter()
+        let lines = try (0...3).map { index -> String in
+            let row: [String: Any] = ["timestamp": formatter.string(from: now.addingTimeInterval(Double(index - 3) * 300)),
+                "type": "event_msg", "payload": ["type": "token_count", "rate_limits": [
+                    "primary": ["window_minutes": 300, "used_percent": 20 + index * 2, "resets_at": now.addingTimeInterval(3_600).timeIntervalSince1970]]]]
+            return String(decoding: try JSONSerialization.data(withJSONObject: row), as: UTF8.self)
+        }.joined(separator: "\n")
+        try Data((lines + "\n").utf8).write(to: directory.appendingPathComponent("sample.jsonl"))
+        let reader = CodexUsageReader(sessionsDirectory: directory, cacheURL: directory.appendingPathComponent("cache.plist"))
+        let snapshot = reader.snapshot(now: now)
+        let limits = try #require(snapshot.rateLimits)
+        #expect(limits.consumptionSamples?.count == 4)
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == 6)
+        let decoded = try JSONDecoder().decode(CodexUsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        #expect(decoded.rateLimits?.consumptionSamples == limits.consumptionSamples)
+    }
+
+    @Test("Custom dates include both endpoints and never substitute lifetime totals")
+    func customDateRange() {
+        let fixture = usageMetricsFixture()
+        let today = fixture.calendar.startOfDay(for: fixture.now)
+        let yesterday = fixture.calendar.date(byAdding: .day, value: -1, to: today)!
+        let range = fixture.snapshot.summary(from: yesterday, through: today, calendar: fixture.calendar, now: fixture.now)
+        #expect(range.usage.total == 200)
+        #expect(range.requestCount == 20)
+        #expect(range.sessionCount == 2)
+        #expect(abs(range.estimatedCostUSD - 0.72) < 0.000_001)
+        #expect(range.days.count == 2)
+        #expect(fixture.snapshot.summary(from: today, through: today, calendar: fixture.calendar, now: fixture.now).usage.total == 100)
+        #expect(fixture.snapshot.summary(from: today, through: yesterday, calendar: fixture.calendar, now: fixture.now).usage.total == 0)
+        let future = fixture.calendar.date(byAdding: .day, value: 2, to: today)!
+        let empty = fixture.snapshot.summary(from: future, through: future, calendar: fixture.calendar, now: fixture.now)
+        #expect(empty.usage.total == 0)
+        #expect(empty.topModel == nil)
+        var legacy = fixture.snapshot
+        legacy.dailyModelUsage = []
+        #expect(legacy.summary(from: today, through: today, calendar: fixture.calendar, now: fixture.now).topModel == nil)
+    }
+
+    @Test("Date ranges use calendar midnights across daylight saving")
+    func customDatesAcrossDST() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Vancouver")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 3, day: 8))!
+        let next = calendar.date(byAdding: .day, value: 1, to: start)!
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.activityDays = [start, next].map {
+            DailyUsage(date: $0, usage: TokenUsage(input: 10, cachedInput: 0, output: 0, reasoningOutput: 0, total: 10), sessions: 1)
+        }
+        #expect(next.timeIntervalSince(start) == 23 * 3_600)
+        #expect(snapshot.summary(from: start, through: start, calendar: calendar, now: next).usage.total == 10)
+    }
+
+    @Test("15-minute consumption uses recent same-window samples and rejects resets and gaps")
+    func consumptionRate() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let reset = now.addingTimeInterval(3_600)
+        let samples = (0...3).map { index in
+            RateLimitWindow(usedPercent: Double(20 + index * 2), windowMinutes: 300,
+                resetsAt: reset, observedAt: now.addingTimeInterval(Double(index - 3) * 300))
+        }
+        var limits = CodexRateLimits(fiveHour: samples.last, weekly: nil, history: [], consumptionSamples: samples)
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == 6)
+        #expect(limits.consumptionPer15Minutes(for: limits.weekly, now: now) == nil)
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now.addingTimeInterval(301)) == nil)
+        limits.consumptionSamples = [samples[2], samples[3]]
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == nil)
+        limits.consumptionSamples = [samples[0], samples[3]]
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == nil)
+        limits.consumptionSamples = samples.map { var point = $0; point.resetsAt = reset.addingTimeInterval(-3_600); return point }
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == nil)
+        limits.consumptionSamples = samples
+        limits.consumptionSamples?[1].usedPercent = 5
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == nil)
+        limits.consumptionSamples = samples.map { var point = $0; point.usedPercent = 26; return point }
+        #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == 0)
+        let legacy = try JSONDecoder().decode(CodexRateLimits.self, from: Data("{\"history\":[]}".utf8))
+        #expect(legacy.consumptionSamples == nil)
+    }
+
     @Test("Account lifetime takes priority in the lifetime widget")
     func accountLifetimeTakesPriority() throws {
         var snapshot = usageMetricsFixture().snapshot

@@ -37,6 +37,35 @@ struct PeriodUsageSummary: Equatable, Sendable {
 }
 
 extension CodexUsageSnapshot {
+    /// Inclusive local calendar dates; the next midnight is an exclusive boundary.
+    func summary(from startDate: Date, through endDate: Date, calendar: Calendar = .current,
+                 now: Date = .now) -> PeriodUsageSummary {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: endDate)) ?? endDate
+        var filtered = self
+        filtered.activityDays = activityDays.filter { $0.date >= start && $0.date < end && $0.date <= now }
+        filtered.dailyModelUsage = dailyModelUsage.filter { $0.date >= start && $0.date < end && $0.date <= now }
+        filtered.lifetime = filtered.activityDays.reduce(into: .zero) { $0.add($1.usage) }
+        filtered.sessionCount = filtered.activityDays.reduce(0) { $0 + $1.sessions }
+        filtered.turnCount = filtered.activityDays.reduce(0) { $0 + ($1.turns ?? 0) }
+        filtered.modelUsage = nil // Never substitute unfiltered legacy model totals.
+        return filtered.summary(for: .lifetime, calendar: calendar, now: now)
+    }
+
+    func headroomTokensSaved(for period: UsagePeriod) -> Int? {
+        if period == .month {
+            let recorded = summary(for: period).days.compactMap(\.headroomSaved)
+            return recorded.isEmpty ? nil : recorded.reduce(0, +)
+        }
+        guard let headroom, headroom.isAvailable else { return nil }
+        switch period {
+        case .today: return headroom.todayTokensSaved
+        case .sevenDays: return headroom.last7DaysTokensSaved
+        case .lifetime: return headroom.lifetimeTokensSaved
+        case .month: return nil
+        }
+    }
+
     func summary(
         for period: UsagePeriod,
         calendar: Calendar = .current,
@@ -100,5 +129,28 @@ extension CodexUsageSnapshot {
             topModel: topModel,
             days: days
         )
+    }
+}
+
+extension CodexRateLimits {
+    /// Percentage points of this allowance consumed, normalized to 15 minutes.
+    /// Require 10+ minutes of recent observations from one unchanged reset window.
+    func consumptionPer15Minutes(for window: RateLimitWindow?, now: Date = .now) -> Double? {
+        guard let window, window.isCurrent(at: now),
+              now.timeIntervalSince(window.observedAt) <= 300,
+              window.observedAt <= now else { return nil }
+        let cutoff = window.observedAt.addingTimeInterval(-900)
+        let points = ((consumptionSamples ?? []) + [window])
+            .filter { $0.windowMinutes == window.windowMinutes && abs($0.resetsAt.timeIntervalSince(window.resetsAt)) <= 2
+                && $0.observedAt >= cutoff && $0.observedAt <= window.observedAt
+                && $0.usedPercent.isFinite && (0...100).contains($0.usedPercent) }
+            .sorted { $0.observedAt < $1.observedAt }
+        guard let first = points.first, let last = points.last,
+              last.observedAt.timeIntervalSince(first.observedAt) >= 600 else { return nil }
+        for (previous, next) in zip(points, points.dropFirst()) {
+            guard next.usedPercent >= previous.usedPercent,
+                  next.observedAt.timeIntervalSince(previous.observedAt) <= 600 else { return nil }
+        }
+        return (last.usedPercent - first.usedPercent) * 900 / last.observedAt.timeIntervalSince(first.observedAt)
     }
 }

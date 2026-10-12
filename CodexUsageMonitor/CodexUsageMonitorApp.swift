@@ -3,8 +3,14 @@ import Darwin
 import SwiftUI
 import WidgetKit
 
+final class GlassWorkspaceWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
+    private var compactObserver: NSObjectProtocol?
     private var refreshTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
     private var dataAccessObserver: NSObjectProtocol?
@@ -30,6 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             return
         }
+
+        compactObserver = NotificationCenter.default.addObserver(
+            forName: .showCodexUsageCompactPreview, object: nil, queue: .main
+        ) { [weak self] _ in self?.showCompactWindow() }
 
         AppPresenceMode.apply(
             CodexUsageMonitorApp.sharedSettingsModel.settings.appPresence
@@ -81,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         sourceChangeMonitor.stop()
+        if let compactObserver { NotificationCenter.default.removeObserver(compactObserver) }
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }
@@ -123,6 +134,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func showMainWindowSoon() {
+        if ProcessInfo.processInfo.arguments.contains("--v4-preview") {
+            showCompactWindow()
+            return
+        }
         showMainWindow()
         guard !activationScheduled else { return }
         activationScheduled = true
@@ -135,23 +150,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func showMainWindow() {
+    @objc func showMainWindow() {
         NSApp.setActivationPolicy(.regular)
         if window == nil {
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1080, height: 720),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            let window = GlassWorkspaceWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 480, height: 500),
+                styleMask: [.borderless, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = "Codex Usage"
             window.identifier = NSUserInterfaceItemIdentifier("CodexUsageMonitor.MainWindow")
-            window.minSize = NSSize(width: 980, height: 660)
+            window.minSize = NSSize(width: 448, height: 460)
             window.isOpaque = false
             window.backgroundColor = .clear
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.hasShadow = false
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
-            window.isMovableByWindowBackground = true
+            window.isMovableByWindowBackground = false
+            window.acceptsMouseMovedEvents = true
             window.isReleasedWhenClosed = false
             window.isRestorable = false
             window.delegate = self
@@ -164,6 +182,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         window?.makeKeyAndOrderFront(nil)
     }
+
+    private func showCompactWindow() {
+        showMainWindow()
+    }
+
 }
 
 private enum WidgetRegistration {
@@ -206,7 +229,7 @@ struct CodexUsageMonitorApp: App {
             CodexMenuBarLabel(model: menuBarModel)
                 .environmentObject(settingsModel)
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
         .commands {
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesCommand()
@@ -215,6 +238,12 @@ struct CodexUsageMonitorApp: App {
                 Button("Run Setup") {
                     NotificationCenter.default.post(name: .showCodexUsageTour, object: nil)
                 }
+            }
+            CommandGroup(after: .windowArrangement) {
+                Button("Show workspace") {
+                    NotificationCenter.default.post(name: .showCodexUsageCompactPreview, object: nil)
+                }
+                .keyboardShortcut("4", modifiers: [.command, .shift])
             }
         }
     }
