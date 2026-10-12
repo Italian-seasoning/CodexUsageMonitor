@@ -165,7 +165,6 @@ enum ModelPricingCatalog {
         // Uses the monitor's existing 272K context boundary for API-equivalent estimates.
         "gpt-6.1-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.1, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.2, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-astra": ModelPricing(inputPerMillion: 10, cachedInputPerMillion: 1, outputPerMillion: 50, longInputPerMillion: 20, longCachedInputPerMillion: 2, longOutputPerMillion: 75, longContextThreshold: 272_000),
-        "gpt-6.1-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.1, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.2, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.2, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.4, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-luna": ModelPricing(inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5, longInputPerMillion: 0.2, longCachedInputPerMillion: 0.02, longOutputPerMillion: 0.75, longContextThreshold: 272_000),
         "gpt-5.6-sol": ModelPricing(inputPerMillion: 4, cachedInputPerMillion: 0.4, outputPerMillion: 20, longInputPerMillion: 8, longCachedInputPerMillion: 0.8, longOutputPerMillion: 30, longContextThreshold: 272_000),

@@ -31,8 +31,7 @@ not replace a software license or third-party license notices.
 - Remaining allowance and estimated percentage-point consumption per 15 minutes
 - Account-window accuracy fixes, archived-session history, and improved widget synchronization
 
-The source on `main` is the v4 preview. Check the release version below before
-downloading a packaged build. WidgetKit controls when desktop widgets redraw;
+The source on `main` is the v4 preview. WidgetKit controls when desktop widgets redraw;
 rate estimates appear only when enough recent observations are available.
 
 > [!WARNING]
@@ -84,7 +83,7 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current preview: **3.1.4**
+Current preview: **4.0.0**.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.

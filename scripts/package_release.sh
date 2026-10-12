@@ -81,6 +81,8 @@ hdiutil detach "/Volumes/$DMG_VOLUME" -force >/dev/null 2>&1 || true
 hdiutil create -quiet -volname "$DMG_VOLUME" -srcfolder "$DMG_ROOT" -ov -format UDRW "$DMG_RW"
 DEVICE="$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_RW" | awk '/Apple_HFS|Apple_APFS/ { print $1; exit }')"
 
+# Headless packaging avoids driving Finder while the user is working.
+if [[ "${HEADLESS_PACKAGE:-0}" != "1" ]]; then
 osascript <<APPLESCRIPT
 tell application "Finder"
   tell disk "$DMG_VOLUME"
@@ -104,6 +106,7 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
+fi
 
 sync
 hdiutil detach "$DEVICE" -quiet

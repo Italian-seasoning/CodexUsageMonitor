@@ -25,6 +25,14 @@ struct SettingsView: View {
                     InspectorSection(title: "Monitoring") {
                         LimitPreferencesView()
                     }
+                    HStack {
+                        Text("Created by Italian-seasoning")
+                            .foregroundStyle(AppPalette.muted)
+                        Spacer()
+                        Link("GitHub", destination: URL(string: "https://github.com/Italian-seasoning/CodexUsageMonitor")!)
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .padding(.horizontal, 4)
                     DisclosureGroup("Setup and updates") {
                         VStack(spacing: 12) {
                         HStack {
