@@ -91,8 +91,9 @@ struct CodexMenuBarLabel: View {
         let sizes = lines.map { ($0 as NSString).size(withAttributes: attributes) }
         let size = NSSize(width: ceil(sizes.map(\.width).max() ?? 1), height: 22)
         let image = NSImage(size: size, flipped: true) { _ in
-            (lines[0] as NSString).draw(at: NSPoint(x: 0, y: 0), withAttributes: attributes)
-            (lines[1] as NSString).draw(at: NSPoint(x: 0, y: 11), withAttributes: attributes)
+            for (index, line) in lines.enumerated() {
+                (line as NSString).draw(at: NSPoint(x: 0, y: lines.count == 1 ? 5 : index * 11), withAttributes: attributes)
+            }
             return true
         }
         image.isTemplate = true
@@ -102,10 +103,9 @@ struct CodexMenuBarLabel: View {
     private var labelLines: [String] {
         let limits = model.snapshot.rateLimits
         let mode = settingsModel.settings.menuBarDisplayMode
-        return [
-            Self.labelText(prefix: "5H", window: limits?.fiveHour, mode: mode),
-            Self.labelText(prefix: "W", window: limits?.weekly, mode: mode),
-        ]
+        var lines = [Self.labelText(prefix: "W", window: limits?.weekly, mode: mode)]
+        if limits?.showsFiveHour == true { lines.insert(Self.labelText(prefix: "5H", window: limits?.fiveHour, mode: mode), at: 0) }
+        return lines
     }
 
     static func labelText(prefix: String, window: RateLimitWindow?, mode: MenuBarDisplayMode) -> String {
@@ -161,7 +161,9 @@ struct CodexMenuBarView: View {
                 }
                 .font(.system(size: 11)).monospacedDigit()
                 Divider()
-                CompactLimitRow(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour, accent: accent)
+                if model.snapshot.rateLimits?.showsFiveHour == true {
+                    CompactLimitRow(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour, accent: accent)
+                }
                 CompactLimitRow(title: "Weekly", window: model.snapshot.rateLimits?.weekly, accent: accent)
                 DisclosureGroup("More details", isExpanded: $showsDetails) {
                     VStack(spacing: 8) {

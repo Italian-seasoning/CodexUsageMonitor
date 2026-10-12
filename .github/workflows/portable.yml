@@ -1,0 +1,41 @@
+name: Portable clients
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'portable/**'
+      - '.github/workflows/portable.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s portable -v
+      - run: python portable/monitor.py --help
+      - run: python portable/monitor.py --once --smoke-test
+      - name: Verify desktop imports
+        if: runner.os == 'Windows'
+        run: python -c "import tkinter; root = tkinter.Tk(); root.update(); root.destroy()"
+      - name: Exercise desktop window
+        if: runner.os == 'Windows'
+        run: python portable/monitor.py --gui --smoke-test
+      - name: Package Windows desktop
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install pyinstaller==6.16.0
+          python -m PyInstaller --onefile --windowed --name CodexUsageMonitor-Windows portable/monitor.py
+          $app = Start-Process dist/CodexUsageMonitor-Windows.exe -ArgumentList '--gui','--smoke-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { throw 'Packaged desktop smoke test failed' }
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: CodexUsageMonitor-Windows
+          path: dist/CodexUsageMonitor-Windows.exe

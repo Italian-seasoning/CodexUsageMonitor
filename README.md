@@ -45,6 +45,9 @@ rate estimates appear only when enough recent observations are available.
 
 ## What it tracks
 
+**Windows and Linux:** [Simple Windows desktop and Linux ASCII clients](portable/README.md)
+are available in the release downloads. The native macOS app retains the full widget and glass experience.
+
 - Local session, today, seven-day, and month token usage; account lifetime tokens when the Codex CLI is available
 - Input, cached input, output, and reasoning tokens
 - Requests, sessions, streaks, context use, and visible chart peaks
@@ -83,7 +86,7 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current preview: **4.0.0**.
+Current preview: **4.0.1**.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.

@@ -4,6 +4,25 @@ import Testing
 
 @Suite
 struct RefreshCoordinatorTests {
+    @Test("Pro plans hide five-hour windows without discarding the account record")
+    func proPresentation() throws {
+        let now = Date()
+        let hourly: [String: Any] = ["usedPercent": 20.0, "windowDurationMins": 300,
+            "resetsAt": now.addingTimeInterval(3600).timeIntervalSince1970]
+        for plan in ["pro", "prolite", "Pro"] {
+            let account = try #require(CodexAccountReader.decodeRateLimits(["rateLimits": ["planType": plan, "primary": hourly]], now: now))
+            #expect(account.fiveHour != nil)
+            #expect(!account.showsFiveHour)
+            let merged = SnapshotRefresh.mergedLimits(local: nil, previous: nil, account: account, now: now)
+            let cached = SnapshotRefresh.mergedLimits(local: account, previous: merged, account: nil, now: now)
+            #expect(cached?.planType == plan)
+            #expect(cached?.showsFiveHour == false)
+        }
+        let plus = try #require(CodexAccountReader.decodeRateLimits(["rateLimits": ["planType": "plus", "primary": hourly]], now: now))
+        #expect(plus.showsFiveHour)
+        #expect(CodexRateLimits(fiveHour: nil, weekly: nil, history: []).showsFiveHour == false)
+    }
+
     @Test("Account primary weekly window is never mislabeled five-hour")
     func accountWindowMapping() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)

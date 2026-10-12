@@ -204,8 +204,10 @@ enum SnapshotRefresh {
             result.fiveHour = account.fiveHour
             result.weekly = account.weekly
             result.accountObservedAt = now
+            result.planType = account.planType
         } else if let checked = previous?.accountObservedAt {
             result.accountObservedAt = checked
+            result.planType = previous?.planType
             if result.fiveHour.map({ $0.observedAt > checked }) != true { result.fiveHour = previous?.fiveHour }
             if result.weekly.map({ $0.observedAt > checked }) != true { result.weekly = previous?.weekly }
         }
@@ -383,6 +385,7 @@ enum CodexAccountReader {
         }
         let windows = [window("primary"), window("secondary")].compactMap { $0 }
         return CodexRateLimits(fiveHour: windows.first { $0.windowMinutes == 300 },
-            weekly: windows.first { $0.windowMinutes == 10_080 }, history: [], accountObservedAt: now)
+            weekly: windows.first { $0.windowMinutes == 10_080 }, history: [], accountObservedAt: now,
+            planType: limits["planType"] as? String)
     }
 }

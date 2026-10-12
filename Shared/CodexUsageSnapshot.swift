@@ -306,11 +306,16 @@ struct CodexRateLimits: Codable, Equatable {
     // Actual observation timestamps and reset boundaries, independent of hourly charts.
     var consumptionSamples: [RateLimitWindow]? = nil
     var accountObservedAt: Date? = nil
+    var planType: String? = nil
 
-    var preferredWindow: RateLimitWindow? { fiveHour ?? weekly }
+    var showsFiveHour: Bool {
+        fiveHour != nil && !(planType?.lowercased().hasPrefix("pro") ?? false)
+    }
+
+    var preferredWindow: RateLimitWindow? { showsFiveHour ? fiveHour : weekly }
 
     var nearestReset: RateLimitWindow? {
-        [fiveHour, weekly].compactMap { $0 }.min { $0.resetsAt < $1.resetsAt }
+        [showsFiveHour ? fiveHour : nil, weekly].compactMap { $0 }.min { $0.resetsAt < $1.resetsAt }
     }
 
     var pace: LimitPace { preferredWindow?.pace() ?? .unknown }

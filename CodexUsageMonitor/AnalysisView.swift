@@ -117,7 +117,7 @@ struct AnalysisView: View {
                                 }.padding(.top, 8)
                             }
                             DisclosureGroup("Limit history") {
-                                LimitHistoryChart(history: snapshot.rateLimits?.history ?? [])
+                                LimitHistoryChart(history: snapshot.rateLimits?.history ?? [], showsFiveHour: snapshot.rateLimits?.showsFiveHour == true)
                                     .frame(height: 125).padding(.top, 8)
                             }
                         }

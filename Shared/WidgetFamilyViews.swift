@@ -66,7 +66,7 @@ enum WidgetFamilySemanticBuilder {
     }
 
     private static func limits(snapshot: CodexUsageSnapshot, now: Date) -> WidgetSemanticContent {
-        let fiveHour = snapshot.rateLimits?.fiveHour.flatMap { $0.isCurrent(at: now) ? $0 : nil }
+        let fiveHour = snapshot.rateLimits?.showsFiveHour == true ? snapshot.rateLimits?.fiveHour.flatMap { $0.isCurrent(at: now) ? $0 : nil } : nil
         let weekly = snapshot.rateLimits?.weekly.flatMap { $0.isCurrent(at: now) ? $0 : nil }
         let preferred = fiveHour ?? weekly
         let remaining = preferred?.remainingPercent ?? 0
@@ -83,7 +83,7 @@ enum WidgetFamilySemanticBuilder {
             ],
             chart: WidgetChartContent(
                 points: history.suffix(14).map {
-                    WidgetChartPoint(date: $0.date, value: 100 - ($0.fiveHourUsedPercent ?? $0.weeklyUsedPercent ?? 100))
+                    WidgetChartPoint(date: $0.date, value: 100 - ((snapshot.rateLimits?.showsFiveHour == true ? $0.fiveHourUsedPercent : nil) ?? $0.weeklyUsedPercent ?? 100))
                 },
                 accessibilitySummary: "Remaining allowance history, latest \(Int(remaining.rounded())) percent"
             ),
@@ -332,12 +332,16 @@ private struct LimitsFamilyView: View {
         VStack(alignment: .leading, spacing: 12) {
             WidgetFamilyHeader(content: content, palette: palette, compact: size == .small)
             if size == .small {
+                if snapshot.rateLimits?.showsFiveHour == true {
                 WidgetAllowanceMeter(title: "5-hour left", window: snapshot.rateLimits?.fiveHour, palette: palette, compact: true, now: now)
+                }
                 WidgetAllowanceMeter(title: "Weekly left", window: snapshot.rateLimits?.weekly, palette: palette, compact: true, now: now)
             } else {
                 HStack(alignment: .top, spacing: 20) {
+                    if snapshot.rateLimits?.showsFiveHour == true {
                     WidgetAllowanceMeter(title: "5-hour left", window: snapshot.rateLimits?.fiveHour, palette: palette, now: now,
                         showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour, now: now))
+                    }
                     WidgetAllowanceMeter(title: "Weekly left", window: snapshot.rateLimits?.weekly, palette: palette, now: now,
                         showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly, now: now))
                 }

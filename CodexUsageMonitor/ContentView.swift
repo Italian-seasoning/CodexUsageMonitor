@@ -376,8 +376,10 @@ struct ContentView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     HStack(alignment: .top, spacing: 20) {
+                        if snapshot.rateLimits?.showsFiveHour == true {
                         WidgetAllowanceMeter(title: "5-hour", window: snapshot.rateLimits?.fiveHour, palette: activityPalette,
                             showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour))
+                        }
                         WidgetAllowanceMeter(title: "Weekly", window: snapshot.rateLimits?.weekly, palette: activityPalette,
                             showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly))
                     }

@@ -4,6 +4,8 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 dist/
+__pycache__/
+*.spec
 .codex/
 .superpowers/
 docs/handoffs/

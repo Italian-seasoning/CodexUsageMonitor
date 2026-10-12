@@ -7,11 +7,13 @@ struct LimitSummaryStrip: View {
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 1)], spacing: 1) {
+            if snapshot.rateLimits?.showsFiveHour == true {
             LimitSummaryCell(
                 label: "5-hour",
                 value: percent(snapshot.rateLimits?.fiveHour),
                 detail: reset(snapshot.rateLimits?.fiveHour)
             )
+            }
             LimitSummaryCell(
                 label: "Weekly",
                 value: percent(snapshot.rateLimits?.weekly),
@@ -69,6 +71,7 @@ private struct LimitSummaryCell: View {
 
 struct LimitHistoryChart: View {
     var history: [RateLimitHistoryPoint]
+    var showsFiveHour = true
 
     var body: some View {
         if history.isEmpty {
@@ -77,7 +80,7 @@ struct LimitHistoryChart: View {
                 .foregroundStyle(.secondary)
         } else {
             Chart(history) { point in
-                if let value = point.fiveHourUsedPercent {
+                if showsFiveHour, let value = point.fiveHourUsedPercent {
                     LineMark(x: .value("Time", point.date), y: .value("5-hour", 100 - value))
                         .foregroundStyle(by: .value("Window", "5-hour"))
                 }
@@ -87,10 +90,7 @@ struct LimitHistoryChart: View {
                 }
             }
             .chartYScale(domain: 0...100)
-            .chartForegroundStyleScale([
-                "5-hour": AppPalette.accent,
-                "Weekly": AppPalette.accent.opacity(0.5)
-            ])
+            .chartForegroundStyleScale(domain: showsFiveHour ? ["5-hour", "Weekly"] : ["Weekly"], range: showsFiveHour ? [AppPalette.accent, AppPalette.accent.opacity(0.7)] : [AppPalette.accent])
             .chartLegend(position: .bottom, spacing: 8)
             .frame(height: 120)
         }
@@ -191,6 +191,7 @@ struct LimitPreferencesView: View {
             }
 
             Divider()
+            if CodexUsageSnapshotStore.load()?.rateLimits?.showsFiveHour == true {
             Toggle("iPhone 5-hour reset alerts", isOn: $settingsModel.settings.phoneNotificationsEnabled)
                 .onChange(of: settingsModel.settings.phoneNotificationsEnabled) { _, enabled in
                     if enabled {
@@ -239,6 +240,7 @@ struct LimitPreferencesView: View {
                     Text(phoneTestStatus ?? "The saved topic stays locked until you choose to unlock it.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+            }
             }
                 }.padding(.top, 8)
             }
