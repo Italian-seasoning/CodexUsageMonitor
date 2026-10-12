@@ -86,7 +86,7 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current preview: **4.0.1**.
+Current Mac preview: **4.0.2**. Windows and Linux clients: **4.0.1**.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.

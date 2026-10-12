@@ -83,7 +83,8 @@ struct CodexMenuBarLabel: View {
     }
 
     private static func labelImage(lines: [String]) -> NSImage {
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+        let singleLine = lines.count == 1
+        let font = NSFont.monospacedDigitSystemFont(ofSize: singleLine ? 13 : 9, weight: .medium)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
@@ -92,7 +93,8 @@ struct CodexMenuBarLabel: View {
         let size = NSSize(width: ceil(sizes.map(\.width).max() ?? 1), height: 22)
         let image = NSImage(size: size, flipped: true) { _ in
             for (index, line) in lines.enumerated() {
-                (line as NSString).draw(at: NSPoint(x: 0, y: lines.count == 1 ? 5 : index * 11), withAttributes: attributes)
+                let y = singleLine ? (22 - sizes[index].height) / 2 : CGFloat(index * 11)
+                (line as NSString).draw(at: NSPoint(x: 0, y: y), withAttributes: attributes)
             }
             return true
         }
@@ -127,7 +129,6 @@ struct CodexMenuBarLabel: View {
 struct CodexMenuBarView: View {
     @ObservedObject var model: MenuBarSnapshotModel
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
-    @State private var showsDetails = false
 
     private var activity: CodexSessionActivity? {
         model.snapshot.sessionActivity.first { $0.status() == "Working" } ?? model.snapshot.sessionActivity.first
@@ -137,7 +138,7 @@ struct CodexMenuBarView: View {
     var body: some View {
         ZStack {
             WindowBackdrop()
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("Codex Usage", systemImage: "terminal")
                         .font(.system(size: 12, weight: .semibold))
@@ -145,36 +146,19 @@ struct CodexMenuBarView: View {
                     Text(activity?.status() ?? "Last recorded")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(ModelPricingCatalog.displayName(for: activity?.model ?? model.snapshot.currentModel))
-                        .font(.system(size: 21, weight: .semibold)).lineLimit(1)
-                    Text(activity?.project ?? "Local Codex activity")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                SessionUsageChart(points: activity?.usageHistory ?? [], accent: accent).frame(height: 80)
-                let usage = activity?.usage ?? model.snapshot.currentSession
-                HStack {
-                    Text("\(usage.total.compactTokenString) tokens").fontWeight(.semibold)
-                    Spacer()
-                    Text("\(activity?.requests ?? model.snapshot.currentSessionTurns ?? 0) requests")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.system(size: 11)).monospacedDigit()
-                Divider()
                 if model.snapshot.rateLimits?.showsFiveHour == true {
                     CompactLimitRow(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour, accent: accent)
                 }
                 CompactLimitRow(title: "Weekly", window: model.snapshot.rateLimits?.weekly, accent: accent)
-                DisclosureGroup("More details", isExpanded: $showsDetails) {
-                    VStack(spacing: 8) {
-                        LabeledContent("Tools", value: (activity?.toolCalls ?? 0).formatted())
-                        LabeledContent("Cached input", value: usage.input > 0 ? (Double(usage.cachedInput) / Double(usage.input) * 100).compactPercentString : "—")
-                        LabeledContent("Reasoning", value: activity?.reasoningEffort?.capitalized ?? "—")
-                        Picker("Menu label", selection: $settingsModel.settings.menuBarDisplayMode) {
-                            ForEach(MenuBarDisplayMode.allCases) { Text($0.label).tag($0) }
-                        }
-                    }.font(.system(size: 11)).padding(.top, 8)
-                }.font(.system(size: 11))
+                Divider()
+                let usage = activity?.usage ?? model.snapshot.currentSession
+                HStack {
+                    Text("\(usage.total.compactTokenString) tokens").fontWeight(.semibold)
+                    Spacer()
+                    Text(ModelPricingCatalog.displayName(for: activity?.model ?? model.snapshot.currentModel))
+                        .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                .font(.system(size: 11)).monospacedDigit()
                 HStack {
                     Circle().fill(model.health.color).frame(width: 5, height: 5)
                     Text(model.health.title)
@@ -190,6 +174,10 @@ struct CodexMenuBarView: View {
                     }
                     .help("Open workspace").accessibilityLabel("Open workspace")
                     Menu {
+                        Picker("Menu label", selection: $settingsModel.settings.menuBarDisplayMode) {
+                            ForEach(MenuBarDisplayMode.allCases) { Text($0.label).tag($0) }
+                        }
+                        Divider()
                         Button("Open workspace") {
                             NotificationCenter.default.post(name: .showCodexUsageCompactPreview, object: nil)
                         }
@@ -197,9 +185,9 @@ struct CodexMenuBarView: View {
                     } label: { Image(systemName: "ellipsis") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.buttonStyle(.plain)
-            }.padding(20)
+            }.padding(14)
         }
-        .frame(width: 330)
+        .frame(width: 280)
         .preferredColorScheme(.dark)
         .tint(accent)
         .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in model.reload() }
