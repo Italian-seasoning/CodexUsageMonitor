@@ -1,5 +1,11 @@
 # Runway
 
+<p align="center">
+  <img src="docs/assets/app-icon.png" width="144" alt="Runway app icon" />
+</p>
+
+[View the software showcase](https://nolan-mac-apps.nolankrahn.chatgpt.site/apps/codex-usage)
+
 **Runway — Codex Usage Monitor**
 
 A native macOS app and WidgetKit extension for local Codex usage, model-aware
