@@ -12,10 +12,32 @@ A native macOS app and WidgetKit extension for local Codex usage, model-aware
 API-equivalent cost estimates, Headroom savings, and configurable desktop widgets.
 
 Previously named Codex Usage Monitor. The repository, download filenames, and
-installed app identifiers retain that name for update compatibility.
+installed app identifiers retain that name for update compatibility. The Homebrew
+cask is now `runway`; `codex-usage-monitor` migrates through the tap’s rename map.
 
 **Created by [Italian-seasoning](https://github.com/Italian-seasoning).**
 Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
+
+## Quick install
+
+```sh
+brew install --cask italian-seasoning/tap/runway
+```
+
+Current preview: **4.0.2**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.2/CodexUsageMonitor-macOS.dmg).
+
+Requires macOS 14 or newer on Apple silicon or Intel.
+
+These previews are not Apple-notarized. Homebrew verifies the archive checksum and leaves Gatekeeper enabled. If macOS blocks the first launch, review the app in **System Settings → Privacy & Security**. Sparkle verifies subsequent in-app updates with its signed feed.
+
+## See the app
+
+![Runway appearance and background monitoring settings in Runway Glass](docs/screenshots/runway-settings.png)
+
+![Runway appearance and monitoring settings in the Graphite theme](docs/screenshots/runway-dark-settings.png)
+
+Screenshots show local preview builds. Empty queues and standby states are shown where applicable.
+
 
 ## Forks and attribution
 
@@ -85,7 +107,7 @@ used only for optional Sparkle updates. See the full [privacy policy](docs/priva
 - Apple silicon or Intel Mac
 - Codex local session logs in `~/.codex/sessions`
 - ChatGPT desktop app or Codex CLI signed in to the same account for profile lifetime totals and live limits; otherwise local estimates are shown
-- Headroom is optional
+- Headroom is optional: it is a local proxy that compresses context before requests reach a model; Runway reads its local savings records
 
 ## Build
 
@@ -103,3 +125,7 @@ Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.
 
 Codex Usage Monitor is independent software and is not affiliated with OpenAI.
+
+## License and attribution
+
+[MIT](LICENSE) — Copyright © 2026 [Italian-seasoning](https://github.com/Italian-seasoning). Forks and redistribution are allowed; retain the copyright and license notice. Please identify independently maintained forks and link back to this project. Third-party components retain their own licenses.
