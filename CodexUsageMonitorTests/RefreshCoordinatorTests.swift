@@ -4,6 +4,24 @@ import Testing
 
 @Suite
 struct RefreshCoordinatorTests {
+    @Test("Account daily buckets must cover the account lifetime exactly")
+    func accountUsageBuckets() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let result: [String: Any] = [
+            "summary": ["lifetimeTokens": 10_200],
+            "dailyUsageBuckets": [
+                ["startDate": "2026-10-12", "tokens": 5_400],
+                ["startDate": "2026-10-13", "tokens": 4_800]
+            ]
+        ]
+        let days = try #require(CodexAccountReader.decodeUsageDays(result, calendar: calendar))
+        #expect(days.map(\.tokens) == [5_400, 4_800])
+        var incomplete = result
+        incomplete["summary"] = ["lifetimeTokens": 10_201]
+        #expect(CodexAccountReader.decodeUsageDays(incomplete, calendar: calendar) == nil)
+    }
+
     @Test("Pro plans hide five-hour windows without discarding the account record")
     func proPresentation() throws {
         let now = Date()
@@ -55,6 +73,14 @@ struct RefreshCoordinatorTests {
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now.addingTimeInterval(-60), trigger: .fallbackTimer, now: now))
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .manual, now: now))
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .wake, now: now))
+    }
+
+    @Test("Missing local logs keep cached account usage only between account reads")
+    func missingLocalAccountFallback() {
+        #expect(SnapshotRefresh.accountAvailableWhenLocalMissing(fetched: 10_200, cached: nil, attempted: true))
+        #expect(SnapshotRefresh.accountAvailableWhenLocalMissing(fetched: nil, cached: 10_200, attempted: false))
+        #expect(!SnapshotRefresh.accountAvailableWhenLocalMissing(fetched: nil, cached: 10_200, attempted: true))
+        #expect(!SnapshotRefresh.accountAvailableWhenLocalMissing(fetched: nil, cached: nil, attempted: false))
     }
 
     @Test("Simultaneous refresh requests share one engine pass")
@@ -144,6 +170,10 @@ struct RefreshCoordinatorTests {
         let now = Date()
         #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now, now: now))
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now.addingTimeInterval(-60), now: now))
+        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false,
+            reloadPending: true, lastRequested: now, now: now))
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false,
+            reloadPending: true, lastRequested: now, now: now.addingTimeInterval(60)))
     }
 }
 

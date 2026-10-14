@@ -10,8 +10,15 @@ struct BackgroundRefreshRecord: Codable, Equatable {
     var sourceFingerprint: String? = nil
     var widgetReloadRequestedAt: Date? = nil
     var widgetSyncPending: Bool? = nil
+    var widgetReloadPending: Bool? = nil
     var lastAccountAttempt: Date? = nil
     var lastAccountSuccess: Date? = nil
+
+    mutating func recordWidgetReload(succeeded: Bool, at date: Date = .now) {
+        widgetSyncPending = !succeeded
+        widgetReloadPending = !succeeded
+        if succeeded { widgetReloadRequestedAt = date }
+    }
 }
 
 struct BackgroundRefreshAgentStatus: Sendable {

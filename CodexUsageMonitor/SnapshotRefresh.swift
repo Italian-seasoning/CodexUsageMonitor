@@ -65,8 +65,11 @@ enum SnapshotRefresh {
             hasSnapshot: previous != nil,
             force: force
         ) && previous?.generatedAt.map { Calendar.current.isDate($0, inSameDayAs: startedAt) } == true
-        var candidate: CodexUsageSnapshot?
+        let shouldReadAccount = shouldReadAccount(lastAttempt: previousRecord?.lastAccountAttempt, trigger: trigger, now: startedAt)
+        let account = shouldReadAccount ? CodexAccountReader.read() : nil
+        var candidate: CodexUsageSnapshot
         var outcome: RefreshOutcome
+        var retainedPreviousLocal = false
 
         if reuseCached, var cached = previous {
             let now = Date()
@@ -85,37 +88,35 @@ enum SnapshotRefresh {
             if snapshot.hasUsage {
                 candidate = snapshot
                 outcome = .updated
-            } else if let previous, previous.hasUsage {
-                let message = "No readable Codex usage was found. Keeping the last successful snapshot."
-                saveRecord(startedAt: startedAt, outcome: .failed, message: message,
-                    fingerprint: nil, widgetReloadRequestedAt: nil)
-                return RefreshResult(outcome: .failed, snapshot: previous, message: message)
-            } else {
+            } else if let previous, previous.lifetime.hasUsage || previous.headroom?.isAvailable == true {
+                guard accountAvailableWhenLocalMissing(
+                    fetched: account?.lifetimeTokens,
+                    cached: previous.accountLifetimeTokens,
+                    attempted: shouldReadAccount
+                ) else {
+                    let message = "No readable Codex usage was found. Keeping the last successful snapshot."
+                    saveRecord(startedAt: startedAt, outcome: .failed, message: message,
+                        fingerprint: nil, widgetReloadRequestedAt: nil)
+                    return RefreshResult(outcome: .failed, snapshot: previous, message: message)
+                }
                 candidate = previous
+                outcome = .unchanged
+                retainedPreviousLocal = true
+            } else {
+                candidate = previous ?? snapshot
                 outcome = .unchanged
             }
         }
 
-        guard var candidate else {
-            let message = "No Codex usage was found and no previous snapshot is available."
-            saveRecord(
-                startedAt: startedAt,
-                outcome: .failed,
-                message: message,
-                fingerprint: fingerprint,
-                widgetReloadRequestedAt: nil
-            )
-            logger.error("\(message, privacy: .public)")
-            return RefreshResult(outcome: .failed, snapshot: nil, message: message)
-        }
-
-        let shouldReadAccount = shouldReadAccount(lastAttempt: previousRecord?.lastAccountAttempt, trigger: trigger, now: startedAt)
-        let account = shouldReadAccount ? CodexAccountReader.read() : nil
         candidate.rateLimits = mergedLimits(local: candidate.rateLimits, previous: previous?.rateLimits,
             account: account?.rateLimits, now: Date())
         if let account {
             candidate.accountLifetimeTokens = account.lifetimeTokens ?? previous?.accountLifetimeTokens
+            candidate.accountUsageDays = account.lifetimeTokens != nil ? account.usageDays : previous?.accountUsageDays
+            candidate.accountUsageObservedAt = account.lifetimeTokens != nil ? Date() : previous?.accountUsageObservedAt
             if candidate.accountLifetimeTokens != previous?.accountLifetimeTokens
+                || candidate.accountUsageDays != previous?.accountUsageDays
+                || candidate.accountUsageObservedAt != previous?.accountUsageObservedAt
                 || candidate.rateLimits?.fiveHour?.usedPercent != previous?.rateLimits?.fiveHour?.usedPercent
                 || candidate.rateLimits?.weekly?.usedPercent != previous?.rateLimits?.weekly?.usedPercent
                 || candidate.rateLimits?.fiveHour?.resetsAt != previous?.rateLimits?.fiveHour?.resetsAt
@@ -124,6 +125,17 @@ enum SnapshotRefresh {
             }
         } else {
             candidate.accountLifetimeTokens = previous?.accountLifetimeTokens
+            candidate.accountUsageDays = previous?.accountUsageDays
+            candidate.accountUsageObservedAt = previous?.accountUsageObservedAt
+        }
+        guard candidate.hasUsage else {
+            let message = "No Codex usage was found and no previous snapshot is available."
+            saveRecord(startedAt: startedAt, outcome: .failed, message: message,
+                fingerprint: fingerprint, widgetReloadRequestedAt: nil)
+            return RefreshResult(outcome: .failed, snapshot: previous, message: message)
+        }
+        if account?.lifetimeTokens != nil && !candidate.lifetime.hasUsage {
+            candidate.generatedAt = Date()
         }
         if candidate.rateLimits != previous?.rateLimits { outcome = .updated }
 
@@ -153,6 +165,7 @@ enum SnapshotRefresh {
             outcome: outcome,
             trigger: trigger,
             syncPending: previousRecord?.widgetSyncPending == true,
+            reloadPending: previousRecord?.widgetReloadPending == true,
             lastRequested: previousRecord?.widgetReloadRequestedAt
         )
         // Keep the heartbeat current even when WidgetKit does not need a redraw.
@@ -166,11 +179,12 @@ enum SnapshotRefresh {
             startedAt: startedAt,
             outcome: outcome,
             message: nil,
-            fingerprint: fingerprint,
+            fingerprint: retainedPreviousLocal ? previousRecord?.sourceFingerprint : fingerprint,
             widgetReloadRequestedAt: widgetReloadRequestedAt,
             widgetSyncPending: !widgetSynced,
+            widgetReloadPending: (outcome == .updated || previousRecord?.widgetReloadPending == true) && !widgetReloaded,
             lastAccountAttempt: shouldReadAccount ? startedAt : previousRecord?.lastAccountAttempt,
-            lastAccountSuccess: account != nil ? Date() : previousRecord?.lastAccountSuccess
+            lastAccountSuccess: account?.lifetimeTokens != nil ? Date() : previousRecord?.lastAccountSuccess
         )
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
@@ -194,6 +208,10 @@ enum SnapshotRefresh {
     static func shouldReadAccount(lastAttempt: Date?, trigger: RefreshTrigger, now: Date) -> Bool {
         trigger == .manual || trigger == .wake || trigger == .launch
             || lastAttempt.map { now.timeIntervalSince($0) >= 60 } != false
+    }
+
+    static func accountAvailableWhenLocalMissing(fetched: Int?, cached: Int?, attempted: Bool) -> Bool {
+        fetched != nil || (!attempted && cached != nil)
     }
 
     static func mergedLimits(local: CodexRateLimits?, previous: CodexRateLimits?, account: CodexRateLimits?, now: Date) -> CodexRateLimits? {
@@ -228,11 +246,12 @@ enum SnapshotRefresh {
         outcome: RefreshOutcome,
         trigger: RefreshTrigger,
         syncPending: Bool,
+        reloadPending: Bool = false,
         lastRequested: Date? = nil,
         now: Date = .now
     ) -> Bool {
         if syncPending || trigger == .launch || trigger == .wake || trigger == .manual { return true }
-        return outcome == .updated && lastRequested.map { now.timeIntervalSince($0) >= 60 } != false
+        return (outcome == .updated || reloadPending) && lastRequested.map { now.timeIntervalSince($0) >= 60 } != false
     }
 
     private static func saveRecord(
@@ -242,6 +261,7 @@ enum SnapshotRefresh {
         fingerprint: String?,
         widgetReloadRequestedAt: Date?,
         widgetSyncPending: Bool? = nil,
+        widgetReloadPending: Bool? = nil,
         lastAccountAttempt: Date? = nil,
         lastAccountSuccess: Date? = nil
     ) {
@@ -258,6 +278,7 @@ enum SnapshotRefresh {
                 sourceFingerprint: fingerprint ?? previous?.sourceFingerprint,
                 widgetReloadRequestedAt: widgetReloadRequestedAt ?? previous?.widgetReloadRequestedAt,
                 widgetSyncPending: widgetSyncPending ?? previous?.widgetSyncPending,
+                widgetReloadPending: widgetReloadPending ?? previous?.widgetReloadPending,
                 lastAccountAttempt: lastAccountAttempt ?? previous?.lastAccountAttempt,
                 lastAccountSuccess: lastAccountSuccess ?? previous?.lastAccountSuccess
             )
@@ -292,6 +313,7 @@ private final class RefreshLock {
 
 struct CodexAccountData {
     var lifetimeTokens: Int?
+    var usageDays: [AccountUsageDay]?
     var rateLimits: CodexRateLimits?
 }
 
@@ -363,10 +385,35 @@ enum CodexAccountReader {
         send(["id": 2, "method": "account/rateLimits/read"])
         let usage = response(1)
         let limits = response(2).flatMap { decodeRateLimits($0, now: Date()) }
-        let lifetime = (usage?["summary"] as? [String: Any])?["lifetimeTokens"] as? Int
+        let lifetime = ((usage?["summary"] as? [String: Any])?["lifetimeTokens"] as? Int).flatMap { $0 >= 0 ? $0 : nil }
+        let usageDays = usage.flatMap { decodeUsageDays($0) }
 
         guard lifetime != nil || limits != nil else { return nil }
-        return CodexAccountData(lifetimeTokens: lifetime, rateLimits: limits)
+        return CodexAccountData(lifetimeTokens: lifetime, usageDays: usageDays, rateLimits: limits)
+    }
+
+    static func decodeUsageDays(_ result: [String: Any], calendar: Calendar = .current) -> [AccountUsageDay]? {
+        guard let rows = result["dailyUsageBuckets"] as? [[String: Any]],
+              let lifetime = (result["summary"] as? [String: Any])?["lifetimeTokens"] as? Int,
+              lifetime >= 0 else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        var days: [AccountUsageDay] = []
+        var seen = Set<Date>()
+        var total = 0
+        for row in rows {
+            guard let label = row["startDate"] as? String, label.count == 10,
+                  let date = formatter.date(from: label), seen.insert(date).inserted,
+                  let tokens = row["tokens"] as? Int, tokens >= 0,
+                  total <= Int.max - tokens else { return nil }
+            total += tokens
+            days.append(AccountUsageDay(date: date, tokens: tokens))
+        }
+        return total == lifetime ? days.sorted { $0.date < $1.date } : nil
     }
 
     static func decodeRateLimits(_ result: [String: Any], now: Date) -> CodexRateLimits? {

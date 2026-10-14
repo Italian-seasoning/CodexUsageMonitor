@@ -124,6 +124,35 @@ struct UsageMetricsTests {
         #expect(restored.lifetime.total == 5_000)
     }
 
+    @Test("Account usage alone is a valid snapshot source")
+    func accountOnlySnapshotHasUsage() {
+        var snapshot = CodexUsageSnapshot.empty
+        #expect(!snapshot.hasUsage)
+        snapshot.accountLifetimeTokens = 10_200
+        #expect(snapshot.hasUsage)
+    }
+
+    @Test("Account token days survive snapshots and stay separate from local sessions")
+    func accountDaysAcrossPeriods() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 13)))
+        let yesterday = try #require(calendar.date(byAdding: .day, value: -1, to: today))
+        let now = today.addingTimeInterval(3_600)
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        snapshot.accountUsageDays = [AccountUsageDay(date: yesterday, tokens: 5_400),
+            AccountUsageDay(date: today, tokens: 4_800)]
+        let restored = try JSONDecoder().decode(CodexUsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        #expect(restored.accountDays(for: .lifetime, calendar: calendar, now: now)?.map(\.tokens) == [5_400, 4_800])
+        #expect(restored.accountDays(for: .today, calendar: calendar, now: now)?.map(\.tokens) == [4_800])
+        #expect(restored.lifetime.total == 2_400)
+        #expect(restored.accountUsageObservedAt == now)
+        #expect(StatMetric.lifetime.value(in: restored) == 10_200.compactTokenString)
+    }
+
     @Test("Period summaries use deterministic calendar boundaries")
     func periodSummariesUseDeterministicCalendarBoundaries() {
         let fixture = usageMetricsFixture()
