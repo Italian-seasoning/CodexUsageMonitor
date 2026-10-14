@@ -77,13 +77,13 @@ ln -s /Applications "$DMG_ROOT/Applications"
 cp "$DMG_BACKGROUND" "$DMG_ROOT/.background/dmg-background.png"
 chflags hidden "$DMG_ROOT/.background"
 
-hdiutil detach "/Volumes/$DMG_VOLUME" -force >/dev/null 2>&1 || true
 hdiutil create -quiet -volname "$DMG_VOLUME" -srcfolder "$DMG_ROOT" -ov -format UDRW "$DMG_RW"
-DEVICE="$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_RW" | awk '/Apple_HFS|Apple_APFS/ { print $1; exit }')"
 
 # Headless packaging avoids driving Finder while the user is working.
 if [[ "${HEADLESS_PACKAGE:-0}" != "1" ]]; then
-osascript <<APPLESCRIPT
+  hdiutil detach "/Volumes/$DMG_VOLUME" -force >/dev/null 2>&1 || true
+  DEVICE="$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_RW" | awk '/Apple_HFS|Apple_APFS/ { print $1; exit }')"
+  osascript <<APPLESCRIPT
 tell application "Finder"
   tell disk "$DMG_VOLUME"
     open
@@ -106,10 +106,10 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
+  sync
+  hdiutil detach "$DEVICE" -quiet
 fi
 
-sync
-hdiutil detach "$DEVICE" -quiet
 hdiutil convert "$DMG_RW" -quiet -format UDZO -o "$DMG"
 rm -f "$DMG_RW"
 
