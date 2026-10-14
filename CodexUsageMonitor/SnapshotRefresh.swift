@@ -398,7 +398,7 @@ enum CodexAccountReader {
               lifetime >= 0 else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = calendar
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.isLenient = false
