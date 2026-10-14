@@ -4,6 +4,33 @@ import Testing
 
 @Suite
 struct RefreshCoordinatorTests {
+    @Test("ISO account dates stay Gregorian in the user's time zone", arguments: [Calendar.Identifier.buddhist, .japanese])
+    func accountUsageDatesUseGregorianCalendar(identifier: Calendar.Identifier) throws {
+        var calendar = Calendar(identifier: identifier)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Vancouver"))
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        let today = try #require(gregorian.date(from: DateComponents(year: 2026, month: 10, day: 13)))
+        let yesterday = try #require(gregorian.date(byAdding: .day, value: -1, to: today))
+        let result: [String: Any] = [
+            "summary": ["lifetimeTokens": 10_200],
+            "dailyUsageBuckets": [
+                ["startDate": "2026-10-13", "tokens": 4_800],
+                ["startDate": "2026-10-12", "tokens": 5_400]
+            ]
+        ]
+        let days = try #require(CodexAccountReader.decodeUsageDays(result, calendar: calendar))
+        #expect(days.map(\.date) == [yesterday, today])
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageDays = days
+        let now = today.addingTimeInterval(3_600)
+        #expect(snapshot.accountDays(for: .today, calendar: calendar, now: now)?.map(\.tokens) == [4_800])
+        #expect(snapshot.accountDays(for: .sevenDays, calendar: calendar, now: now)?.map(\.tokens) == [5_400, 4_800])
+        #expect(snapshot.accountDays(for: .month, calendar: calendar, now: now)?.map(\.tokens) == [5_400, 4_800])
+        #expect(snapshot.accountDays(for: .lifetime, calendar: calendar, now: now)?.map(\.date) == [yesterday, today])
+    }
+
     @Test("Account daily buckets must cover the account lifetime exactly")
     func accountUsageBuckets() throws {
         var calendar = Calendar(identifier: .gregorian)
