@@ -31,6 +31,126 @@ struct WidgetConfigurationTests {
         #expect(AnalysisChartData.points(from: days, period: .month, measure: .tokens).count == 14)
     }
 
+    @Test("Lifetime chart and widget use the same account buckets as the total")
+    func accountLifetimeChartAndWidget() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 13, hour: 12)))
+        let first = try #require(calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: now)))
+        let second = try #require(calendar.date(byAdding: .day, value: 7, to: first))
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        snapshot.accountUsageDays = [AccountUsageDay(date: first, tokens: 5_400),
+            AccountUsageDay(date: second, tokens: 4_800)]
+        let accountDays = try #require(snapshot.accountDays(for: .lifetime, calendar: calendar, now: now))
+        #expect(AnalysisChartData.points(from: accountDays, period: .lifetime, calendar: calendar)
+            .reduce(0) { $0 + Int($1.value) } == 10_200)
+        let widget = WidgetFamilySemanticBuilder.content(snapshot: snapshot,
+            configuration: WidgetDisplayConfiguration(family: .usagePulse, style: .precisionInstrument,
+                theme: .crimson, period: .lifetime, dashboardArrangement: .balanced),
+            now: now, calendar: calendar)
+        #expect(widget.heroValue == 10_200.compactTokenString)
+        #expect(widget.chart?.points.reduce(0) { $0 + Int($1.value) } == 10_200)
+        #expect(widget.heroLabel.contains("Account"))
+        #expect(widget.freshness == .fresh)
+    }
+
+    @Test("Lifetime widget shows account total without inventing a chart when daily buckets are missing")
+    func accountLifetimeWithoutBuckets() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now.addingTimeInterval(-300)
+        let widget = WidgetFamilySemanticBuilder.content(snapshot: snapshot,
+            configuration: WidgetDisplayConfiguration(family: .usagePulse, style: .precisionInstrument,
+                theme: .crimson, period: .lifetime, dashboardArrangement: .balanced), now: now)
+        #expect(widget.heroValue == 10_200.compactTokenString)
+        #expect(widget.heroLabel.contains("Account"))
+        #expect(widget.chart == nil)
+        #expect(widget.freshness == .stale)
+    }
+
+    @Test("A fresh local snapshot does not make cached account usage fresh")
+    func accountUsageHealth() {
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = Date()
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = Date().addingTimeInterval(-300)
+        let health = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(health.kind == .freshPartial)
+        #expect(health.detail == "Account token total is cached")
+    }
+
+    @Test("Data Health identifies missing account usage and missing account history")
+    func incompleteAccountUsageHealth() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 2_400
+        let missingTotal = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(missingTotal.kind == .freshPartial)
+        #expect(missingTotal.detail == "Account token total is unavailable")
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        let missingDays = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(missingDays.kind == .freshPartial)
+        #expect(missingDays.detail.contains("daily history is unavailable"))
+    }
+
+    @Test("Account-only usage does not claim local logs are current")
+    func accountOnlyHealth() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        snapshot.accountUsageDays = [AccountUsageDay(date: Calendar.current.startOfDay(for: now), tokens: 10_200)]
+
+        let health = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(health.kind == .freshPartial)
+        #expect(health.detail == "Account allowance has not been verified recently")
+    }
+
+    @Test("Failed widget settings sync remains queued until a successful retry")
+    func widgetSettingsSyncRetry() {
+        let now = Date()
+        let previousRequest = now.addingTimeInterval(-120)
+        var record = BackgroundRefreshRecord(lastAttempt: now, lastSuccess: now,
+            durationSeconds: 0, error: nil, widgetReloadRequestedAt: previousRequest)
+
+        record.recordWidgetReload(succeeded: false, at: now)
+        #expect(record.widgetSyncPending == true)
+        #expect(record.widgetReloadPending == true)
+        #expect(record.widgetReloadRequestedAt == previousRequest)
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent,
+            syncPending: record.widgetSyncPending == true, reloadPending: record.widgetReloadPending == true,
+            lastRequested: record.widgetReloadRequestedAt, now: now))
+
+        record.recordWidgetReload(succeeded: true, at: now)
+        #expect(record.widgetSyncPending == false)
+        #expect(record.widgetReloadPending == false)
+        #expect(record.widgetReloadRequestedAt == now)
+    }
+
+    @Test("Data Health reports a queued widget redraw")
+    func pendingWidgetHealth() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 100
+        let record = BackgroundRefreshRecord(lastAttempt: now, lastSuccess: now,
+            durationSeconds: 0, error: nil, widgetReloadPending: true)
+        let health = SnapshotHealth(snapshot: snapshot, record: record, isRefreshing: false)
+        #expect(health.kind == .freshPartial)
+        #expect(health.detail == "Widget refresh is queued")
+    }
+
     @Test("Widget snapshots live outside protected app containers")
     func sharedSnapshotLocation() {
         let folder = Bundle.main.bundleIdentifier?.hasSuffix(".debug") == true

@@ -97,6 +97,11 @@ struct DailyUsage: Codable, Equatable, Identifiable, Sendable {
     var id: Date { date }
 }
 
+struct AccountUsageDay: Codable, Equatable, Sendable {
+    var date: Date
+    var tokens: Int
+}
+
 struct ModelUsage: Codable, Equatable, Identifiable, Sendable {
     var model: String
     var usage: TokenUsage
@@ -440,6 +445,8 @@ struct CodexUsageSnapshot: Codable, Equatable {
     var pricingVersion: String? = nil
     var rateLimits: CodexRateLimits? = nil
     var accountLifetimeTokens: Int? = nil
+    var accountUsageDays: [AccountUsageDay]? = nil
+    var accountUsageObservedAt: Date? = nil
     var recentSessions: [CodexSessionSummary] = []
     var sessionActivity: [CodexSessionActivity] = []
     var appearanceTheme: String? = nil
@@ -504,6 +511,8 @@ extension CodexUsageSnapshot {
         case pricingVersion
         case rateLimits
         case accountLifetimeTokens
+        case accountUsageDays
+        case accountUsageObservedAt
         case recentSessions
         case sessionActivity
         case appearanceTheme
@@ -538,6 +547,8 @@ extension CodexUsageSnapshot {
         pricingVersion = try values.decodeIfPresent(String.self, forKey: .pricingVersion)
         rateLimits = try values.decodeIfPresent(CodexRateLimits.self, forKey: .rateLimits)
         accountLifetimeTokens = try values.decodeIfPresent(Int.self, forKey: .accountLifetimeTokens)
+        accountUsageDays = try values.decodeIfPresent([AccountUsageDay].self, forKey: .accountUsageDays)
+        accountUsageObservedAt = try values.decodeIfPresent(Date.self, forKey: .accountUsageObservedAt)
         recentSessions = try values.decodeIfPresent([CodexSessionSummary].self, forKey: .recentSessions) ?? []
         sessionActivity = try values.decodeIfPresent([CodexSessionActivity].self, forKey: .sessionActivity) ?? []
         appearanceTheme = try values.decodeIfPresent(String.self, forKey: .appearanceTheme)
@@ -936,7 +947,7 @@ enum StatMetric: String, Codable, CaseIterable, Identifiable {
         case .currentSession: return snapshot.currentSession.total.compactTokenString
         case .today: return snapshot.today.total.compactTokenString
         case .last7Days: return snapshot.last7DaysUsage.total.compactTokenString
-        case .lifetime: return snapshot.lifetime.total.compactTokenString
+        case .lifetime: return (snapshot.accountLifetimeTokens ?? snapshot.lifetime.total).compactTokenString
         case .peakDay: return (snapshot.peakDay?.usage.total ?? 0).compactTokenString
         case .sessionsToday: return snapshot.todaySessionCount.formatted()
         case .totalSessions: return (snapshot.sessionCount ?? 0).formatted()
@@ -1053,7 +1064,7 @@ extension CodexUsageSnapshot {
     }
 
     var hasUsage: Bool {
-        lifetime.hasUsage || headroom?.isAvailable == true
+        lifetime.hasUsage || accountLifetimeTokens != nil || headroom?.isAvailable == true
     }
 
     var cachedHeadroomActivity: HeadroomActivity? {

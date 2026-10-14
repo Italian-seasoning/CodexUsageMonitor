@@ -9,6 +9,19 @@ enum WidgetFamilySemanticBuilder {
     ) -> WidgetSemanticContent {
         let configuration = configuration.normalized()
         let summary = snapshot.summary(for: configuration.period, calendar: calendar, now: now)
+        let accountDays = snapshot.accountDays(for: configuration.period, calendar: calendar, now: now)
+        let accountLifetime = configuration.period == .lifetime ? snapshot.accountLifetimeTokens : nil
+        let accountSource = accountDays != nil || accountLifetime != nil
+        let tokenTotal = accountDays.map { $0.reduce(0) { $0 + $1.tokens } } ?? accountLifetime ?? summary.usage.total
+        let tokenChart: WidgetChartContent? = accountDays.map { days in
+            WidgetChartContent(
+                points: days.suffix(14).map { WidgetChartPoint(date: $0.date, value: Double($0.tokens)) },
+                accessibilitySummary: "Codex account token history"
+            )
+        } ?? (accountLifetime == nil ? chart(summary.days) { Double($0.usage.total) } : nil)
+        let tokenFreshness: WidgetFreshness = accountSource
+            ? (snapshot.accountUsageObservedAt.map { now.timeIntervalSince($0) <= 180 } == true ? .fresh : .stale)
+            : freshness(snapshot, hasData: tokenTotal > 0, now: now)
 
         switch configuration.family {
         case .limits:
@@ -16,15 +29,15 @@ enum WidgetFamilySemanticBuilder {
         case .usagePulse:
             return WidgetSemanticContent(
                 eyebrow: "Usage Pulse",
-                heroValue: summary.usage.total.compactTokenString,
-                heroLabel: "\(configuration.period.widgetLabel) tokens",
+                heroValue: tokenTotal.compactTokenString,
+                heroLabel: "\(accountSource ? "Account" : "Local") \(configuration.period.widgetLabel.lowercased()) tokens",
                 secondaryValues: [
                     .init(label: "Sessions", value: summary.sessionCount.formatted()),
                     .init(label: "Requests", value: summary.requestCount.formatted()),
                     .init(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
                 ],
-                chart: chart(summary.days) { Double($0.usage.total) },
-                freshness: freshness(snapshot, hasData: summary.usage.hasUsage, now: now)
+                chart: tokenChart,
+                freshness: tokenFreshness
             )
         case .costLens:
             return WidgetSemanticContent(
@@ -32,7 +45,7 @@ enum WidgetFamilySemanticBuilder {
                 heroValue: summary.estimatedCostUSD.compactCurrencyString,
                 heroLabel: "\(configuration.period.widgetLabel) API estimate",
                 secondaryValues: [
-                    .init(label: "Tokens", value: summary.usage.total.compactTokenString),
+                    .init(label: "Local tokens", value: summary.usage.total.compactTokenString),
                     .init(label: "Top model", value: ModelPricingCatalog.displayName(for: summary.topModel?.model)),
                     .init(label: "Unpriced lifetime", value: snapshot.unpricedTokens?.compactTokenString ?? "—")
                 ],
@@ -61,7 +74,9 @@ enum WidgetFamilySemanticBuilder {
         case .sessionLive:
             return session(snapshot: snapshot, now: now)
         case .dashboard:
-            return dashboard(snapshot: snapshot, summary: summary, configuration: configuration, now: now)
+            return dashboard(snapshot: snapshot, summary: summary, configuration: configuration,
+                tokenTotal: tokenTotal, tokenChart: tokenChart, accountSource: accountSource,
+                tokenFreshness: tokenFreshness, now: now)
         }
     }
 
@@ -138,11 +153,15 @@ enum WidgetFamilySemanticBuilder {
         snapshot: CodexUsageSnapshot,
         summary: PeriodUsageSummary,
         configuration: WidgetDisplayConfiguration,
+        tokenTotal: Int,
+        tokenChart: WidgetChartContent?,
+        accountSource: Bool,
+        tokenFreshness: WidgetFreshness,
         now: Date
     ) -> WidgetSemanticContent {
         let weeklyWindow = snapshot.rateLimits?.weekly.flatMap { $0.isCurrent(at: now) ? $0 : nil }
         let weeklyRemaining = weeklyWindow?.remainingPercent
-        let usage = WidgetLabeledValue(label: "Tokens", value: summary.usage.total.compactTokenString)
+        let usage = WidgetLabeledValue(label: "\(accountSource ? "Account" : "Local") tokens", value: tokenTotal.compactTokenString)
         let limits = WidgetLabeledValue(label: "Weekly left", value: weeklyRemaining.map { "\(Int($0.rounded()))%" } ?? "—")
         let cost = WidgetLabeledValue(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
         let model = WidgetLabeledValue(label: "Top model", value: ModelPricingCatalog.displayName(for: summary.topModel?.model))
@@ -163,12 +182,12 @@ enum WidgetFamilySemanticBuilder {
             eyebrow: "Dashboard",
             heroValue: hero.value,
             heroLabel: configuration.dashboardArrangement == .limitsFirst
-                ? "Weekly remaining" : "\(configuration.period.widgetLabel) \(hero.label.lowercased())",
+                ? "Weekly remaining" : "\(accountSource ? "Account" : "Local") \(configuration.period.widgetLabel.lowercased()) tokens",
             secondaryValues: values,
-            chart: chart(summary.days) { Double($0.usage.total) },
+            chart: tokenChart,
             freshness: configuration.dashboardArrangement == .limitsFirst
                 ? (weeklyWindow == nil ? .unavailable : now.timeIntervalSince(weeklyWindow!.observedAt) > 180 ? .stale : freshness(snapshot, hasData: true, now: now))
-                : freshness(snapshot, hasData: summary.usage.hasUsage, now: now)
+                : tokenFreshness
         )
     }
 

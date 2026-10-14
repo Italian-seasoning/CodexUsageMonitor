@@ -18,7 +18,7 @@ struct SnapshotHealth: Equatable {
     init(snapshot: CodexUsageSnapshot, record: BackgroundRefreshRecord?, isRefreshing: Bool) {
         if isRefreshing {
             kind = .refreshing
-            detail = "Reading local Codex sources"
+            detail = "Reading Codex sources"
         } else if record?.outcome == .permissionRequired {
             kind = .permissionRequired
             detail = record?.error ?? "Codex data needs permission"
@@ -30,14 +30,26 @@ struct SnapshotHealth: Equatable {
             detail = record == nil ? "No recorded usage yet" : "No readable usage source was found"
         } else if record?.widgetSyncPending == true {
             kind = .freshPartial
-            detail = "App data is current; widget synchronization is retrying"
+            detail = "Widget synchronization is retrying"
+        } else if record?.widgetReloadPending == true {
+            kind = .freshPartial
+            detail = "Widget refresh is queued"
         } else if let generatedAt = snapshot.generatedAt,
                   Date().timeIntervalSince(generatedAt) > 10 * 60 {
             kind = .staleCached
             detail = "Showing the latest cached snapshot"
+        } else if snapshot.accountLifetimeTokens == nil {
+            kind = .freshPartial
+            detail = "Account token total is unavailable"
+        } else if snapshot.accountUsageObservedAt.map({ Date().timeIntervalSince($0) > 180 }) != false {
+            kind = .freshPartial
+            detail = "Account token total is cached"
+        } else if snapshot.accountDays(for: .lifetime) == nil {
+            kind = .freshPartial
+            detail = "Account total is current; daily history is unavailable"
         } else if snapshot.rateLimits?.accountObservedAt.map({ Date().timeIntervalSince($0) > 180 }) != false {
             kind = .freshPartial
-            detail = "Local usage is current; account allowance has not been verified recently"
+            detail = "Account allowance has not been verified recently"
         } else if snapshot.rateLimits == nil || (snapshot.modelUsage ?? []).isEmpty {
             kind = .freshPartial
             detail = "Valid usage is available; some sources are missing"
@@ -111,11 +123,18 @@ struct DataHealthView: View {
 
             healthRow("Last success", date: record?.lastSuccess)
             healthRow("Snapshot", date: snapshot.generatedAt)
+            if snapshot.accountLifetimeTokens != nil {
+                healthRow("Account usage", date: snapshot.accountUsageObservedAt)
+            }
             healthRow("Widget reload", date: record?.widgetReloadRequestedAt)
             if record?.widgetSyncPending == true {
                 Text("Widget sync failed; the next refresh will retry.")
                     .font(.caption)
                     .foregroundStyle(.orange)
+            } else if record?.widgetReloadPending == true {
+                Text("Widget refresh is queued.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             LabeledContent("Source") {
                 Text(sourceLabel)
@@ -137,7 +156,7 @@ struct DataHealthView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(isRefreshing)
-            .accessibilityHint("Waits for local sources and WidgetKit to finish refreshing")
+            .accessibilityHint("Waits for Codex usage sources and WidgetKit to finish refreshing")
         }
         .padding(16)
         .frame(width: 320)
@@ -145,8 +164,12 @@ struct DataHealthView: View {
 
     private var sourceLabel: String {
         if record?.outcome == .permissionRequired { return "Permission blocked" }
+        if record?.outcome == .failed { return "Read failed" }
+        if snapshot.accountLifetimeTokens != nil {
+            return snapshot.lifetime.hasUsage ? "Codex account + local data" : "Codex account"
+        }
         if record?.sourceFingerprint == nil { return "Not detected" }
-        return record?.outcome == .failed ? "Read failed" : "Local Codex logs"
+        return "Local Codex logs"
     }
 
     @ViewBuilder
@@ -161,7 +184,7 @@ struct DataHealthView: View {
     private func refresh() {
         guard !isRefreshing else { return }
         isRefreshing = true
-        message = "Reading Codex logs and updating WidgetKit…"
+        message = "Reading Codex usage and updating WidgetKit…"
         Task {
             let result = await RefreshCoordinator.shared.refresh(trigger: .manual, force: true)
             if let refreshed = result.snapshot {

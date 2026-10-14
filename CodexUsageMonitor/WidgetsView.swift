@@ -11,7 +11,7 @@ struct WidgetsView: View {
     @State private var configuredSizes: Set<CodexUsageWidgetSize> = []
     @State private var wallpaper: NSImage?
     @State private var customBackgroundImage: NSImage?
-    @State private var backgroundImportError: String?
+    @State private var widgetError: String?
     @State private var preset = WidgetPresetMode.custom
     @State private var savedPresets = SavedWidgetPresetStore.load()
     @State private var savedPresetID: UUID?
@@ -24,15 +24,15 @@ struct WidgetsView: View {
                 refreshConfiguredSizes()
             }
             .alert(
-                "Couldn’t Use Image",
+                "Couldn’t Update Widget",
                 isPresented: Binding(
-                    get: { backgroundImportError != nil },
-                    set: { if !$0 { backgroundImportError = nil } }
+                    get: { widgetError != nil },
+                    set: { if !$0 { widgetError = nil } }
                 )
             ) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(backgroundImportError ?? "Choose another image and try again.")
+                Text(widgetError ?? "Try again.")
             }
     }
 
@@ -309,16 +309,28 @@ struct WidgetsView: View {
             set: { value in
                 var configuration = currentConfiguration
                 configuration[keyPath: keyPath] = value
-                save(configuration)
-                preset = .custom
+                if save(configuration) { preset = .custom }
             }
         )
     }
 
-    private func save(_ configuration: WidgetDisplayConfiguration) {
-        configurations.set(configuration, for: selectedSize)
-        guard DesktopWidgetConfigurationsStore.save(configurations) else { return }
-        CodexWidgetReloader.reloadAll()
+    @discardableResult
+    private func save(_ configuration: WidgetDisplayConfiguration) -> Bool {
+        var updated = configurations
+        updated.set(configuration, for: selectedSize)
+        guard DesktopWidgetConfigurationsStore.save(updated) else {
+            widgetError = "Could not save widget settings. Check available disk space and try again."
+            return false
+        }
+        configurations = updated
+        let synced = CodexWidgetReloader.reloadAll()
+        var record = BackgroundRefreshAgent.loadRecord() ?? BackgroundRefreshRecord(
+            lastAttempt: .now, lastSuccess: nil, durationSeconds: 0, error: nil)
+        record.recordWidgetReload(succeeded: synced)
+        BackgroundRefreshAgent.saveRecord(record)
+        NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
+        if !synced { widgetError = "Settings were saved, but the widget could not refresh. The next update will retry." }
+        return true
     }
 
     private func applyPreset(_ requestedPreset: WidgetPresetMode? = nil) {
@@ -404,7 +416,7 @@ struct WidgetsView: View {
             configuration.backgroundMode = .customImage
             save(configuration)
         } catch {
-            backgroundImportError = error.localizedDescription
+            widgetError = error.localizedDescription
         }
     }
 
@@ -419,7 +431,7 @@ struct WidgetsView: View {
             configuration.backgroundMode = .styled
             save(configuration)
         } catch {
-            backgroundImportError = error.localizedDescription
+            widgetError = error.localizedDescription
         }
     }
 

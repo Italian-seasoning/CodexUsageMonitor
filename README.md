@@ -81,7 +81,7 @@ rate estimates appear only when enough recent observations are available.
 **Windows and Linux:** [Simple Windows desktop and Linux ASCII clients](portable/README.md)
 are available in the release downloads. The native macOS app retains the full widget and glass experience.
 
-- Local session, today, seven-day, and month token usage; account lifetime tokens when the Codex CLI is available
+- Local session and model breakdowns; account daily and lifetime token totals for Trends and token widgets when the Codex CLI is available
 - Input, cached input, output, and reasoning tokens
 - Requests, sessions, streaks, context use, and visible chart peaks
 - Recorded models and API-equivalent cost estimates by model
@@ -96,7 +96,7 @@ are available in the release downloads. The native macOS app retains the full wi
 
 Codex Usage Monitor reads local Codex logs and the local Headroom database. When
 the Codex CLI or ChatGPT desktop app is installed, it also asks Codex's
-app-server for account lifetime usage and current limits. The app-server may
+app-server for account daily usage, lifetime totals, and current limits. The app-server may
 contact OpenAI using your existing sign-in. The monitor does not upload prompts,
 responses, or local session history. GitHub is
 used only for optional Sparkle updates. See the full [privacy policy](docs/privacy.html).
@@ -119,7 +119,7 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Current Mac preview: **4.0.2**. Windows and Linux clients: **4.0.1**.
+Latest published Mac preview: **4.0.2**. Windows and Linux clients: **4.0.1**.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.

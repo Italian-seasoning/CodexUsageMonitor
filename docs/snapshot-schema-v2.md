@@ -15,7 +15,7 @@ Codex Usage Monitor writes one local JSON snapshot for the macOS app, menu bar, 
 
 ## Freshness
 
-`generatedAt` is the snapshot creation time and is the primary freshness clock.
+`generatedAt` is the snapshot creation time. `accountUsageObservedAt` separately tracks the last successful account token read; a local refresh does not make cached account usage current.
 
 - Fresh: age is at most 10 minutes.
 - Stale: a valid snapshot exists but is older than 10 minutes.
@@ -55,6 +55,9 @@ Widget timelines request a new shared snapshot every minute. WidgetKit may delay
 | `unpricedTokens` | integer | tokens | yes | Usage without a matching public model rate |
 | `pricingVersion` | string | version | yes | Pricing catalog identifier |
 | `rateLimits` | `CodexRateLimits` | mixed | yes | Current limit windows and history |
+| `accountLifetimeTokens` | integer | tokens | yes | Codex account lifetime total, separate from local `lifetime` |
+| `accountUsageDays` | array of `AccountUsageDay` | tokens | yes | Codex account daily totals; used when they sum to `accountLifetimeTokens` |
+| `accountUsageObservedAt` | date | instant | yes | Last successful account lifetime read |
 
 ## Nested records
 
@@ -72,6 +75,10 @@ Widget timelines request a new shared snapshot every minute. WidgetKit may delay
 | `turns` | integer | requests | yes |
 | `headroomSaved` | integer | tokens | yes |
 | `estimatedCostMicros` | integer | millionths USD | yes |
+
+### `AccountUsageDay`
+
+`date` is the account bucket's calendar day, and `tokens` is its total token count. These buckets do not contain model or request breakdowns.
 
 ### `ModelUsage`
 

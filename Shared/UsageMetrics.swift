@@ -37,6 +37,24 @@ struct PeriodUsageSummary: Equatable, Sendable {
 }
 
 extension CodexUsageSnapshot {
+    func accountDays(for period: UsagePeriod, calendar: Calendar = .current, now: Date = .now) -> [AccountUsageDay]? {
+        guard let accountUsageDays, let accountLifetimeTokens else { return nil }
+        var total = 0
+        for day in accountUsageDays {
+            guard day.tokens >= 0, total <= Int.max - day.tokens else { return nil }
+            total += day.tokens
+        }
+        guard total == accountLifetimeTokens else { return nil }
+        if period == .lifetime { return accountUsageDays }
+        let start: Date? = switch period {
+        case .today: calendar.startOfDay(for: now)
+        case .sevenDays: calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now))
+        case .month: calendar.date(from: calendar.dateComponents([.year, .month], from: now))
+        case .lifetime: nil
+        }
+        return accountUsageDays.filter { day in day.date <= now && start.map { day.date >= $0 } != false }
+    }
+
     /// Inclusive local calendar dates; the next midnight is an exclusive boundary.
     func summary(from startDate: Date, through endDate: Date, calendar: Calendar = .current,
                  now: Date = .now) -> PeriodUsageSummary {

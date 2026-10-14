@@ -37,11 +37,32 @@ struct AnalysisView: View {
     }
 
     private var chartPoints: [AnalysisChartPoint] {
-        AnalysisChartData.points(
+        if selection.measure == .tokens, let accountDays {
+            return AnalysisChartData.points(from: accountDays, period: chartPeriod)
+        }
+        if accountLifetimeWithoutDays { return [] }
+        return AnalysisChartData.points(
             from: summary.days,
             period: chartPeriod,
             measure: selection.measure
         )
+    }
+
+    private var accountDays: [AccountUsageDay]? {
+        selection.usesCustomDates ? nil : snapshot.accountDays(for: selection.period)
+    }
+
+    private var accountLifetimeWithoutDays: Bool {
+        selection.measure == .tokens && !selection.usesCustomDates && selection.period == .lifetime
+            && snapshot.accountLifetimeTokens != nil && accountDays == nil
+    }
+
+    private var displayedChartValue: Double {
+        if selection.measure == .tokens, let accountDays {
+            return Double(accountDays.reduce(0) { $0 + $1.tokens })
+        }
+        if accountLifetimeWithoutDays, let total = snapshot.accountLifetimeTokens { return Double(total) }
+        return summary.value(for: selection.measure)
     }
 
     var body: some View {
@@ -129,11 +150,12 @@ struct AnalysisView: View {
     private func activityChart(height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(hoveredPoint.map { chartPeriod == .lifetime ? "Week of \($0.date.formatted(date: .abbreviated, time: .omitted))" : $0.date.formatted(date: .abbreviated, time: .omitted) } ?? periodLabel)
+                Text(hoveredPoint.map { chartPeriod == .lifetime ? "Week of \($0.date.formatted(date: .abbreviated, time: .omitted))" : $0.date.formatted(date: .abbreviated, time: .omitted) }
+                    ?? "\(selection.measure == .tokens && (accountDays != nil || accountLifetimeWithoutDays) ? "Account" : "Local") \(periodLabel.lowercased())")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Text(hoveredPoint.map { exactValue($0.value) } ?? formatted(summary.value(for: selection.measure)))
+                    Text(hoveredPoint.map { exactValue($0.value) } ?? formatted(displayedChartValue))
                         .font(.system(size: 30, weight: .semibold)).tracking(-0.7)
                         .monospacedDigit().minimumScaleFactor(0.65).lineLimit(1)
                     Text(selection.measure.title.lowercased())
@@ -192,9 +214,9 @@ struct AnalysisView: View {
             .overlay {
                 if chartPoints.isEmpty {
                     ContentUnavailableView(
-                        "No usage in this period",
+                        accountLifetimeWithoutDays ? "Account daily history unavailable" : "No usage in this period",
                         systemImage: "chart.bar.xaxis",
-                        description: Text(health.detail)
+                        description: Text(accountLifetimeWithoutDays ? "The account lifetime total is available, but its daily chart is not." : health.detail)
                     )
                 }
             }
@@ -220,10 +242,12 @@ struct AnalysisView: View {
 
     @ViewBuilder
     private var modules: some View {
+        let accountTokens = accountDays.map { $0.reduce(0) { $0 + $1.tokens } }
+            ?? (selection.usesCustomDates || selection.period != .lifetime ? nil : snapshot.accountLifetimeTokens)
         MetricModule(
-            eyebrow: selection.usesCustomDates ? "Range tokens" : snapshot.accountLifetimeTokens == nil ? "Local lifetime" : "Account lifetime",
-            value: (selection.usesCustomDates ? summary.usage.total : snapshot.accountLifetimeTokens ?? snapshot.lifetime.total).compactTokenString,
-            detail: selection.usesCustomDates ? "Recorded within selected dates" : snapshot.accountLifetimeTokens == nil ? "Local history estimate" : "Codex account total",
+            eyebrow: selection.usesCustomDates ? "Local range tokens" : "\(accountTokens == nil ? "Local" : "Account") \(selection.period.title.lowercased())",
+            value: (accountTokens ?? summary.usage.total).compactTokenString,
+            detail: accountTokens == nil ? "Recorded local sessions" : "Codex account total",
             symbol: "sum",
             state: health
         )
@@ -259,7 +283,7 @@ struct AnalysisView: View {
 
     private var modelShareText: String {
         guard let model = summary.topModel, summary.usage.total > 0 else { return health.title }
-        return "\((Double(model.usage.total) / Double(summary.usage.total)).formatted(.percent.precision(.fractionLength(0)))) of selected usage"
+        return "\((Double(model.usage.total) / Double(summary.usage.total)).formatted(.percent.precision(.fractionLength(0)))) of local usage"
     }
 
     private var headroomValue: String {
@@ -361,6 +385,14 @@ enum AnalysisChartData {
         let points = days.map {
             AnalysisChartPoint(date: $0.date, value: $0.value(for: measure))
         }
+        return grouped(points, period: period, calendar: calendar)
+    }
+
+    static func points(from days: [AccountUsageDay], period: UsagePeriod, calendar: Calendar = .current) -> [AnalysisChartPoint] {
+        grouped(days.map { AnalysisChartPoint(date: $0.date, value: Double($0.tokens)) }, period: period, calendar: calendar)
+    }
+
+    private static func grouped(_ points: [AnalysisChartPoint], period: UsagePeriod, calendar: Calendar) -> [AnalysisChartPoint] {
         guard period == .lifetime else { return points }
 
         return Dictionary(grouping: points) {
