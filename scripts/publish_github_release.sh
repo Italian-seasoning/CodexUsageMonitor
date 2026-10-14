@@ -51,6 +51,7 @@ cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
 
 xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
+python3 "$ROOT/scripts/verify_update.py" "$APP" "$RELEASE_DIR/$ARCHIVE" "$RELEASE_DIR/appcast.xml" --sparkle-bin "$SPARKLE_BIN" --repository "$REPOSITORY" --require-newer
 cp "$DIST/CodexUsageMonitor-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
 (cd "$RELEASE_DIR" && shasum -a 256 "$ARCHIVE" CodexUsageMonitor-macOS.dmg > SHA256SUMS.txt)
 TITLE="Codex Usage Monitor $VERSION preview"
