@@ -40,6 +40,7 @@ struct BackgroundRefreshAgentStatus: Sendable {
 
 enum BackgroundRefreshAgent {
     static let identifier = "com.codexusage.Runway.refresh"
+    static let legacyIdentifier = "com.codexusage.CodexUsageMonitor.refresh"
     static let interval: TimeInterval = 60
 
     static var isStableInstall: Bool {
@@ -50,8 +51,11 @@ enum BackgroundRefreshAgent {
     }
 
     static func installIfEnabled() {
-        guard CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled else { return }
-        _ = install()
+        if CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled {
+            _ = install()
+        } else {
+            _ = uninstall()
+        }
     }
 
     @discardableResult
@@ -61,7 +65,8 @@ enum BackgroundRefreshAgent {
 
     @discardableResult
     static func install() -> Bool {
-        guard isStableInstall,
+        guard canManageInstalledAgents,
+              removeAgent(identifier: legacyIdentifier),
               OnboardingStateStore.hasCurrentCodexDataAccess(),
               let executable = Bundle.main.executableURL
         else {
@@ -96,9 +101,47 @@ enum BackgroundRefreshAgent {
 
     @discardableResult
     static func uninstall() -> Bool {
-        if isLoaded { _ = launchctl(["bootout", domain, plistURL.path]) }
-        try? FileManager.default.removeItem(at: plistURL)
-        return !FileManager.default.fileExists(atPath: plistURL.path) && !isLoaded
+        guard canManageInstalledAgents else { return false }
+        let legacyRemoved = removeAgent(identifier: legacyIdentifier)
+        let currentRemoved = removeAgent(identifier: identifier)
+        return legacyRemoved && currentRemoved
+    }
+
+    static func canManageAgents(bundleIdentifier: String?, isStableInstall: Bool) -> Bool {
+        isStableInstall && bundleIdentifier == "com.codexusage.CodexUsageMonitor"
+    }
+
+    private static var canManageInstalledAgents: Bool {
+        canManageAgents(bundleIdentifier: Bundle.main.bundleIdentifier, isStableInstall: isStableInstall)
+    }
+
+    private static func removeAgent(identifier: String) -> Bool {
+        removeAgent(identifier: identifier, directory: plistURL.deletingLastPathComponent(),
+            domain: domain, allowed: canManageInstalledAgents, run: launchctl)
+    }
+
+    /// Use the service label so upgrades can stop a loaded job whose plist was moved or removed.
+    /// Keep its registration file intact if launchctl cannot confirm the job was stopped.
+    static func removeAgent(identifier: String, directory: URL, domain: String,
+                            allowed: Bool, run: ([String]) -> Int32) -> Bool {
+        guard allowed else { return false }
+        let service = "\(domain)/\(identifier)"
+        let status = run(["print", service])
+        // `launchctl print` uses 113 for a missing service; other failures do not prove it is gone.
+        let serviceNotFound: Int32 = 113
+        guard status == 0 || status == serviceNotFound else { return false }
+        if status == 0 {
+            guard run(["bootout", service]) == 0,
+                  run(["print", service]) == serviceNotFound else { return false }
+        }
+        do {
+            try FileManager.default.removeItem(at: directory.appendingPathComponent("\(identifier).plist"))
+            return true
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            return true
+        } catch {
+            return false
+        }
     }
 
     static func status() -> BackgroundRefreshAgentStatus {

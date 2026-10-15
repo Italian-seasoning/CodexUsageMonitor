@@ -26,11 +26,11 @@ Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Itali
 brew install --cask italian-seasoning/tap/runway
 ```
 
-Current preview: **4.0.3**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.3/CodexUsageMonitor-macOS.dmg).
+Current preview: **4.0.8**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.8/Runway-macOS.dmg).
 
 Requires macOS 14 or newer on Apple silicon or Intel.
 
-These previews are not Apple-notarized. Homebrew verifies the archive checksum and leaves Gatekeeper enabled. If macOS blocks the first launch, review the app in **System Settings → Privacy & Security**. Sparkle verifies subsequent in-app updates with its signed feed.
+These previews use an anonymous ad-hoc signature and are not Apple-notarized. Homebrew verifies the archive checksum and leaves Gatekeeper enabled. If macOS blocks the first launch, review the app in **System Settings → Privacy & Security**. Sparkle verifies subsequent in-app updates with its signed feed.
 
 ## See the app
 
@@ -70,11 +70,11 @@ The source on `main` is the v4 preview. WidgetKit controls when desktop widgets 
 rate estimates appear only when enough recent observations are available.
 
 > [!WARNING]
-> **Preview software.** The current build is not signed with an Apple Developer ID
-> or notarized by Apple. macOS may require Control-clicking the app and choosing
-> **Open**. Treat it as a test build, not a finished production release.
+> **Preview software.** The package uses an anonymous ad-hoc signature and is not
+> notarized by Apple. If macOS blocks the first launch, review the app in
+> **System Settings → Privacy & Security**. Use it as a test build.
 
-[Download the unsigned preview](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg)
+[Download the Mac preview](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/Runway-macOS.dmg)
 · [View the website](https://italian-seasoning.github.io/CodexUsageMonitor/)
 · [Report an issue](https://github.com/Italian-seasoning/CodexUsageMonitor/issues)
 
@@ -121,7 +121,7 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Latest published Mac preview: **4.0.3**. Windows and Linux clients: **4.0.1**.
+Latest published Mac preview: **4.0.8**. Windows and Linux clients: **4.0.1**.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.

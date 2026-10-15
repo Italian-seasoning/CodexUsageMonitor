@@ -108,4 +108,102 @@ struct SnapshotRefreshRepairTests {
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: reloaded.lastAccountAttempt,
             trigger: .fallbackTimer, now: now.addingTimeInterval(60)))
     }
+
+    @Test("Legacy background migration stops the old label and removes only its registration")
+    func removesLegacyBackgroundAgent() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacy = directory.appendingPathComponent("\(BackgroundRefreshAgent.legacyIdentifier).plist")
+        let current = directory.appendingPathComponent("\(BackgroundRefreshAgent.identifier).plist")
+        let registration = Data("registration".utf8)
+        try registration.write(to: legacy)
+        try registration.write(to: current)
+        let service = "gui/123/\(BackgroundRefreshAgent.legacyIdentifier)"
+        var loaded = true
+        var calls: [[String]] = []
+        let removed = BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+            directory: directory, domain: "gui/123", allowed: true) { arguments in
+            calls.append(arguments)
+            if arguments == ["bootout", service] {
+                loaded = false
+                return 0
+            }
+            return loaded ? 0 : 113
+        }
+        #expect(removed)
+        #expect(calls == [["print", service], ["bootout", service], ["print", service]])
+        #expect(!FileManager.default.fileExists(atPath: legacy.path))
+        #expect(try Data(contentsOf: current) == registration)
+
+        // A loaded launchd job remains addressable after its old plist has disappeared.
+        loaded = true
+        calls = []
+        #expect(BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+            directory: directory, domain: "gui/123", allowed: true) { arguments in
+            calls.append(arguments)
+            if arguments.first == "bootout" { loaded = false; return 0 }
+            return loaded ? 0 : 113
+        })
+        #expect(calls.contains(["bootout", service]))
+    }
+
+    @Test("A disabled or unloaded legacy registration is removed without re-enabling its job")
+    func removesUnloadedLegacyBackgroundAgent() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacy = directory.appendingPathComponent("\(BackgroundRefreshAgent.legacyIdentifier).plist")
+        try Data("disabled registration".utf8).write(to: legacy)
+        var calls: [[String]] = []
+        #expect(BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+            directory: directory, domain: "gui/123", allowed: true) { arguments in
+            calls.append(arguments)
+            return 113
+        })
+        #expect(calls == [["print", "gui/123/\(BackgroundRefreshAgent.legacyIdentifier)"]])
+        #expect(!FileManager.default.fileExists(atPath: legacy.path))
+    }
+
+    @Test("Failed legacy job removal preserves its plist and reports failure")
+    func legacyBackgroundAgentRemovalFailure() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacy = directory.appendingPathComponent("\(BackgroundRefreshAgent.legacyIdentifier).plist")
+        let registration = Data("registration".utf8)
+        try registration.write(to: legacy)
+        for failure in [Int32(-1), 1, 5] {
+            #expect(!BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+                directory: directory, domain: "gui/123", allowed: true) { _ in failure })
+            #expect(try Data(contentsOf: legacy) == registration)
+        }
+        #expect(!BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+            directory: directory, domain: "gui/123", allowed: true) { arguments in
+            arguments.first == "bootout" ? 5 : 0
+        })
+        #expect(try Data(contentsOf: legacy) == registration)
+        // Even a successful bootout cannot remove the file while the job still appears loaded.
+        #expect(!BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+            directory: directory, domain: "gui/123", allowed: true) { _ in 0 })
+        #expect(try Data(contentsOf: legacy) == registration)
+    }
+
+    @Test("Debug and temporary app builds cannot modify production launch agents")
+    func backgroundAgentDebugIsolation() throws {
+        #expect(BackgroundRefreshAgent.canManageAgents(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor", isStableInstall: true))
+        #expect(!BackgroundRefreshAgent.canManageAgents(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor.debug", isStableInstall: true))
+        #expect(!BackgroundRefreshAgent.canManageAgents(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor", isStableInstall: false))
+        #expect(!BackgroundRefreshAgent.canManageAgents(bundleIdentifier: nil, isStableInstall: true))
+        var called = false
+        #expect(!BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.legacyIdentifier,
+            directory: URL(fileURLWithPath: "/unused"), domain: "gui/123", allowed: false) { _ in
+            called = true
+            return 0
+        })
+        #expect(!called)
+    }
 }
