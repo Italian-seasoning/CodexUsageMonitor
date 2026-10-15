@@ -12,6 +12,9 @@ enum WidgetFamilySemanticBuilder {
         let accountDays = snapshot.accountDays(for: configuration.period, calendar: calendar, now: now)
         let accountLifetime = configuration.period == .lifetime ? snapshot.accountLifetimeTokens : nil
         let accountSource = accountDays != nil || accountLifetime != nil
+        let accountPending = snapshot.accountUsageIsPending(for: configuration.period, calendar: calendar, now: now)
+        let localHistoryLabel = summary.hasPartialLegacyCoverage ? " · Partial local history" : ""
+        let localDataPartial = summary.hasPartialLegacyCoverage || snapshot.sourceReadPending == true
         let tokenTotal = accountDays.map { $0.reduce(0) { $0 + $1.tokens } } ?? accountLifetime ?? summary.usage.total
         let tokenChart: WidgetChartContent? = accountDays.map { days in
             WidgetChartContent(
@@ -20,8 +23,8 @@ enum WidgetFamilySemanticBuilder {
             )
         } ?? (accountLifetime == nil ? chart(summary.days) { Double($0.usage.total) } : nil)
         let tokenFreshness: WidgetFreshness = accountSource
-            ? (snapshot.accountUsageObservedAt.map { now.timeIntervalSince($0) <= 180 } == true ? .fresh : .stale)
-            : freshness(snapshot, hasData: tokenTotal > 0, now: now)
+            ? (snapshot.accountUsageObservedAt.map { now.timeIntervalSince($0) <= 180 } == true ? accountPending ? .partial : .fresh : .stale)
+            : freshness(snapshot, hasData: tokenTotal > 0, now: now, partial: localDataPartial || accountPending)
 
         switch configuration.family {
         case .limits:
@@ -30,27 +33,27 @@ enum WidgetFamilySemanticBuilder {
             return WidgetSemanticContent(
                 eyebrow: "Usage Pulse",
                 heroValue: tokenTotal.compactTokenString,
-                heroLabel: "\(accountSource ? "Account" : "Local") \(configuration.period.widgetLabel.lowercased()) tokens",
+                heroLabel: "\(accountSource ? "Account" : "Local") \(configuration.period.widgetLabel.lowercased()) tokens\(accountSource ? accountPending ? " · Today pending" : "" : localHistoryLabel)",
                 secondaryValues: [
-                    .init(label: "Sessions", value: summary.sessionCount.formatted()),
-                    .init(label: "Requests", value: summary.requestCount.formatted()),
-                    .init(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
+                    .init(label: "Local sessions", value: summary.sessionCount.formatted()),
+                    .init(label: "Local requests", value: summary.requestCount.formatted()),
+                    .init(label: "Local API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
                 ],
                 chart: tokenChart,
-                freshness: tokenFreshness
+                freshness: snapshot.sourceReadPending == true && tokenFreshness == .fresh ? .partial : tokenFreshness
             )
         case .costLens:
             return WidgetSemanticContent(
                 eyebrow: "Cost Lens",
                 heroValue: summary.estimatedCostUSD.compactCurrencyString,
-                heroLabel: "\(configuration.period.widgetLabel) API estimate",
+                heroLabel: "\(configuration.period.widgetLabel) API estimate\(localHistoryLabel)",
                 secondaryValues: [
                     .init(label: "Local tokens", value: summary.usage.total.compactTokenString),
                     .init(label: "Top model", value: ModelPricingCatalog.displayName(for: summary.topModel?.model)),
                     .init(label: "Unpriced lifetime", value: snapshot.unpricedTokens?.compactTokenString ?? "—")
                 ],
                 chart: chart(summary.days) { Double($0.estimatedCostMicros ?? 0) / 1_000_000 },
-                freshness: freshness(snapshot, hasData: summary.usage.hasUsage, now: now)
+                freshness: freshness(snapshot, hasData: summary.usage.hasUsage, now: now, partial: localDataPartial)
             )
         case .modelMix:
             let share = summary.topModel.map {
@@ -59,14 +62,14 @@ enum WidgetFamilySemanticBuilder {
             return WidgetSemanticContent(
                 eyebrow: "Model Mix",
                 heroValue: ModelPricingCatalog.displayName(for: summary.topModel?.model),
-                heroLabel: "\(share.formatted(.percent.precision(.fractionLength(0)))) of \(configuration.period.widgetLabel.lowercased()) tokens",
+                heroLabel: "\(share.formatted(.percent.precision(.fractionLength(0)))) of \(configuration.period.widgetLabel.lowercased()) tokens\(localHistoryLabel)",
                 secondaryValues: [
                     .init(label: "Attributed", value: (summary.topModel?.usage.total ?? 0).compactTokenString),
                     .init(label: "Total", value: summary.usage.total.compactTokenString),
                     .init(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
                 ],
                 chart: chart(summary.days) { Double($0.usage.total) },
-                freshness: freshness(snapshot, hasData: summary.topModel != nil, now: now),
+                freshness: freshness(snapshot, hasData: summary.topModel != nil, now: now, partial: localDataPartial),
                 fraction: share
             )
         case .headroomImpact:
@@ -76,7 +79,7 @@ enum WidgetFamilySemanticBuilder {
         case .dashboard:
             return dashboard(snapshot: snapshot, summary: summary, configuration: configuration,
                 tokenTotal: tokenTotal, tokenChart: tokenChart, accountSource: accountSource,
-                tokenFreshness: tokenFreshness, now: now)
+                accountPending: accountPending, tokenFreshness: tokenFreshness, now: now)
         }
     }
 
@@ -103,7 +106,9 @@ enum WidgetFamilySemanticBuilder {
                 accessibilitySummary: "Remaining allowance history, latest \(Int(remaining.rounded())) percent"
             ),
             freshness: preferred.map { now.timeIntervalSince($0.observedAt) > 180 } == true
-                ? .stale : freshness(snapshot, hasData: preferred != nil, now: now)
+                ? .stale : freshness(snapshot, hasData: preferred != nil, now: now,
+                    partial: snapshot.sourceReadPending == true
+                        && snapshot.rateLimits?.accountObservedAt.map { now.timeIntervalSince($0) <= 180 } != true)
         )
     }
 
@@ -118,14 +123,15 @@ enum WidgetFamilySemanticBuilder {
         return WidgetSemanticContent(
             eyebrow: "Headroom Impact",
             heroValue: saved?.compactTokenString ?? "—",
-            heroLabel: "\(period.widgetLabel) tokens saved",
+            heroLabel: "\(period == .lifetime ? (headroom?.trackedPeriodLabel ?? "Tracked") : period.widgetLabel) tokens saved",
             secondaryValues: [
-                .init(label: "Lifetime savings", value: headroom?.savingsPercent.compactPercentString ?? "—"),
-                .init(label: "Lifetime API avoided", value: headroom?.costSavedUSD.compactCurrencyString ?? "—"),
-                .init(label: "Lifetime requests", value: headroom?.lifetimeRequests.formatted() ?? "—")
+                .init(label: "\(headroom?.trackedPeriodLabel ?? "Tracked") savings", value: headroom?.savingsPercent.compactPercentString ?? "—"),
+                .init(label: "\(headroom?.trackedPeriodLabel ?? "Tracked") API estimate", value: headroom?.costSavedUSD.compactCurrencyString ?? "—"),
+                .init(label: "\(headroom?.trackedPeriodLabel ?? "Tracked") requests", value: headroom?.lifetimeRequests.formatted() ?? "—")
             ],
             chart: chart(summary.days) { Double($0.headroomSaved ?? 0) },
-            freshness: freshness(snapshot, hasData: saved != nil, now: now)
+            freshness: freshness(snapshot, hasData: saved != nil, now: now,
+                partial: period == .month && snapshot.sourceReadPending == true)
         )
     }
 
@@ -145,7 +151,8 @@ enum WidgetFamilySemanticBuilder {
                 WidgetChartContent(points: points.map { WidgetChartPoint(date: $0.date, value: Double($0.totalTokens)) },
                     accessibilitySummary: "Recorded session token history")
             },
-            freshness: freshness(snapshot, hasData: (activity?.usage ?? snapshot.currentSession).hasUsage, now: now)
+            freshness: freshness(snapshot, hasData: (activity?.usage ?? snapshot.currentSession).hasUsage,
+                now: now, partial: snapshot.sourceReadPending == true)
         )
     }
 
@@ -156,15 +163,17 @@ enum WidgetFamilySemanticBuilder {
         tokenTotal: Int,
         tokenChart: WidgetChartContent?,
         accountSource: Bool,
+        accountPending: Bool,
         tokenFreshness: WidgetFreshness,
         now: Date
     ) -> WidgetSemanticContent {
         let weeklyWindow = snapshot.rateLimits?.weekly.flatMap { $0.isCurrent(at: now) ? $0 : nil }
         let weeklyRemaining = weeklyWindow?.remainingPercent
-        let usage = WidgetLabeledValue(label: "\(accountSource ? "Account" : "Local") tokens", value: tokenTotal.compactTokenString)
+        let partialLocalHistory = !accountSource && summary.hasPartialLegacyCoverage
+        let usage = WidgetLabeledValue(label: partialLocalHistory ? "Partial local history" : accountSource && accountPending ? "Account · Today pending" : "\(accountSource ? "Account" : "Local") tokens", value: tokenTotal.compactTokenString)
         let limits = WidgetLabeledValue(label: "Weekly left", value: weeklyRemaining.map { "\(Int($0.rounded()))%" } ?? "—")
-        let cost = WidgetLabeledValue(label: "API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
-        let model = WidgetLabeledValue(label: "Top model", value: ModelPricingCatalog.displayName(for: summary.topModel?.model))
+        let cost = WidgetLabeledValue(label: "Local API equivalent", value: summary.estimatedCostUSD.compactCurrencyString)
+        let model = WidgetLabeledValue(label: "Local top model", value: ModelPricingCatalog.displayName(for: summary.topModel?.model))
         let values: [WidgetLabeledValue]
         let hero: WidgetLabeledValue
         switch configuration.dashboardArrangement {
@@ -178,16 +187,17 @@ enum WidgetFamilySemanticBuilder {
             hero = usage
             values = [model, cost, limits]
         }
+        let baseFreshness: WidgetFreshness = configuration.dashboardArrangement == .limitsFirst
+            ? (weeklyWindow == nil ? .unavailable : now.timeIntervalSince(weeklyWindow!.observedAt) > 180 ? .stale : freshness(snapshot, hasData: true, now: now))
+            : tokenFreshness
         return WidgetSemanticContent(
             eyebrow: "Dashboard",
             heroValue: hero.value,
             heroLabel: configuration.dashboardArrangement == .limitsFirst
-                ? "Weekly remaining" : "\(accountSource ? "Account" : "Local") \(configuration.period.widgetLabel.lowercased()) tokens",
+                ? "Weekly remaining" : "\(accountSource ? "Account" : "Local") \(configuration.period.widgetLabel.lowercased()) tokens\(accountSource && accountPending ? " · Today pending" : partialLocalHistory ? " · Partial local history" : "")",
             secondaryValues: values,
             chart: tokenChart,
-            freshness: configuration.dashboardArrangement == .limitsFirst
-                ? (weeklyWindow == nil ? .unavailable : now.timeIntervalSince(weeklyWindow!.observedAt) > 180 ? .stale : freshness(snapshot, hasData: true, now: now))
-                : tokenFreshness
+            freshness: (snapshot.sourceReadPending == true || accountPending) && baseFreshness == .fresh ? .partial : baseFreshness
         )
     }
 
@@ -207,11 +217,12 @@ enum WidgetFamilySemanticBuilder {
     private static func freshness(
         _ snapshot: CodexUsageSnapshot,
         hasData: Bool,
-        now: Date
+        now: Date,
+        partial: Bool = false
     ) -> WidgetFreshness {
         guard hasData else { return snapshot.hasUsage ? .partial : .unavailable }
         guard let generatedAt = snapshot.generatedAt else { return .stale }
-        return now.timeIntervalSince(generatedAt) > 10 * 60 ? .stale : .fresh
+        return now.timeIntervalSince(generatedAt) > 10 * 60 ? .stale : partial ? .partial : .fresh
     }
 
     private static func compactDuration(_ seconds: TimeInterval) -> String {

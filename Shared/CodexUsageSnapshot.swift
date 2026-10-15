@@ -1,17 +1,72 @@
 import Darwin
 import Foundation
+import CryptoKit
 
 enum JSONLFileReader {
+    struct SourceIdentity: Codable, Equatable, Sendable {
+        var device: UInt64
+        var inode: UInt64
+    }
+
+    struct ReadProgress: Codable, Equatable, Sendable {
+        var bytesRead: UInt64
+        var prefixDigest: Data
+        var endedWithNewline: Bool
+        var identity: SourceIdentity
+    }
+
+    enum ReadError: Error, Equatable {
+        case invalidOffset
+        case sourceReplaced
+        case prefixMismatch
+        case sourceChanged
+    }
+
     // Transcript size must not determine refresh memory. Only a partial row is
     // carried between fixed-size reads; JSON objects are released after each row.
+    @discardableResult
     static func forEachRow(
         at url: URL,
         chunkSize: Int = 64 * 1024,
+        offset: UInt64 = 0,
+        expectedPrefixDigest: Data? = nil,
+        expectedIdentity: SourceIdentity? = nil,
         _ visit: ([String: Any]) -> Void
-    ) throws {
+    ) throws -> ReadProgress {
         precondition(chunkSize > 0)
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
+        var initial = stat()
+        try checkPOSIX(Darwin.fstat(handle.fileDescriptor, &initial))
+        let identity = sourceIdentity(initial)
+        guard expectedIdentity == nil || expectedIdentity == identity else {
+            throw ReadError.sourceReplaced
+        }
+        guard initial.st_size >= 0, offset <= UInt64(initial.st_size) else {
+            throw ReadError.invalidOffset
+        }
+        let initialSize = UInt64(initial.st_size)
+        var cursor: UInt64 = 0
+        var hasher = SHA256()
+        var lastByte: UInt8?
+
+        func read(through end: UInt64) throws -> Data {
+            let count = Int(min(UInt64(chunkSize), end - cursor))
+            guard let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: count) }),
+                  !chunk.isEmpty else { throw ReadError.sourceChanged }
+            hasher.update(data: chunk)
+            cursor += UInt64(chunk.count)
+            lastByte = chunk.last
+            return chunk
+        }
+
+        // Verify the entire cached prefix without decoding it. No parser state
+        // may be advanced until both its bytes and source identity match.
+        while cursor < offset { _ = try read(through: offset) }
+        if let expectedPrefixDigest, Data(hasher.finalize()) != expectedPrefixDigest {
+            throw ReadError.prefixMismatch
+        }
+        guard offset == 0 || lastByte == 10 else { throw ReadError.invalidOffset }
         var pending = Data()
 
         func consume(_ data: Data) {
@@ -23,8 +78,10 @@ enum JSONLFileReader {
             }
         }
 
-        while let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: chunkSize) }),
-              !chunk.isEmpty {
+        // Bound the suffix to the size observed on this same descriptor. An
+        // append during a visit is rejected below instead of extending the read.
+        while cursor < initialSize {
+            let chunk = try read(through: initialSize)
             var start = chunk.startIndex
             while let newline = chunk[start...].firstIndex(of: 10) {
                 if pending.isEmpty {
@@ -42,6 +99,38 @@ enum JSONLFileReader {
         }
         // Codex may leave a valid final JSON row without a terminating newline.
         consume(pending)
+
+        var final = stat()
+        try checkPOSIX(Darwin.fstat(handle.fileDescriptor, &final))
+        var path = stat()
+        try checkPOSIX(url.withUnsafeFileSystemRepresentation { pointer in
+            guard let pointer else { errno = EINVAL; return -1 }
+            return Darwin.fstatat(AT_FDCWD, pointer, &path, 0)
+        })
+        guard unchanged(initial, final), unchanged(initial, path) else {
+            throw ReadError.sourceChanged
+        }
+        return ReadProgress(bytesRead: cursor, prefixDigest: Data(hasher.finalize()),
+            endedWithNewline: lastByte == nil || lastByte == 10, identity: identity)
+    }
+
+    private static func sourceIdentity(_ value: stat) -> SourceIdentity {
+        SourceIdentity(device: UInt64(UInt32(bitPattern: value.st_dev)), inode: UInt64(value.st_ino))
+    }
+
+    private static func unchanged(_ lhs: stat, _ rhs: stat) -> Bool {
+        sourceIdentity(lhs) == sourceIdentity(rhs)
+            && lhs.st_size == rhs.st_size
+            && lhs.st_mtimespec.tv_sec == rhs.st_mtimespec.tv_sec
+            && lhs.st_mtimespec.tv_nsec == rhs.st_mtimespec.tv_nsec
+            && lhs.st_ctimespec.tv_sec == rhs.st_ctimespec.tv_sec
+            && lhs.st_ctimespec.tv_nsec == rhs.st_ctimespec.tv_nsec
+    }
+
+    private static func checkPOSIX(_ result: Int32) throws {
+        guard result == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
     }
 }
 
@@ -93,6 +182,7 @@ struct DailyUsage: Codable, Equatable, Identifiable, Sendable {
     var turns: Int? = nil
     var headroomSaved: Int? = nil
     var estimatedCostMicros: Int? = nil
+    var legacyCoverageIncomplete: Bool? = nil
 
     var id: Date { date }
 }
@@ -163,7 +253,7 @@ struct ModelPricing: Equatable {
 }
 
 enum ModelPricingCatalog {
-    static let version = "OpenAI Standard API · GPT-6.1 Sol added 2026-10-04"
+    static let version = "OpenAI Standard API · verified 2026-10-14"
     static let sourceURL = "https://developers.openai.com/api/docs/pricing"
 
     private static let prices: [String: ModelPricing] = [
@@ -173,7 +263,7 @@ enum ModelPricingCatalog {
         "gpt-6-sol": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.2, outputPerMillion: 10, longInputPerMillion: 4, longCachedInputPerMillion: 0.4, longOutputPerMillion: 15, longContextThreshold: 272_000),
         "gpt-6-luna": ModelPricing(inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5, longInputPerMillion: 0.2, longCachedInputPerMillion: 0.02, longOutputPerMillion: 0.75, longContextThreshold: 272_000),
         "gpt-5.6-sol": ModelPricing(inputPerMillion: 4, cachedInputPerMillion: 0.4, outputPerMillion: 20, longInputPerMillion: 8, longCachedInputPerMillion: 0.8, longOutputPerMillion: 30, longContextThreshold: 272_000),
-        "gpt-5.6-terra": ModelPricing(inputPerMillion: 2.5, cachedInputPerMillion: 0.25, outputPerMillion: 15, longInputPerMillion: 5, longCachedInputPerMillion: 0.5, longOutputPerMillion: 22.5, longContextThreshold: 272_000),
+        "gpt-5.6-terra": ModelPricing(inputPerMillion: 2, cachedInputPerMillion: 0.2, outputPerMillion: 12, longInputPerMillion: 4, longCachedInputPerMillion: 0.4, longOutputPerMillion: 18, longContextThreshold: 272_000),
         "gpt-5.6-luna": ModelPricing(inputPerMillion: 0.2, cachedInputPerMillion: 0.02, outputPerMillion: 1.2, longInputPerMillion: 0.4, longCachedInputPerMillion: 0.04, longOutputPerMillion: 1.8, longContextThreshold: 272_000),
         "gpt-5.5": ModelPricing(inputPerMillion: 5, cachedInputPerMillion: 0.5, outputPerMillion: 30, longInputPerMillion: 10, longCachedInputPerMillion: 1, longOutputPerMillion: 45, longContextThreshold: 272_000),
         "gpt-5.5-pro": ModelPricing(inputPerMillion: 30, cachedInputPerMillion: 30, outputPerMillion: 180, longInputPerMillion: 60, longCachedInputPerMillion: 60, longOutputPerMillion: 270, longContextThreshold: 272_000),
@@ -182,6 +272,8 @@ enum ModelPricingCatalog {
         "gpt-5.4-nano": ModelPricing(inputPerMillion: 0.2, cachedInputPerMillion: 0.02, outputPerMillion: 1.25, longInputPerMillion: nil, longCachedInputPerMillion: nil, longOutputPerMillion: nil, longContextThreshold: nil),
         "gpt-5.4-pro": ModelPricing(inputPerMillion: 30, cachedInputPerMillion: 30, outputPerMillion: 180, longInputPerMillion: 60, longCachedInputPerMillion: 60, longOutputPerMillion: 270, longContextThreshold: 272_000)
     ]
+
+    private static let modelIDsBySpecificity = prices.keys.sorted { $0.count > $1.count }
 
     static func pricing(for model: String?) -> ModelPricing? {
         guard let normalized = normalizedModelID(model) else { return nil }
@@ -200,7 +292,7 @@ enum ModelPricingCatalog {
 
     private static func normalizedModelID(_ model: String?) -> String? {
         guard let model = model?.lowercased() else { return nil }
-        return prices.keys.sorted { $0.count > $1.count }.first { model == $0 || model.hasPrefix($0 + "-") }
+        return modelIDsBySpecificity.first { model == $0 || model.hasPrefix($0 + "-") }
     }
 }
 
@@ -235,6 +327,8 @@ struct HeadroomSavings: Codable, Equatable {
     var isAvailable: Bool {
         lifetimeTokensSaved > 0 || lifetimeRequests > 0 || lastUpdated != nil
     }
+
+    var trackedPeriodLabel: String { (schemaVersion ?? 1) >= 2 ? "Last 30 days" : "Tracked" }
 }
 
 struct HeadroomActivity: Equatable {
@@ -427,6 +521,7 @@ struct CodexUsageSnapshot: Codable, Equatable {
     var lastUpdated: Date?
     var activityDays: [DailyUsage]
     var generatedAt: Date? = nil
+    var sourceReadPending: Bool? = nil
     var sessionCount: Int? = nil
     var turnCount: Int? = nil
     var currentSessionTurns: Int? = nil
@@ -493,6 +588,7 @@ extension CodexUsageSnapshot {
         case lastUpdated
         case activityDays
         case generatedAt
+        case sourceReadPending
         case sessionCount
         case turnCount
         case currentSessionTurns
@@ -529,6 +625,7 @@ extension CodexUsageSnapshot {
         lastUpdated = try values.decodeIfPresent(Date.self, forKey: .lastUpdated)
         activityDays = try values.decode([DailyUsage].self, forKey: .activityDays)
         generatedAt = try values.decodeIfPresent(Date.self, forKey: .generatedAt)
+        sourceReadPending = try values.decodeIfPresent(Bool.self, forKey: .sourceReadPending)
         sessionCount = try values.decodeIfPresent(Int.self, forKey: .sessionCount)
         turnCount = try values.decodeIfPresent(Int.self, forKey: .turnCount)
         currentSessionTurns = try values.decodeIfPresent(Int.self, forKey: .currentSessionTurns)
@@ -563,7 +660,9 @@ extension CodexUsageSnapshot {
         guard !legacySnapshots.isEmpty else { return self }
         var result = self
         var days = Dictionary(uniqueKeysWithValues: result.activityDays.map {
-            (calendar.startOfDay(for: $0.date), $0)
+            var day = $0
+            day.legacyCoverageIncomplete = nil
+            return (calendar.startOfDay(for: day.date), day)
         })
         var importedDates = Set<Date>()
 
@@ -571,6 +670,10 @@ extension CodexUsageSnapshot {
             for var day in snapshot.activityDays {
                 let date = calendar.startOfDay(for: day.date)
                 let existing = days[date]
+                if let existing, existing.usage.hasUsage, day.usage.total > existing.usage.total {
+                    // Daily aggregates have no session provenance; retain totals and disclose the overlap.
+                    days[date]?.legacyCoverageIncomplete = true
+                }
                 guard existing == nil || existing?.usage.hasUsage == false && day.usage.hasUsage else {
                     continue
                 }
@@ -735,6 +838,7 @@ struct CodexUsageWidgetSettingsBySize: Codable, Equatable {
 }
 
 enum WidgetTheme: String, Codable, CaseIterable, Identifiable, Sendable {
+    case runway
     case crimson
     case classicRed
     case darkGlass
@@ -751,6 +855,7 @@ enum WidgetTheme: String, Codable, CaseIterable, Identifiable, Sendable {
         case .classicRed: "Classic Red"
         case .darkGlass: "Graphite"
         case .frostedWhite: "Paper"
+        case .runway: "Runway Glass"
         case .monochrome: "System mono"
         case .rain: "Vancouver Rain"
         case .autumn: "Autumn"
@@ -1157,31 +1262,56 @@ struct CodexUsageReader {
         )
     }
 
-    func sourceFingerprint() -> String {
+    func sourceFingerprint(now: Date = Date()) -> String {
         var hash: UInt64 = 14_695_981_039_346_656_037
         let prime: UInt64 = 1_099_511_628_211
-        for file in jsonlFiles().sorted(by: { $0.path < $1.path }) {
-            let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let calendarData = (try? encoder.encode(calendar)) ?? Data()
+        for byte in calendarData + Data("|\(calendar.timeZone.secondsFromGMT(for: now))".utf8) {
+            hash = (hash ^ UInt64(byte)) &* prime
+        }
+        var failedSubtrees = Set<String>()
+        let files = jsonlFiles { failed in _ = failedSubtrees.insert(canonicalSourcePath(failed)) }
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            var metadata = stat()
+            let status = file.withUnsafeFileSystemRepresentation { pointer in
+                guard let pointer else { errno = EINVAL; return Int32(-1) }
+                return Darwin.fstatat(AT_FDCWD, pointer, &metadata, 0)
+            }
             let parts = [
                 file.path,
-                String(values?.fileSize ?? -1),
-                String(values?.contentModificationDate?.timeIntervalSince1970.bitPattern ?? 0)
+                String(status), String(metadata.st_dev), String(metadata.st_ino), String(metadata.st_size),
+                String(metadata.st_mtimespec.tv_sec), String(metadata.st_mtimespec.tv_nsec),
+                String(metadata.st_ctimespec.tv_sec), String(metadata.st_ctimespec.tv_nsec)
             ]
             for byte in parts.joined(separator: "|").utf8 {
                 hash = (hash ^ UInt64(byte)) &* prime
             }
         }
-        return "session-activity-v6|" + String(hash, radix: 16)
+        for failed in failedSubtrees.sorted() {
+            for byte in ("|unreadable-subtree|" + failed).utf8 {
+                hash = (hash ^ UInt64(byte)) &* prime
+            }
+        }
+        return "session-activity-v7|" + String(hash, radix: 16)
     }
 
     func snapshot(now: Date = Date(), headroomActivity: HeadroomActivity? = nil) -> CodexUsageSnapshot {
+        snapshotResult(now: now, headroomActivity: headroomActivity).snapshot
+    }
+
+    func snapshotResult(now: Date = Date(), headroomActivity: HeadroomActivity? = nil)
+        -> (snapshot: CodexUsageSnapshot, sourceReadPending: Bool) {
         // Detached tasks do not provide a per-refresh Foundation autorelease pool.
         // Keep only the returned value alive after parsing and cache serialization.
         autoreleasepool { makeSnapshot(now: now, headroomActivity: headroomActivity) }
     }
 
-    private func makeSnapshot(now: Date, headroomActivity: HeadroomActivity?) -> CodexUsageSnapshot {
-        let parsedFiles = parsedFilesUsingCache()
+    private func makeSnapshot(now: Date, headroomActivity: HeadroomActivity?)
+        -> (snapshot: CodexUsageSnapshot, sourceReadPending: Bool) {
+        let read = parsedFilesUsingCache(now: now)
+        let parsedFiles = read.files
         let observedFiles = deduplicatedFiles(parsedFiles.filter { !$0.isSubagent })
         let files = observedFiles.filter { !$0.samples.isEmpty }
         let rateLimits = rateLimitSnapshot(from: parsedFiles.flatMap(\.rateLimits), now: now)
@@ -1310,7 +1440,7 @@ struct CodexUsageReader {
             return activity
         }.sorted { ($0.observedAt ?? .distantPast) > ($1.observedAt ?? .distantPast) }
 
-        return CodexUsageSnapshot(
+        return (CodexUsageSnapshot(
             currentSession: newest?.total ?? .zero,
             lifetime: lifetime,
             today: byDay[startOfToday]?.usage ?? .zero,
@@ -1339,7 +1469,7 @@ struct CodexUsageReader {
             rateLimits: rateLimits,
             recentSessions: recentSessions,
             sessionActivity: Array(latestActivity.prefix(12))
-        )
+        ), read.sourceReadPending)
     }
 
     private func recentSessionSummaries(
@@ -1520,11 +1650,22 @@ struct CodexUsageReader {
         return best
     }
 
-    private func jsonlFiles() -> [URL] {
+    private func jsonlFiles(onEnumerationError: ((URL) -> Void)? = nil) -> [URL] {
         [sessionsDirectory, archivedSessionsDirectory].compactMap { $0 }.flatMap { directory -> [URL] in
             guard let enumerator = FileManager.default.enumerator(
                 at: directory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
-                options: [.skipsHiddenFiles]) else { return [] }
+                options: [.skipsHiddenFiles], errorHandler: { url, error in
+                    if !isMissingSource(error) { onEnumerationError?(url) }
+                    return true
+                }) else {
+                var metadata = stat()
+                let status = directory.withUnsafeFileSystemRepresentation { pointer in
+                    guard let pointer else { errno = EINVAL; return Int32(-1) }
+                    return Darwin.fstatat(AT_FDCWD, pointer, &metadata, 0)
+                }
+                if status == 0 || (errno != ENOENT && errno != ENOTDIR) { onEnumerationError?(directory) }
+                return []
+            }
             return enumerator.compactMap { item in
                 guard let url = item as? URL, url.pathExtension == "jsonl" else { return nil }
                 return url
@@ -1532,91 +1673,236 @@ struct CodexUsageReader {
         }
     }
 
-    private func parsedFilesUsingCache() -> [ParsedFile] {
-        let existingCache = autoreleasepool { loadReaderCache() }
+    private func parsedFilesUsingCache(now: Date) -> (files: [ParsedFile], sourceReadPending: Bool) {
+        let existingCache = autoreleasepool { loadReaderCache(now: now) }
         var nextEntries: [String: CachedFile] = [:]
         var parsedFiles: [ParsedFile] = []
+        var sourceReadPending = false
+        var failedSubtrees: [String] = []
+        let files = jsonlFiles { failed in
+            failedSubtrees.append(canonicalSourcePath(failed))
+            sourceReadPending = true
+        }
 
-        for file in jsonlFiles() {
+        for file in files {
             let path = file.path
             let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
             let fileSize = values?.fileSize ?? -1
             let modificationTime = values?.contentModificationDate?.timeIntervalSince1970 ?? -1
-
-            let parsed: ParsedFile?
-            if let cached = existingCache.entries[path],
-               cached.fileSize == fileSize,
-               cached.modificationTime == modificationTime {
-                parsed = cached.parsedFile
-            } else {
-                parsed = parseSessionFile(file)
+            var metadata = stat()
+            let hasMetadata = file.withUnsafeFileSystemRepresentation { pointer in
+                guard let pointer else { return false }
+                return Darwin.fstatat(AT_FDCWD, pointer, &metadata, 0) == 0
             }
 
-            nextEntries[path] = CachedFile(
-                fileSize: fileSize,
-                modificationTime: modificationTime,
-                parsedFile: parsed
-            )
-            if let parsed { parsedFiles.append(parsed) }
+            let cached = existingCache.entries[path]
+            let invalidCheckpoint = cached?.checkpoint != nil && cached?.parsedFile == nil
+                && cached?.checkpoint?.activity == nil
+            var unchanged = cached?.fileSize == fileSize && cached?.modificationTime == modificationTime
+                && fileSize >= 0 && values?.contentModificationDate != nil && hasMetadata
+                && !invalidCheckpoint
+            let identity = hasMetadata ? JSONLFileReader.SourceIdentity(
+                device: UInt64(UInt32(bitPattern: metadata.st_dev)), inode: UInt64(metadata.st_ino)) : nil
+            if let expectedIdentity = cached?.checkpoint?.progress.identity ?? cached?.sourceIdentity {
+                unchanged = unchanged && expectedIdentity == identity
+            }
+            if let changeTime = cached?.changeTimeSeconds {
+                unchanged = unchanged && changeTime == Int64(metadata.st_ctimespec.tv_sec)
+                    && cached?.changeTimeNanoseconds == Int64(metadata.st_ctimespec.tv_nsec)
+            }
+
+            let entry: CachedFile?
+            if unchanged {
+                var trusted = cached
+                trusted?.changeTimeSeconds = Int64(metadata.st_ctimespec.tv_sec)
+                trusted?.changeTimeNanoseconds = Int64(metadata.st_ctimespec.tv_nsec)
+                let fallbackIdentity = trusted?.checkpoint == nil ? identity : nil
+                trusted?.sourceIdentity = fallbackIdentity
+                entry = trusted
+            } else {
+                do {
+                    let read: (parsed: ParsedFile?, checkpoint: ParserCheckpoint)
+                    if !invalidCheckpoint, let cached, let checkpoint = cached.checkpoint,
+                       checkpoint.progress.endedWithNewline,
+                       cached.fileSize >= 0, UInt64(cached.fileSize) == checkpoint.progress.bytesRead,
+                       fileSize > cached.fileSize {
+                        do {
+                            read = try parseSessionFile(file, resuming: cached)
+                        } catch let error as JSONLFileReader.ReadError {
+                            switch error {
+                            case .invalidOffset, .sourceReplaced, .prefixMismatch:
+                                read = try parseSessionFile(file)
+                            case .sourceChanged:
+                                throw error
+                            }
+                        }
+                    } else {
+                        read = try parseSessionFile(file)
+                    }
+                    entry = CachedFile(fileSize: Int(read.checkpoint.progress.bytesRead),
+                        modificationTime: modificationTime, parsedFile: read.parsed, checkpoint: read.checkpoint,
+                        changeTimeSeconds: hasMetadata ? Int64(metadata.st_ctimespec.tv_sec) : nil,
+                        changeTimeNanoseconds: hasMetadata ? Int64(metadata.st_ctimespec.tv_nsec) : nil)
+                } catch {
+                    // A failed read must retain known usage and remain eligible for retry.
+                    if isMissingSource(error) {
+                        entry = nil
+                    } else {
+                        sourceReadPending = true
+                        entry = cached
+                    }
+                }
+            }
+            if let entry {
+                nextEntries[path] = entry
+                if let parsed = entry.parsedFile { parsedFiles.append(parsed) }
+            }
+        }
+        for (path, entry) in existingCache.entries where nextEntries[path] == nil {
+            let normalized = canonicalSourcePath(URL(fileURLWithPath: path))
+            if failedSubtrees.contains(where: { normalized == $0 || normalized.hasPrefix($0 + "/") }) {
+                nextEntries[path] = entry
+                if let parsed = entry.parsedFile { parsedFiles.append(parsed) }
+            }
         }
 
         autoreleasepool {
-            saveReaderCache(ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: nextEntries))
+            saveReaderCache(ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: nextEntries), now: now)
         }
-        return parsedFiles
+        return (parsedFiles, sourceReadPending)
     }
 
-    private func loadReaderCache() -> ReaderCache {
+    private func canonicalSourcePath(_ url: URL) -> String {
+        var ancestor = url.standardizedFileURL
+        var suffix: [String] = []
+        while true {
+            if let resolved = ancestor.path.withCString({ Darwin.realpath($0, nil) }) {
+                let prefix = String(cString: resolved)
+                free(resolved)
+                guard !suffix.isEmpty else { return prefix }
+                return prefix + (prefix.hasSuffix("/") ? "" : "/") + suffix.reversed().joined(separator: "/")
+            }
+            guard ancestor.path != "/" else { return url.standardizedFileURL.path }
+            suffix.append(ancestor.lastPathComponent)
+            ancestor.deleteLastPathComponent()
+        }
+    }
+
+    private func isMissingSource(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == NSPOSIXErrorDomain && [Int(ENOENT), Int(ENOTDIR)].contains(error.code)
+            || error.domain == NSCocoaErrorDomain
+                && [CocoaError.fileNoSuchFile.rawValue, CocoaError.fileReadNoSuchFile.rawValue].contains(error.code)
+    }
+
+    private func loadReaderCache(now: Date) -> ReaderCache {
         guard let cacheURL else {
             return ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: [:])
         }
         let candidates = cacheURL == CodexUsageSnapshotStore.readerCacheURL
             ? [cacheURL, CodexUsageSnapshotStore.legacyReaderCacheURL]
             : [cacheURL]
+        func isUsable(_ cache: ReaderCache) -> Bool {
+            if cache.schemaVersion == 6 { return true }
+            guard cache.schemaVersion == ReaderCache.currentSchemaVersion else { return false }
+            if cache.entries.isEmpty { return true }
+            guard cache.calendar == calendar, let anchor = cache.pruningAnchor, anchor <= now else { return false }
+            let previousCutoff = calendar.date(byAdding: .day, value: -7, to: anchor) ?? anchor.addingTimeInterval(-604_800)
+            let currentCutoff = calendar.date(byAdding: .day, value: -7, to: now) ?? now.addingTimeInterval(-604_800)
+            // A daylight-saving fold can move the calendar cutoff backward while time advances.
+            return previousCutoff <= currentCutoff
+        }
         for candidate in candidates {
             guard let data = try? Data(contentsOf: candidate) else { continue }
             if let cache = try? PropertyListDecoder().decode(ReaderCache.self, from: data),
-               cache.schemaVersion == ReaderCache.currentSchemaVersion {
+               isUsable(cache) {
                 return cache
             }
             if let cache = try? JSONDecoder().decode(ReaderCache.self, from: data),
-               cache.schemaVersion == ReaderCache.currentSchemaVersion {
+               isUsable(cache) {
                 return cache
             }
         }
         return ReaderCache(schemaVersion: ReaderCache.currentSchemaVersion, entries: [:])
     }
 
-    private func saveReaderCache(_ cache: ReaderCache) {
+    private func saveReaderCache(_ cache: ReaderCache, now: Date) {
         guard let cacheURL else { return }
         do {
+            var compacted = cache
+            compacted.schemaVersion = ReaderCache.currentSchemaVersion
+            compacted.calendar = calendar
+            compacted.pruningAnchor = now
+            for (path, var entry) in cache.entries {
+                guard var parsed = entry.parsedFile else { continue }
+                parsed.rateLimits = compactedRateLimits(parsed.rateLimits, now: now)
+                entry.parsedFile = parsed
+                compacted.entries[path] = entry
+            }
             try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = PropertyListEncoder()
             encoder.outputFormat = .binary
-            let data = try encoder.encode(cache)
+            let data = try encoder.encode(compacted)
             try data.write(to: cacheURL, options: .atomic)
         } catch {
             // Cache failure only affects refresh speed; it must never block a valid snapshot.
         }
     }
 
-    private func parseSessionFile(_ file: URL) -> ParsedFile? {
-        var sessionID = file.deletingPathExtension().lastPathComponent
-        var startedAt: Date?
-        var primaryID: String?
-        var lineageIDs: Set<String> = []
-        var previousCumulative: TokenUsage?
-        var samples: [UsageSample] = []
-        var activeModel: String?
-        var rateLimitSamples: [RateLimitSample] = []
-        var lastRateLimitByWindow: [Int: RateLimitSample] = [:]
-        var isSubagent = false
-        var activity = CodexSessionActivity(id: sessionID)
-        var hasLifecycle = false
-        var completedToolIDs = Set<String>()
+    private func compactedRateLimits(_ samples: [RateLimitSample], now: Date) -> [RateLimitSample] {
+        guard samples.allSatisfy({ $0.observedAt.timeIntervalSinceReferenceDate.isFinite }) else { return samples }
+        let cutoff = calendar.date(byAdding: .day, value: -7, to: now) ?? now.addingTimeInterval(-604_800)
+        let minuteCutoff = now.addingTimeInterval(-3_600)
+        var latest: [Int: Int] = [:]
+        var hours: [Date: [Int: Int]] = [:]
+        var minutes: [String: Int] = [:]
+        var retained = Set<Int>()
 
-        do {
-            try JSONLFileReader.forEachRow(at: file) { row in
+        func newer(_ previous: Int?, than index: Int) -> Int {
+            guard let previous else { return index }
+            return samples[previous].observedAt <= samples[index].observedAt ? index : previous
+        }
+
+        for (index, sample) in samples.enumerated() {
+            let knownWindow = [300, 10_080].contains(sample.windowMinutes)
+            // Future rows must remain available as the clock advances into their minute.
+            if sample.observedAt > now { retained.insert(index) }
+            if knownWindow { latest[sample.windowMinutes] = newer(latest[sample.windowMinutes], than: index) }
+            if sample.observedAt >= cutoff {
+                let hour = calendar.dateInterval(of: .hour, for: sample.observedAt)?.start ?? sample.observedAt
+                let kind = knownWindow ? sample.windowMinutes : 0
+                hours[hour, default: [:]][kind] = newer(hours[hour]?[kind], than: index)
+            }
+            if knownWindow, sample.observedAt >= minuteCutoff, sample.observedAt <= now {
+                let key = "\(sample.windowMinutes):\(Int(sample.observedAt.timeIntervalSince1970 / 60))"
+                minutes[key] = newer(minutes[key], than: index)
+            }
+        }
+        retained.formUnion(latest.values)
+        for hour in hours.values { retained.formUnion(hour.values) }
+        retained.formUnion(minutes.values)
+        return samples.enumerated().compactMap { retained.contains($0.offset) ? $0.element : nil }
+    }
+
+    private func parseSessionFile(_ file: URL, resuming cached: CachedFile? = nil) throws
+        -> (parsed: ParsedFile?, checkpoint: ParserCheckpoint) {
+        let resume = cached?.checkpoint
+        var sessionID = resume?.sessionID ?? file.deletingPathExtension().lastPathComponent
+        var startedAt = resume?.startedAt
+        var primaryID = resume?.primaryID
+        var lineageIDs = resume?.lineageIDs ?? []
+        var previousCumulative = resume?.previousCumulative
+        var samples = resume == nil ? [] : cached?.parsedFile?.samples ?? []
+        var activeModel = resume?.activeModel
+        var rateLimitSamples = resume == nil ? [] : cached?.parsedFile?.rateLimits ?? []
+        var lastRateLimitByWindow = resume?.lastRateLimitByWindow ?? [:]
+        var isSubagent = resume?.isSubagent ?? false
+        var activity = resume?.activity ?? cached?.parsedFile?.activity ?? CodexSessionActivity(id: sessionID)
+        var hasLifecycle = resume?.hasLifecycle ?? false
+        var completedToolIDs = resume?.completedToolIDs ?? []
+
+        let progress = try JSONLFileReader.forEachRow(at: file, offset: resume?.progress.bytesRead ?? 0,
+            expectedPrefixDigest: resume?.progress.prefixDigest, expectedIdentity: resume?.progress.identity) { row in
                 if row["type"] as? String == "session_meta", let metadata = row["payload"] as? [String: Any] {
                     if metadata["thread_source"] as? String == "subagent" { isSubagent = true }
                     if let id = metadata["id"] as? String { lineageIDs.insert(id) }
@@ -1647,10 +1933,17 @@ struct CodexUsageReader {
                 return
             }
 
-            if let timestamp = parseDate(row["timestamp"] as? String),
-               row["type"] as? String == "event_msg",
-               let payload = row["payload"] as? [String: Any] {
-                switch payload["type"] as? String {
+            guard let payload = row["payload"] as? [String: Any] else { return }
+            let payloadType = payload["type"] as? String
+            let eventType = row["type"] as? String == "event_msg" ? payloadType : nil
+            let limits = payload["rate_limits"] as? [String: Any]
+            guard ["task_started", "turn_started", "task_complete", "turn_complete",
+                   "task_aborted", "turn_aborted", "item_completed", "token_count"].contains(eventType ?? "")
+                    || limits != nil || payloadType == "token_count",
+                  let timestamp = parseDate(row["timestamp"] as? String)
+            else { return }
+
+                switch eventType {
                 case "task_started", "turn_started":
                     hasLifecycle = true
                     activity.state = "running"
@@ -1690,11 +1983,7 @@ struct CodexUsageReader {
                     activity.model = activeModel
                 default: break
                 }
-            }
-
-            if let timestamp = parseDate(row["timestamp"] as? String),
-               let payload = row["payload"] as? [String: Any],
-               let limits = payload["rate_limits"] as? [String: Any] {
+            if let limits {
                 for key in ["primary", "secondary"] {
                     guard let values = limits[key] as? [String: Any],
                           let windowMinutes = (values["window_minutes"] as? NSNumber)?.intValue,
@@ -1716,9 +2005,7 @@ struct CodexUsageReader {
                 }
 
                 guard
-                    let payload = row["payload"] as? [String: Any],
-                    payload["type"] as? String == "token_count",
-                    let timestamp = parseDate(row["timestamp"] as? String),
+                    payloadType == "token_count",
                     let info = payload["info"] as? [String: Any],
                     let totalValues = info["total_token_usage"] as? [String: Any]
                 else {
@@ -1745,27 +2032,27 @@ struct CodexUsageReader {
                     contextWindow: contextWindow,
                     model: activeModel
                 ))
-            }
-        } catch {
-            // Do not cache partial totals when a file cannot be read completely.
-            return nil
         }
-
-        guard !samples.isEmpty || !rateLimitSamples.isEmpty || hasLifecycle else { return nil }
-        if startedAt == nil { startedAt = samples.first?.timestamp }
+        let hasParsedFile = !samples.isEmpty || !rateLimitSamples.isEmpty || hasLifecycle
+        let checkpoint = ParserCheckpoint(progress: progress, sessionID: sessionID, startedAt: startedAt,
+            primaryID: primaryID, lineageIDs: lineageIDs, previousCumulative: previousCumulative,
+            activeModel: activeModel, lastRateLimitByWindow: lastRateLimitByWindow,
+            isSubagent: isSubagent, activity: !hasParsedFile || activity.observedAt == nil ? activity : nil,
+            hasLifecycle: hasLifecycle, completedToolIDs: completedToolIDs)
+        guard hasParsedFile else { return (nil, checkpoint) }
         let resolvedPrimaryID = primaryID ?? sessionID
         lineageIDs.insert(resolvedPrimaryID)
-        return ParsedFile(
+        return (ParsedFile(
             primaryID: resolvedPrimaryID,
             sessionID: sessionID,
             lineageIDs: lineageIDs,
-            startedAt: startedAt,
+            startedAt: startedAt ?? samples.first?.timestamp,
             lineageSequence: samples.map(\.cumulative),
             samples: samples,
             rateLimits: rateLimitSamples,
             isSubagent: isSubagent,
             activity: activity.observedAt == nil ? nil : activity
-        )
+        ), checkpoint)
     }
 
     private func deduplicatedFiles(_ files: [ParsedFile]) -> [ParsedFile] {
@@ -1836,6 +2123,16 @@ struct CodexUsageReader {
 
     private func parseDate(_ value: String?) -> Date? {
         guard let value else { return nil }
+        // Match legacy millisecond precision and reject its unsupported time components.
+        if (20...24).contains(value.utf8.count), value.hasSuffix("Z"),
+           let month = Int(value.dropFirst(5).prefix(2)), (1...12).contains(month),
+           let day = Int(value.dropFirst(8).prefix(2)), (1...31).contains(day),
+           let hour = Int(value.dropFirst(11).prefix(2)), (0..<24).contains(hour),
+           let minute = Int(value.dropFirst(14).prefix(2)), (0..<60).contains(minute),
+           let second = Int(value.dropFirst(17).prefix(2)), (0..<60).contains(second),
+           let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: value.contains(".")).parse(value) {
+            return Date(timeIntervalSince1970: (date.timeIntervalSince1970 * 1_000).rounded() / 1_000)
+        }
         return ISO8601DateFormatter.codex.date(from: value) ?? ISO8601DateFormatter.codexNoFractions.date(from: value)
     }
 
@@ -1892,13 +2189,34 @@ struct CodexUsageReader {
         var fileSize: Int
         var modificationTime: TimeInterval
         var parsedFile: ParsedFile?
+        var checkpoint: ParserCheckpoint? = nil
+        var changeTimeSeconds: Int64? = nil
+        var changeTimeNanoseconds: Int64? = nil
+        var sourceIdentity: JSONLFileReader.SourceIdentity? = nil
+    }
+
+    private struct ParserCheckpoint: Codable {
+        var progress: JSONLFileReader.ReadProgress
+        var sessionID: String
+        var startedAt: Date?
+        var primaryID: String?
+        var lineageIDs: Set<String>
+        var previousCumulative: TokenUsage?
+        var activeModel: String?
+        var lastRateLimitByWindow: [Int: RateLimitSample]
+        var isSubagent: Bool
+        var activity: CodexSessionActivity?
+        var hasLifecycle: Bool
+        var completedToolIDs: Set<String>
     }
 
     private struct ReaderCache: Codable {
-        static let currentSchemaVersion = 6
+        static let currentSchemaVersion = 7
 
         var schemaVersion: Int
         var entries: [String: CachedFile]
+        var calendar: Calendar? = nil
+        var pruningAnchor: Date? = nil
     }
 }
 

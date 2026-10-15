@@ -1,4 +1,4 @@
-# Codex Usage Monitor distribution
+# Runway distribution
 
 ## Current preview
 
@@ -14,20 +14,21 @@ Run:
 ./scripts/package_release.sh
 ```
 
-Without a Developer ID certificate this creates an ad-hoc signed ZIP and DMG for
-local testing. With `SIGN_IDENTITY` and `NOTARY_PROFILE`, it signs, notarizes, and
-staples the DMG.
+This creates an anonymous, ad-hoc signed ZIP and DMG. Identified Apple signing and
+notarization are unsupported by the preview packaging policy; requesting either
+fails before any build or cleanup. Use `HEADLESS_PACKAGE=1` to package without
+mounting the DMG or driving Finder.
 
 ## Sparkle updates
 
 Sparkle 2.9.4 is configured to check daily and automatically install updates. The
-app also provides **Codex Usage Monitor > Check for Updates…**. Update archives and
+app also provides **Runway > Check for Updates…**. Update archives and
 the appcast are signed with the existing Sparkle EdDSA key; the app verifies both
 the signed feed and archive before extraction.
 
-Unsigned previews can update through Sparkle because the archive and feed use its
-EdDSA signatures. Apple Developer ID signing is still required to avoid Gatekeeper
-warnings and provide a stable macOS identity for permissions and widgets.
+Ad-hoc previews can update through Sparkle because the archive and feed use its
+EdDSA signatures. The preview packages retain anonymous Apple signing and may
+still show Gatekeeper warnings.
 
 The Sparkle private key is stored in the developer login Keychain. Keep a secure
 backup: future updates must use the same key unless a supported key rotation is
@@ -42,5 +43,5 @@ Authenticate `gh`, then run:
 ```
 
 The script derives the version from the built app, generates and validates the
-Sparkle-signed appcast, and uploads the ZIP, DMG, appcast, and checksums. Set
-`SIGN_IDENTITY` and `NOTARY_PROFILE` when Developer ID credentials are available.
+Sparkle-signed appcast, and uploads the ZIP, DMG, appcast, and checksums. Public
+preview packages follow the same anonymous ad-hoc signing policy.

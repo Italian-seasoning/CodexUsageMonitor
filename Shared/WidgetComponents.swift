@@ -111,7 +111,7 @@ struct WidgetFreshnessLabel: View {
             }
         }
             .font(.system(size: WidgetTypeScale.caption, weight: .semibold))
-            .foregroundStyle(freshness == .fresh ? palette.accent : palette.secondary)
+            .foregroundStyle(freshness == .fresh ? palette.highlight : palette.secondary)
             .help(freshness.label)
     }
 }
@@ -132,7 +132,7 @@ struct WidgetMiniBars: View {
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(displayedPoints) { point in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(point.id == chart.points.last?.id ? palette.accent : palette.accent.opacity(0.32))
+                        .fill(point.id == chart.points.last?.id ? palette.accent : palette.highlight.opacity(0.32))
                         .frame(
                             maxWidth: chart.points.count == 1 ? 12 : .infinity,
                             minHeight: 3,
@@ -171,7 +171,7 @@ struct WidgetSparkline: View {
                 .foregroundStyle(palette.accent)
             if chart.points.count == 1 {
                 PointMark(x: .value("Date", point.date), y: .value("Value", point.value))
-                    .foregroundStyle(palette.accent).symbolSize(16)
+                    .foregroundStyle(palette.highlight).symbolSize(16)
             }
         }
         .chartYScale(domain: domain)

@@ -1,14 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Runway — allowance ahead</title>
+  <desc id="desc">An open amber glass allowance gauge, with a translucent remaining segment and a violet AI spark marking the current usage, on warm ivory.</desc>
   <defs>
-    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff7777"/>
-      <stop offset="1" stop-color="#e6424b"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#43090d" flood-opacity=".42"/>
-    </filter>
+    <linearGradient id="tile" x1="238" y1="64" x2="802" y2="960" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFEF9"/><stop offset=".55" stop-color="#F4EEE6"/><stop offset="1" stop-color="#DDD4CA"/></linearGradient>
+    <linearGradient id="rim" x1="204" y1="74" x2="852" y2="917" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".25"/><stop offset="1" stop-color="#BFB1A7" stop-opacity=".65"/></linearGradient>
+    <linearGradient id="amber" x1="294" y1="696" x2="654" y2="308" gradientUnits="userSpaceOnUse"><stop stop-color="#C24C25"/><stop offset=".3" stop-color="#FF872F"/><stop offset=".68" stop-color="#FFC35D"/><stop offset="1" stop-color="#FFE2A0"/></linearGradient>
+    <linearGradient id="remaining" x1="683" y1="317" x2="692" y2="697" gradientUnits="userSpaceOnUse"><stop stop-color="#EEE3F6" stop-opacity=".8"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".52"/><stop offset="1" stop-color="#D4C7B8" stop-opacity=".65"/></linearGradient>
+    <linearGradient id="violet" x1="601" y1="247" x2="756" y2="429" gradientUnits="userSpaceOnUse"><stop stop-color="#EAC5FF"/><stop offset=".44" stop-color="#B778DC"/><stop offset="1" stop-color="#7442A2"/></linearGradient>
+    <linearGradient id="facet" x1="633" y1="279" x2="733" y2="396" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF0FF"/><stop offset="1" stop-color="#CBA3ED" stop-opacity=".15"/></linearGradient>
+    <filter id="tileShadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#32251D" flood-opacity=".17"/></filter>
+    <filter id="ringShadow" x="150" y="150" width="724" height="724" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="15" stdDeviation="13" flood-color="#915629" flood-opacity=".19"/></filter>
+    <filter id="sparkShadow" x="526" y="187" width="302" height="321" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#653B79" flood-opacity=".26"/></filter>
+    <path id="arc" d="M336 722A274 274 0 1 1 688 722"/>
+    <path id="used" d="M336 722A274 274 0 0 1 675 292"/>
+    <path id="spark" d="M656 228C658 218 666 218 669 228L690 293C693 302 699 307 709 309L773 321C784 323 785 331 774 335L713 356C703 359 699 365 697 375L685 442C683 453 674 453 671 443L649 379C646 369 640 365 630 363L567 350C556 348 556 340 566 336L627 315C637 312 642 306 644 296L656 228Z"/>
   </defs>
-  <rect x="52" y="52" width="920" height="920" rx="218" fill="url(#red)" filter="url(#shadow)"/>
-  <path d="M704 346c-51-59-116-89-191-89-173 0-287 131-287 322s112 322 287 322c82 0 150-31 203-93l-98-96c-28 33-61 47-103 47-86 0-140-70-140-180s56-180 140-180c40 0 72 16 98 47l91-100Z" fill="#180708"/>
-  <path d="M231 686c135 63 248 72 344 28 78-36 146-39 218-7" fill="none" stroke="#ffb0b0" stroke-width="18" stroke-linecap="round" opacity=".42"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="#E7DED4" filter="url(#tileShadow)"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#tile)"/>
+  <rect x="66" y="66" width="892" height="892" rx="206" stroke="url(#rim)" stroke-width="4"/>
+  <rect x="77" y="77" width="870" height="870" rx="195" stroke="white" stroke-opacity=".48" stroke-width="2"/>
+  <g filter="url(#ringShadow)">
+    <use href="#arc" stroke="url(#remaining)" stroke-width="106" stroke-linecap="round"/>
+    <use href="#arc" stroke="white" stroke-opacity=".5" stroke-width="108" stroke-linecap="round"/>
+    <use href="#arc" stroke="url(#remaining)" stroke-width="102" stroke-linecap="round"/>
+    <use href="#used" stroke="url(#amber)" stroke-width="106" stroke-linecap="round"/>
+  </g>
+  <path d="M312 741A305 305 0 0 1 645 237" stroke="#FFF7DB" stroke-opacity=".78" stroke-width="4" stroke-linecap="round"/>
+  <path d="M348 697A248 248 0 0 1 533 265" stroke="#FFFBEB" stroke-opacity=".36" stroke-width="3" stroke-linecap="round"/>
+  <path d="M767 399A289 289 0 0 1 704 708" stroke="white" stroke-opacity=".8" stroke-width="4" stroke-linecap="round"/>
+  <g filter="url(#sparkShadow)">
+    <use href="#spark" fill="url(#violet)"/>
+    <path d="M663 239L672 337L570 344L632 322C645 317 650 312 653 298L663 239Z" fill="url(#facet)"/>
+    <path d="M672 337L772 328L708 349C697 353 691 362 688 375L678 438L672 337Z" fill="#6E389F" opacity=".28"/>
+    <path d="M663 239L672 337L772 328M672 337L678 438" stroke="#FFF2FF" stroke-opacity=".61" stroke-width="2" stroke-linejoin="round"/>
+    <use href="#spark" stroke="#FCEBFF" stroke-opacity=".72" stroke-width="2"/>
+  </g>
 </svg>

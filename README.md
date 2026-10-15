@@ -4,16 +4,18 @@
   <img src="docs/assets/app-icon.png" width="144" alt="Runway app icon" />
 </p>
 
-[View the software showcase](https://nolan-mac-apps.nolankrahn.chatgpt.site/apps/codex-usage)
+[View the software showcase](https://italian-seasoning.github.io/CodexUsageMonitor/)
 
-**Runway — Codex Usage Monitor**
+**Runway — Codex usage at a glance**
 
 A native macOS app and WidgetKit extension for local Codex usage, model-aware
 API-equivalent cost estimates, Headroom savings, and configurable desktop widgets.
 
-Previously named Codex Usage Monitor. The repository, download filenames, and
-installed app identifiers retain that name for update compatibility. The Homebrew
-cask is now `runway`; `codex-usage-monitor` migrates through the tap’s rename map.
+Previously named **Codex Usage Monitor**. The local project, Xcode targets, installed
+app, and data folders are named **Runway**. The old project and app paths remain
+compatibility aliases for older documents. Historical bundle identifiers, settings
+keys, widget kinds, and published download URLs remain compatible with existing
+installs. The Homebrew cask is `runway`.
 
 **Created by [Italian-seasoning](https://github.com/Italian-seasoning).**
 Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
@@ -24,11 +26,11 @@ Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Itali
 brew install --cask italian-seasoning/tap/runway
 ```
 
-Current preview: **4.0.3**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.3/CodexUsageMonitor-macOS.dmg).
+Current preview: **4.0.8**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.8/Runway-macOS.dmg).
 
 Requires macOS 14 or newer on Apple silicon or Intel.
 
-These previews are not Apple-notarized. Homebrew verifies the archive checksum and leaves Gatekeeper enabled. If macOS blocks the first launch, review the app in **System Settings → Privacy & Security**. Sparkle verifies subsequent in-app updates with its signed feed.
+These previews use an anonymous ad-hoc signature and are not Apple-notarized. Homebrew verifies the archive checksum and leaves Gatekeeper enabled. If macOS blocks the first launch, review the app in **System Settings → Privacy & Security**. Sparkle verifies subsequent in-app updates with its signed feed.
 
 ## See the app
 
@@ -48,7 +50,7 @@ please do not present a derivative as the original project or imply endorsement.
 
 Copy this into your README and adapt the final sentence:
 
-> Based on **Codex Usage Monitor**, created by
+> Based on **Runway**, created by
 > [Italian-seasoning](https://github.com/Italian-seasoning).
 > Original source: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
 > This fork is independently maintained; its changes are described below.
@@ -68,11 +70,11 @@ The source on `main` is the v4 preview. WidgetKit controls when desktop widgets 
 rate estimates appear only when enough recent observations are available.
 
 > [!WARNING]
-> **Preview software.** The current build is not signed with an Apple Developer ID
-> or notarized by Apple. macOS may require Control-clicking the app and choosing
-> **Open**. Treat it as a test build, not a finished production release.
+> **Preview software.** The package uses an anonymous ad-hoc signature and is not
+> notarized by Apple. If macOS blocks the first launch, review the app in
+> **System Settings → Privacy & Security**. Use it as a test build.
 
-[Download the unsigned preview](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/CodexUsageMonitor-macOS.dmg)
+[Download the Mac preview](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/Runway-macOS.dmg)
 · [View the website](https://italian-seasoning.github.io/CodexUsageMonitor/)
 · [Report an issue](https://github.com/Italian-seasoning/CodexUsageMonitor/issues)
 
@@ -94,7 +96,7 @@ are available in the release downloads. The native macOS app retains the full wi
 
 ## Privacy
 
-Codex Usage Monitor reads local Codex logs and the local Headroom database. When
+Runway reads local Codex logs and the local Headroom database. When
 the Codex CLI or ChatGPT desktop app is installed, it also asks Codex's
 app-server for account daily usage, lifetime totals, and current limits. The app-server may
 contact OpenAI using your existing sign-in. The monitor does not upload prompts,
@@ -111,20 +113,20 @@ used only for optional Sparkle updates. See the full [privacy policy](docs/priva
 
 ## Build
 
-Open `CodexUsageMonitor.xcodeproj` in Xcode and run the
-`CodexUsageMonitor` scheme. Sparkle resolves through Swift Package Manager.
+Open `Runway.xcodeproj` in Xcode and run the
+`Runway` scheme. Sparkle resolves through Swift Package Manager.
 
 Release packaging and GitHub publishing are documented in
 [`DISTRIBUTION.md`](DISTRIBUTION.md).
 
 ## Version
 
-Latest published Mac preview: **4.0.3**. Windows and Linux clients: **4.0.1**.
+Latest published Mac preview: **4.0.8**. Windows and Linux clients: **4.0.1**.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.
 
-Codex Usage Monitor is independent software and is not affiliated with OpenAI.
+Runway is independent software and is not affiliated with OpenAI.
 
 ## License and attribution
 

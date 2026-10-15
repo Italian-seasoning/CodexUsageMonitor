@@ -10,7 +10,7 @@ The app is used on macOS while working in Codex. The job is to glance at current
 
 ## Product Purpose
 
-Codex Usage Monitor reads local Codex session logs and presents current session, lifetime, peak day, streak, and recent activity in a native app and WidgetKit widget.
+Runway reads local Codex session logs and presents current session, lifetime, peak day, streak, and recent activity in a native app and WidgetKit widget.
 
 ## Brand Personality
 

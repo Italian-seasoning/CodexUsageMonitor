@@ -7,6 +7,7 @@ struct WidgetStylePalette {
     var accent: Color
     var track: Color
     var separator: Color
+    var highlight: Color
 }
 
 struct CodexWidgetStyledContainer<Content: View>: View {
@@ -58,6 +59,8 @@ struct CodexWidgetStyleBackground: View {
         switch style {
         case .precisionInstrument:
             let colors = switch theme {
+            case .runway:
+                [Color(red: 1, green: 0.98, blue: 0.94), Color(red: 0.94, green: 0.90, blue: 0.84)]
             case .crimson:
                 [Color(red: 0.025, green: 0.25, blue: 0.28), Color(red: 0.015, green: 0.08, blue: 0.13)]
             case .classicRed:
@@ -76,6 +79,7 @@ struct CodexWidgetStyleBackground: View {
             )
         case .nativeGlass:
             let base = switch theme {
+            case .runway: Color(red: 0.98, green: 0.95, blue: 0.90)
             case .frostedWhite where colorScheme == .light: Color(red: 0.95, green: 0.96, blue: 0.98)
             case .crimson: Color(red: 0.035, green: 0.19, blue: 0.22)
             case .classicRed: Color(red: 0.095, green: 0.09, blue: 0.10)
@@ -97,6 +101,7 @@ struct CodexWidgetStyleBackground: View {
             }
         case .signalGrid:
             switch theme {
+            case .runway: Color(red: 0.98, green: 0.95, blue: 0.90)
             case .crimson: Color(red: 0.018, green: 0.12, blue: 0.16)
             case .classicRed: Color(red: 0.028, green: 0.027, blue: 0.032)
             case .rain: Color(red: 0.035, green: 0.085, blue: 0.12)
@@ -109,6 +114,7 @@ struct CodexWidgetStyleBackground: View {
 
 struct CodexWidgetCustomImageBackground: View {
     var image: NSImage
+    var light = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -116,7 +122,7 @@ struct CodexWidgetCustomImageBackground: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: geometry.size.width, height: geometry.size.height)
-                .overlay(Color.black.opacity(0.38))
+                .overlay(light ? Color(red: 1, green: 0.97, blue: 0.91).opacity(0.88) : Color.black.opacity(0.38))
                 .clipped()
         }
     }
@@ -129,13 +135,14 @@ extension WidgetStylePalette {
         monochrome: Bool,
         colorScheme: ColorScheme
     ) -> Self {
-        let light = !monochrome && style == .nativeGlass && theme == .frostedWhite && colorScheme == .light
+        let light = theme == .runway || (!monochrome && style == .nativeGlass && theme == .frostedWhite && colorScheme == .light)
         let primary: Color = light ? .black : .white
         let accent: Color
         if monochrome || theme == .monochrome {
             accent = primary
         } else {
             accent = switch theme {
+            case .runway: Color(red: 0.73, green: 0.29, blue: 0.055)
             case .crimson: Color(red: 0.12, green: 0.82, blue: 0.79)
             case .classicRed: Color(red: 1, green: 0.18, blue: 0.23)
             case .rain: Color(red: 0.48, green: 0.76, blue: 0.91)
@@ -148,7 +155,8 @@ extension WidgetStylePalette {
             secondary: primary.opacity(light ? 0.62 : 0.67),
             accent: accent,
             track: primary.opacity(light ? 0.12 : 0.2),
-            separator: primary.opacity(light ? 0.1 : 0.11)
+            separator: primary.opacity(light ? 0.1 : 0.11),
+            highlight: theme == .runway && !monochrome ? Color(red: 0.49, green: 0.29, blue: 0.68) : accent
         )
     }
 }

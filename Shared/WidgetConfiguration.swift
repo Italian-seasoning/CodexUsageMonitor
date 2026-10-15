@@ -15,32 +15,51 @@ enum WidgetDataBridge {
         ?? FileManager.default.homeDirectoryForCurrentUser
 
     static var currentDirectoryURL: URL {
-        dataDirectoryURL(
+        migratingLegacyDirectory(at: dataDirectoryURL(
             bundleIdentifier: Bundle.main.bundleIdentifier,
             homeDirectory: homeDirectoryURL
-        )
+        ))
     }
 
     static var extensionDirectoryURL: URL {
-        dataDirectoryURL(
+        migratingLegacyDirectory(at: dataDirectoryURL(
             bundleIdentifier: widgetBundleIdentifier,
             homeDirectory: homeDirectoryURL
-        )
+        ))
     }
 
     static func dataDirectoryURL(bundleIdentifier: String?, homeDirectory: URL) -> URL {
         if let bundleIdentifier, bundleIdentifier.hasSuffix(".widget3") {
             return homeDirectory
                 .appendingPathComponent("Library/Containers/\(bundleIdentifier)/Data", isDirectory: true)
-                .appendingPathComponent("Library/Application Support/CodexUsageMonitor", isDirectory: true)
+                .appendingPathComponent("Library/Application Support/Runway", isDirectory: true)
         }
         return homeDirectory
             .appendingPathComponent(
                 bundleIdentifier?.hasSuffix(".debug") == true
-                    ? "Library/Application Support/CodexUsageMonitor-Debug"
-                    : "Library/Application Support/CodexUsageMonitor",
+                    ? "Library/Application Support/Runway-Debug"
+                    : "Library/Application Support/Runway",
                 isDirectory: true
             )
+    }
+
+    static func migratingLegacyDirectory(at destination: URL) -> URL {
+        let legacyName = destination.lastPathComponent.replacingOccurrences(of: "Runway", with: "CodexUsageMonitor")
+        let legacy = destination.deletingLastPathComponent().appendingPathComponent(legacyName, isDirectory: true)
+        let fileManager = FileManager.default
+        guard legacy != destination, fileManager.fileExists(atPath: legacy.path) else { return destination }
+        do {
+            // Existing Runway data takes precedence; keep older data recoverable.
+            if !fileManager.fileExists(atPath: destination.path) {
+                try fileManager.moveItem(at: legacy, to: destination)
+            }
+            if !fileManager.fileExists(atPath: legacy.path) {
+                try fileManager.createSymbolicLink(atPath: legacy.path, withDestinationPath: destination.lastPathComponent)
+            }
+            return destination
+        } catch {
+            return fileManager.fileExists(atPath: destination.path) ? destination : legacy
+        }
     }
 
     @discardableResult
@@ -172,12 +191,8 @@ struct SavedWidgetPreset: Codable, Equatable, Identifiable, Sendable {
 }
 
 enum SavedWidgetPresetStore {
-    static let url = URL(
-        fileURLWithPath: ProcessInfo.processInfo.environment["HOME"]
-            ?? FileManager.default.homeDirectoryForCurrentUser.path,
-        isDirectory: true
-    )
-        .appendingPathComponent("Library/Application Support/CodexUsageMonitor/widget-presets.json")
+    static let url = WidgetDataBridge.currentDirectoryURL
+        .appendingPathComponent("widget-presets.json")
 
     static func load() -> [SavedWidgetPreset] {
         guard let data = try? Data(contentsOf: url) else { return [] }
