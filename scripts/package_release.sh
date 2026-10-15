@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${SIGN_IDENTITY:--}" != "-" || -n "${NOTARY_PROFILE:-}" ]]; then
+  echo "Runway previews support anonymous ad-hoc signing only; identified signing and notarization are unsupported." >&2
+  exit 1
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED_DATA="$ROOT/build/DistributionDerivedData"
-BUILD_APP="$DERIVED_DATA/Build/Products/Release/CodexUsageMonitor.app"
+BUILD_APP="$DERIVED_DATA/Build/Products/Release/Runway.app"
 DIST="$ROOT/dist"
 STAGE="$DIST/stage"
-APP="$STAGE/CodexUsageMonitor.app"
-WIDGET="$APP/Contents/PlugIns/CodexUsageWidget.appex"
-ARCHIVE="$DIST/CodexUsageMonitor-macOS.zip"
+APP="$STAGE/Runway.app"
+WIDGET="$APP/Contents/PlugIns/RunwayWidget.appex"
+ARCHIVE="$DIST/Runway-macOS.zip"
 DMG_ROOT="$DIST/dmg-root"
-DMG="$DIST/CodexUsageMonitor-macOS.dmg"
-DMG_RW="$DIST/CodexUsageMonitor-macOS-rw.dmg"
-DMG_VOLUME="Codex Usage Monitor"
+DMG="$DIST/Runway-macOS.dmg"
+DMG_RW="$DIST/Runway-macOS-rw.dmg"
+DMG_VOLUME="Runway"
 DMG_BACKGROUND="$ROOT/scripts/assets/dmg-background.png"
 
 rm -rf "$DERIVED_DATA" "$DIST"
 mkdir -p "$STAGE" "$DMG_ROOT/.background"
 
 xcodebuild \
-  -project "$ROOT/CodexUsageMonitor.xcodeproj" \
-  -scheme CodexUsageMonitor \
+  -project "$ROOT/Runway.xcodeproj" \
+  -scheme Runway \
   -configuration Release \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED_DATA" \
-  -allowProvisioningUpdates \
   ARCHS='arm64 x86_64' \
   ONLY_ACTIVE_ARCH=NO \
   CODE_SIGN_IDENTITY='-' \
@@ -44,35 +48,16 @@ while IFS= read -r -d '' file; do
 done < <(find "$APP" -type f -print0)
 find "$APP" -name embedded.provisionprofile -delete
 
-IDENTITY="${SIGN_IDENTITY:-}"
-if [[ -z "$IDENTITY" ]]; then
-  IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
-fi
-if [[ -z "$IDENTITY" ]]; then
-  IDENTITY="-"
-  echo "No Developer ID Application identity found; creating an ad-hoc signed build."
-fi
-
-if [[ "$IDENTITY" == Developer\ ID\ Application:* && -z "${NOTARY_PROFILE:-}" ]]; then
-  echo "A Developer ID identity was found, but NOTARY_PROFILE is missing." >&2
-  echo "Refusing to create a misleading unnotarized public release." >&2
-  exit 1
-fi
-
-SIGN_OPTIONS=""
-if [[ "$IDENTITY" != "-" ]]; then
-  SIGN_OPTIONS="--options runtime"
-fi
 if [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
-  codesign --force --deep $SIGN_OPTIONS --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
+  codesign --force --deep --sign - "$APP/Contents/Frameworks/Sparkle.framework"
 fi
-codesign --force $SIGN_OPTIONS --entitlements "$ROOT/CodexUsageWidget/CodexUsageWidget.entitlements" --sign "$IDENTITY" "$WIDGET"
-codesign --force $SIGN_OPTIONS --sign "$IDENTITY" "$APP"
+codesign --force --entitlements "$ROOT/RunwayWidget/RunwayWidget.entitlements" --sign - "$WIDGET"
+codesign --force --sign - "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 "$ROOT/scripts/verify_release_privacy.sh" "$APP"
 
 ditto -c -k --norsrc --keepParent "$APP" "$ARCHIVE"
-ditto "$APP" "$DMG_ROOT/CodexUsageMonitor.app"
+ditto "$APP" "$DMG_ROOT/Runway.app"
 ln -s /Applications "$DMG_ROOT/Applications"
 cp "$DMG_BACKGROUND" "$DMG_ROOT/.background/dmg-background.png"
 chflags hidden "$DMG_ROOT/.background"
@@ -98,7 +83,7 @@ tell application "Finder"
     set text size of theViewOptions to 13
     set label position of theViewOptions to bottom
     set background picture of theViewOptions to file ".background:dmg-background.png"
-    set position of item "CodexUsageMonitor.app" of container window to {185, 220}
+    set position of item "Runway.app" of container window to {185, 220}
     set position of item "Applications" of container window to {535, 220}
     update without registering applications
     delay 2
@@ -113,15 +98,10 @@ fi
 hdiutil convert "$DMG_RW" -quiet -format UDZO -o "$DMG"
 rm -f "$DMG_RW"
 
-if [[ "$IDENTITY" == Developer\ ID\ Application:* && -n "${NOTARY_PROFILE:-}" ]]; then
-  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
-  xcrun stapler staple "$DMG"
-else
-  echo "Notarization skipped. Set NOTARY_PROFILE after installing a Developer ID Application certificate."
-fi
-
-shasum -a 256 "$ARCHIVE" "$DMG" > "$DIST/SHA256SUMS.txt"
+(cd "$DIST" && shasum -a 256 "${ARCHIVE##*/}" "${DMG##*/}" > SHA256SUMS.txt)
+ln -s Runway-macOS.zip "$DIST/CodexUsageMonitor-macOS.zip"
+ln -s Runway-macOS.dmg "$DIST/CodexUsageMonitor-macOS.dmg"
 
 echo "Created $ARCHIVE"
 echo "Created $DMG"
-echo "Signing identity: $IDENTITY"
+echo "Signing: anonymous ad-hoc preview (not notarized)."

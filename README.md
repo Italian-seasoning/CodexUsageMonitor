@@ -4,16 +4,18 @@
   <img src="docs/assets/app-icon.png" width="144" alt="Runway app icon" />
 </p>
 
-[View the software showcase](https://nolan-mac-apps.nolankrahn.chatgpt.site/apps/codex-usage)
+[View the software showcase](https://italian-seasoning.github.io/CodexUsageMonitor/)
 
-**Runway — Codex Usage Monitor**
+**Runway — Codex usage at a glance**
 
 A native macOS app and WidgetKit extension for local Codex usage, model-aware
 API-equivalent cost estimates, Headroom savings, and configurable desktop widgets.
 
-Previously named Codex Usage Monitor. The repository, download filenames, and
-installed app identifiers retain that name for update compatibility. The Homebrew
-cask is now `runway`; `codex-usage-monitor` migrates through the tap’s rename map.
+Previously named **Codex Usage Monitor**. The local project, Xcode targets, installed
+app, and data folders are named **Runway**. The old project and app paths remain
+compatibility aliases for older documents. Historical bundle identifiers, settings
+keys, widget kinds, and published download URLs remain compatible with existing
+installs. The Homebrew cask is `runway`.
 
 **Created by [Italian-seasoning](https://github.com/Italian-seasoning).**
 Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
@@ -48,7 +50,7 @@ please do not present a derivative as the original project or imply endorsement.
 
 Copy this into your README and adapt the final sentence:
 
-> Based on **Codex Usage Monitor**, created by
+> Based on **Runway**, created by
 > [Italian-seasoning](https://github.com/Italian-seasoning).
 > Original source: [Italian-seasoning/CodexUsageMonitor](https://github.com/Italian-seasoning/CodexUsageMonitor).
 > This fork is independently maintained; its changes are described below.
@@ -94,7 +96,7 @@ are available in the release downloads. The native macOS app retains the full wi
 
 ## Privacy
 
-Codex Usage Monitor reads local Codex logs and the local Headroom database. When
+Runway reads local Codex logs and the local Headroom database. When
 the Codex CLI or ChatGPT desktop app is installed, it also asks Codex's
 app-server for account daily usage, lifetime totals, and current limits. The app-server may
 contact OpenAI using your existing sign-in. The monitor does not upload prompts,
@@ -111,8 +113,8 @@ used only for optional Sparkle updates. See the full [privacy policy](docs/priva
 
 ## Build
 
-Open `CodexUsageMonitor.xcodeproj` in Xcode and run the
-`CodexUsageMonitor` scheme. Sparkle resolves through Swift Package Manager.
+Open `Runway.xcodeproj` in Xcode and run the
+`Runway` scheme. Sparkle resolves through Swift Package Manager.
 
 Release packaging and GitHub publishing are documented in
 [`DISTRIBUTION.md`](DISTRIBUTION.md).
@@ -124,7 +126,7 @@ Latest published Mac preview: **4.0.3**. Windows and Linux clients: **4.0.1**.
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.
 
-Codex Usage Monitor is independent software and is not affiliated with OpenAI.
+Runway is independent software and is not affiliated with OpenAI.
 
 ## License and attribution
 

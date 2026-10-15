@@ -26,6 +26,10 @@ struct PeriodUsageSummary: Equatable, Sendable {
     let topModel: ModelUsage?
     let days: [DailyUsage]
 
+    var hasPartialLegacyCoverage: Bool {
+        days.contains { $0.legacyCoverageIncomplete == true }
+    }
+
     func value(for measure: UsageMeasure) -> Double {
         switch measure {
         case .tokens: Double(usage.total)
@@ -37,6 +41,7 @@ struct PeriodUsageSummary: Equatable, Sendable {
 }
 
 extension CodexUsageSnapshot {
+    /// Valid reported buckets; a nonempty range can still have pending coverage for today.
     func accountDays(for period: UsagePeriod, calendar: Calendar = .current, now: Date = .now) -> [AccountUsageDay]? {
         guard let accountUsageDays, let accountLifetimeTokens else { return nil }
         var total = 0
@@ -52,7 +57,16 @@ extension CodexUsageSnapshot {
         case .month: calendar.date(from: calendar.dateComponents([.year, .month], from: now))
         case .lifetime: nil
         }
-        return accountUsageDays.filter { day in day.date <= now && start.map { day.date >= $0 } != false }
+        let days = accountUsageDays.filter { day in day.date <= now && start.map { day.date >= $0 } != false }
+        // An absent account bucket is unreported usage, not a confirmed zero.
+        return days.isEmpty ? nil : days
+    }
+
+    func accountUsageIsPending(for period: UsagePeriod, calendar: Calendar = .current, now: Date = .now) -> Bool {
+        guard period != .lifetime, accountDays(for: .lifetime, calendar: calendar, now: now) != nil else { return false }
+        guard let reported = accountDays(for: period, calendar: calendar, now: now) else { return true }
+        guard summary(for: .today, calendar: calendar, now: now).usage.hasUsage else { return false }
+        return !reported.contains { calendar.isDate($0.date, inSameDayAs: now) }
     }
 
     /// Inclusive local calendar dates; the next midnight is an exclusive boundary.

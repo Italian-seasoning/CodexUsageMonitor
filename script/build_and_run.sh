@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="CodexUsageMonitor"
+APP_NAME="Runway"
 BUNDLE_ID="com.codexusage.CodexUsageMonitor"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/build/RunDerivedData"
@@ -10,10 +10,11 @@ APP_BUNDLE="$DERIVED_DATA/Build/Products/Debug/$APP_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+pkill -x CodexUsageMonitor >/dev/null 2>&1 || true
 
 xcodebuild \
-  -project "$ROOT_DIR/CodexUsageMonitor.xcodeproj" \
-  -scheme CodexUsageMonitor \
+  -project "$ROOT_DIR/Runway.xcodeproj" \
+  -scheme Runway \
   -configuration Debug \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED_DATA" \

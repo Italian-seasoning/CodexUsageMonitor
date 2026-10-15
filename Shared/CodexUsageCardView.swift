@@ -53,7 +53,7 @@ struct CodexUsageCardPreview: View {
     private var dark: Bool {
         switch settings.theme {
         case .crimson, .classicRed, .darkGlass, .rain, .autumn: true
-        case .frostedWhite: false
+        case .frostedWhite, .runway: false
         case .monochrome: colorScheme == .dark
         }
     }
@@ -68,7 +68,9 @@ struct CodexUsageCardBackground: View {
     var theme: WidgetTheme
 
     var body: some View {
-        if theme == .crimson || theme == .classicRed {
+        if theme == .runway {
+            Color(red: 0.98, green: 0.95, blue: 0.90)
+        } else if theme == .crimson || theme == .classicRed {
             LinearGradient(
                 colors: theme == .classicRed
                     ? [Color(red: 0.065, green: 0.058, blue: 0.062), Color(red: 0.018, green: 0.018, blue: 0.022)]
@@ -122,6 +124,7 @@ private struct CodexUsageCardPalette {
     var tertiary: Color { primary.opacity(dark ? 0.52 : 0.48) }
     var accent: Color {
         if monochrome { return primary }
+        if theme == .runway { return Color(red: 0.73, green: 0.29, blue: 0.055) }
         if theme == .crimson { return Color(red: 0.12, green: 0.82, blue: 0.79) }
         if theme == .classicRed { return Color(red: 1, green: 0.18, blue: 0.23) }
         return Color.accentColor

@@ -1,6 +1,6 @@
-# Codex Usage Snapshot V2
+# Runway Usage Snapshot V2
 
-Codex Usage Monitor writes one local JSON snapshot for the macOS app, menu bar, refresh helper, and WidgetKit extension. This document defines the platform-neutral data contract for a possible future Windows reader. It does not define a cross-platform runtime.
+Runway writes one local JSON snapshot for the macOS app, menu bar, refresh helper, and WidgetKit extension. This document defines the platform-neutral data contract for a possible future Windows reader. It does not define a cross-platform runtime.
 
 ## Contract
 
@@ -19,7 +19,7 @@ Codex Usage Monitor writes one local JSON snapshot for the macOS app, menu bar, 
 
 - Fresh: age is at most 10 minutes.
 - Stale: a valid snapshot exists but is older than 10 minutes.
-- Partial: primary usage is valid but one or more optional model, limit, or Headroom sources are missing.
+- Partial: valid usage exists, but a source read is pending, account coverage is incomplete, or an optional model, limit, or Headroom source is missing.
 - Unavailable: no valid usage source was found.
 - Permission blocked and refresh errors are stored in the separate background refresh status record, not inferred from zero usage.
 
@@ -38,6 +38,7 @@ Widget timelines request a new shared snapshot every minute. WidgetKit may delay
 | `lastUpdated` | date | instant | yes | Latest source event time |
 | `activityDays` | array of `DailyUsage` | mixed | no | Dated daily aggregates |
 | `generatedAt` | date | instant | yes | Snapshot write time and freshness origin |
+| `sourceReadPending` | boolean | flag | yes | Local reads are retrying; retained usage may be incomplete even when `generatedAt` is recent |
 | `sessionCount` | integer | sessions | yes | Lifetime session count |
 | `turnCount` | integer | requests | yes | Lifetime request/turn count |
 | `currentSessionTurns` | integer | requests | yes | Current session request/turn count |
@@ -75,10 +76,15 @@ Widget timelines request a new shared snapshot every minute. WidgetKit may delay
 | `turns` | integer | requests | yes |
 | `headroomSaved` | integer | tokens | yes |
 | `estimatedCostMicros` | integer | millionths USD | yes |
+| `legacyCoverageIncomplete` | boolean | flag | yes |
+
+`legacyCoverageIncomplete` marks a day whose surviving local total is smaller than saved legacy history. Consumers disclose partial local history without adding potentially overlapping tokens. The marker clears when current coverage recovers.
 
 ### `AccountUsageDay`
 
 `date` is the account bucket's calendar day, and `tokens` is its total token count. These buckets do not contain model or request breakdowns.
+
+An empty selected period is unreported usage, not a confirmed zero. Seven-day and month totals remain reported account totals when today's bucket is absent; if local logs show usage today, consumers mark that coverage pending. An explicit account bucket with zero tokens remains authoritative. Local and account totals are never added together to fill the gap.
 
 ### `ModelUsage`
 
@@ -91,6 +97,8 @@ Widget timelines request a new shared snapshot every minute. WidgetKit may delay
 ### `HeadroomSavings`
 
 Token fields are `lifetimeTokensSaved`, `todayTokensSaved`, and `last7DaysTokensSaved`. Request fields are `lifetimeRequests` and `todayRequests`. `inputTokensBeforeCompression` is the original input-token count, `savingsPercent` is a 0...1 ratio, and `costSavedUSD`/`todayCostSavedUSD` are API-equivalent estimates. `lastUpdated` and `trackingStartedAt` are optional instants. `topModel` and `schemaVersion` are optional source metadata.
+
+For source `schemaVersion` 2 or newer, the historical `lifetime` field names represent the retained last 30 days and are labeled “Last 30 days.” `last7DaysTokensSaved` covers a rolling 168 hours; `todayTokensSaved` uses the local day. Older sources use the label “Tracked” without assuming complete lifetime coverage.
 
 ### `CodexRateLimits`
 

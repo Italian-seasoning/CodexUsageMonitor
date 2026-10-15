@@ -2,6 +2,7 @@ import Combine
 import Foundation
 
 enum AppTheme: String, Codable, CaseIterable, Identifiable, Sendable {
+    case runway
     case crimson
     case classicRed
     case graphite

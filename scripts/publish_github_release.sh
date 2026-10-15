@@ -11,18 +11,18 @@ LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchS
 
 cleanup() {
   for bundle in \
-    "$ROOT/build/DistributionDerivedData/Build/Products/Release/CodexUsageMonitor.app" \
-    "$DIST/stage/CodexUsageMonitor.app" \
-    "$DIST/dmg-root/CodexUsageMonitor.app" \
-    "/Volumes/Codex Usage Monitor/CodexUsageMonitor.app"; do
-    pluginkit -r "$bundle/Contents/PlugIns/CodexUsageWidget.appex" >/dev/null 2>&1 || true
+    "$ROOT/build/DistributionDerivedData/Build/Products/Release/Runway.app" \
+    "$DIST/stage/Runway.app" \
+    "$DIST/dmg-root/Runway.app" \
+    "/Volumes/Runway/Runway.app"; do
+    pluginkit -r "$bundle/Contents/PlugIns/RunwayWidget.appex" >/dev/null 2>&1 || true
     "$LSREGISTER" -u "$bundle" >/dev/null 2>&1 || true
   done
   rm -rf "$ROOT/build/DistributionDerivedData" "$DIST/stage" "$DIST/dmg-root"
 
-  if [[ -d /Applications/CodexUsageMonitor.app ]]; then
-    "$LSREGISTER" -f /Applications/CodexUsageMonitor.app >/dev/null 2>&1 || true
-    pluginkit -a /Applications/CodexUsageMonitor.app/Contents/PlugIns/CodexUsageWidget.appex >/dev/null 2>&1 || true
+  if [[ -d /Applications/Runway.app ]]; then
+    "$LSREGISTER" -f /Applications/Runway.app >/dev/null 2>&1 || true
+    pluginkit -a /Applications/Runway.app/Contents/PlugIns/RunwayWidget.appex >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -32,7 +32,7 @@ command -v gh >/dev/null || { echo "GitHub CLI (gh) is required." >&2; exit 1; }
 "$ROOT/scripts/package_release.sh"
 [[ -x "$SPARKLE_BIN/generate_appcast" ]] || { echo "Sparkle generate_appcast was not produced by the release build." >&2; exit 1; }
 
-APP="$DIST/stage/CodexUsageMonitor.app"
+APP="$DIST/stage/Runway.app"
 VERSION="$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")"
 if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$VERSION" ]]; then
   echo "Requested version $REQUESTED_VERSION does not match built version $VERSION." >&2
@@ -40,10 +40,10 @@ if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$VERSION" ]]; then
 fi
 
 TAG="v$VERSION"
-ARCHIVE="CodexUsageMonitor-$VERSION-macOS.zip"
+ARCHIVE="Runway-$VERSION-macOS.zip"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
-cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
+cp "$DIST/Runway-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
 
 "$SPARKLE_BIN/generate_appcast" \
   --download-url-prefix "https://github.com/$REPOSITORY/releases/download/$TAG/" \
@@ -52,9 +52,10 @@ cp "$DIST/CodexUsageMonitor-macOS.zip" "$RELEASE_DIR/$ARCHIVE"
 xmllint --noout "$RELEASE_DIR/appcast.xml"
 rg -q 'sparkle:edSignature=' "$RELEASE_DIR/appcast.xml"
 python3 "$ROOT/scripts/verify_update.py" "$APP" "$RELEASE_DIR/$ARCHIVE" "$RELEASE_DIR/appcast.xml" --sparkle-bin "$SPARKLE_BIN" --repository "$REPOSITORY" --require-newer
-cp "$DIST/CodexUsageMonitor-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
-(cd "$RELEASE_DIR" && shasum -a 256 "$ARCHIVE" CodexUsageMonitor-macOS.dmg > SHA256SUMS.txt)
-TITLE="Codex Usage Monitor $VERSION preview"
+cp "$DIST/Runway-macOS.dmg" "$RELEASE_DIR/Runway-macOS.dmg"
+cp "$DIST/Runway-macOS.dmg" "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
+(cd "$RELEASE_DIR" && shasum -a 256 "$ARCHIVE" Runway-macOS.dmg CodexUsageMonitor-macOS.dmg > SHA256SUMS.txt)
+TITLE="Runway $VERSION preview"
 SIGNING_AUTHORITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=\(.*\)$/\1/p' | head -1)"
 if [[ "$SIGNING_AUTHORITY" == Apple\ Development:* ]]; then
   NOTES="Apple Development-signed preview. The release is Sparkle-signed for automatic updates, but is not Apple Developer ID signed or notarized for public distribution. macOS may require Control-click, then Open."
@@ -64,6 +65,7 @@ fi
 ASSETS=(
   "$RELEASE_DIR/$ARCHIVE"
   "$RELEASE_DIR/appcast.xml"
+  "$RELEASE_DIR/Runway-macOS.dmg"
   "$RELEASE_DIR/CodexUsageMonitor-macOS.dmg"
   "$RELEASE_DIR/SHA256SUMS.txt"
 )

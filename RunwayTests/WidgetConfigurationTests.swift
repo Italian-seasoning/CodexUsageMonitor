@@ -1,0 +1,610 @@
+import AppKit
+import Foundation
+import SwiftUI
+import Testing
+@testable import Runway
+
+@Suite
+struct WidgetConfigurationTests {
+    @Test("Debug preset storage stays separate from production presets")
+    func debugPresetIsolation() {
+        guard Bundle.main.bundleIdentifier?.hasSuffix(".debug") == true else { return }
+        #expect(SavedWidgetPresetStore.url.deletingLastPathComponent().lastPathComponent == "Runway-Debug")
+        #expect(SavedWidgetPresetStore.url.lastPathComponent == "widget-presets.json")
+    }
+
+    @Test("Lifetime activity chart groups daily usage into weekly bars")
+    func lifetimeActivityChartAggregation() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        calendar.firstWeekday = 1
+        let start = try #require(calendar.date(from: DateComponents(year: 2024, month: 1, day: 7)))
+        let days = try (0..<14).map { offset in
+            DailyUsage(
+                date: try #require(calendar.date(byAdding: .day, value: offset, to: start)),
+                usage: TokenUsage(input: 1, cachedInput: 0, output: 0, reasoningOutput: 0, total: 1),
+                sessions: 1
+            )
+        }
+
+        let lifetime = AnalysisChartData.points(
+            from: days,
+            period: .lifetime,
+            measure: .tokens,
+            calendar: calendar
+        )
+
+        #expect(lifetime.map(\.value) == [7, 7])
+        #expect(AnalysisChartData.points(from: days, period: .month, measure: .tokens).count == 14)
+    }
+
+    @Test("Lifetime chart and widget use the same account buckets as the total")
+    func accountLifetimeChartAndWidget() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 13, hour: 12)))
+        let first = try #require(calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: now)))
+        let second = try #require(calendar.date(byAdding: .day, value: 7, to: first))
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        snapshot.accountUsageDays = [AccountUsageDay(date: first, tokens: 5_400),
+            AccountUsageDay(date: second, tokens: 4_800)]
+        let accountDays = try #require(snapshot.accountDays(for: .lifetime, calendar: calendar, now: now))
+        #expect(AnalysisChartData.points(from: accountDays, period: .lifetime, calendar: calendar)
+            .reduce(0) { $0 + Int($1.value) } == 10_200)
+        let widget = WidgetFamilySemanticBuilder.content(snapshot: snapshot,
+            configuration: WidgetDisplayConfiguration(family: .usagePulse, style: .precisionInstrument,
+                theme: .crimson, period: .lifetime, dashboardArrangement: .balanced),
+            now: now, calendar: calendar)
+        #expect(widget.heroValue == 10_200.compactTokenString)
+        #expect(widget.chart?.points.reduce(0) { $0 + Int($1.value) } == 10_200)
+        #expect(widget.heroLabel.contains("Account"))
+        #expect(widget.freshness == .fresh)
+    }
+
+    @Test("Lifetime widget shows account total without inventing a chart when daily buckets are missing")
+    func accountLifetimeWithoutBuckets() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now.addingTimeInterval(-300)
+        let widget = WidgetFamilySemanticBuilder.content(snapshot: snapshot,
+            configuration: WidgetDisplayConfiguration(family: .usagePulse, style: .precisionInstrument,
+                theme: .crimson, period: .lifetime, dashboardArrangement: .balanced), now: now)
+        #expect(widget.heroValue == 10_200.compactTokenString)
+        #expect(widget.heroLabel.contains("Account"))
+        #expect(widget.chart == nil)
+        #expect(widget.freshness == .stale)
+    }
+
+    @Test("A fresh local snapshot does not make cached account usage fresh")
+    func accountUsageHealth() {
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = Date()
+        snapshot.lifetime.total = 2_400
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = Date().addingTimeInterval(-300)
+        let health = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(health.kind == .freshPartial)
+        #expect(health.detail == "Account token total is cached")
+    }
+
+    @Test("Data Health identifies missing account usage and missing account history")
+    func incompleteAccountUsageHealth() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 2_400
+        let missingTotal = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(missingTotal.kind == .freshPartial)
+        #expect(missingTotal.detail == "Account token total is unavailable")
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        let missingDays = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(missingDays.kind == .freshPartial)
+        #expect(missingDays.detail.contains("daily history is unavailable"))
+    }
+
+    @Test("Account-only usage does not claim local logs are current")
+    func accountOnlyHealth() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.accountLifetimeTokens = 10_200
+        snapshot.accountUsageObservedAt = now
+        snapshot.accountUsageDays = [AccountUsageDay(date: Calendar.current.startOfDay(for: now), tokens: 10_200)]
+
+        let health = SnapshotHealth(snapshot: snapshot, record: nil, isRefreshing: false)
+        #expect(health.kind == .freshPartial)
+        #expect(health.detail == "Account allowance has not been verified recently")
+    }
+
+    @Test("Failed widget settings sync remains queued until a successful retry")
+    func widgetSettingsSyncRetry() {
+        let now = Date()
+        let previousRequest = now.addingTimeInterval(-120)
+        var record = BackgroundRefreshRecord(lastAttempt: now, lastSuccess: now,
+            durationSeconds: 0, error: nil, widgetReloadRequestedAt: previousRequest)
+
+        record.recordWidgetReload(succeeded: false, at: now)
+        #expect(record.widgetSyncPending == true)
+        #expect(record.widgetReloadPending == true)
+        #expect(record.widgetReloadRequestedAt == previousRequest)
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent,
+            syncPending: record.widgetSyncPending == true, reloadPending: record.widgetReloadPending == true,
+            lastRequested: record.widgetReloadRequestedAt, now: now))
+
+        record.recordWidgetReload(succeeded: true, at: now)
+        #expect(record.widgetSyncPending == false)
+        #expect(record.widgetReloadPending == false)
+        #expect(record.widgetReloadRequestedAt == now)
+    }
+
+    @Test("Data Health reports a queued widget redraw")
+    func pendingWidgetHealth() {
+        let now = Date()
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.generatedAt = now
+        snapshot.lifetime.total = 100
+        let record = BackgroundRefreshRecord(lastAttempt: now, lastSuccess: now,
+            durationSeconds: 0, error: nil, widgetReloadPending: true)
+        let health = SnapshotHealth(snapshot: snapshot, record: record, isRefreshing: false)
+        #expect(health.kind == .freshPartial)
+        #expect(health.detail == "Widget refresh is queued")
+    }
+
+    @Test("Widget snapshots live outside protected app containers")
+    func sharedSnapshotLocation() {
+        let folder = Bundle.main.bundleIdentifier?.hasSuffix(".debug") == true
+            ? "Runway-Debug" : "Runway"
+        let expected = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/\(folder)/snapshot.json")
+            .standardizedFileURL
+
+        #expect(CodexUsageSnapshotStore.snapshotURL.standardizedFileURL == expected)
+        #expect(!CodexUsageSnapshotStore.snapshotURL.path.contains("/Library/Containers/"))
+        #expect(!CodexUsageSnapshotStore.snapshotURL.path.contains("/Library/Group Containers/"))
+    }
+
+    @Test("Runway data migration preserves history and older document paths")
+    func runwayDataMigrationPreservesLegacyPaths() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let legacy = root.appendingPathComponent("CodexUsageMonitor")
+        let current = root.appendingPathComponent("Runway")
+        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+        let data = Data("saved-history".utf8)
+        try data.write(to: legacy.appendingPathComponent("snapshot.json"))
+        #expect(WidgetDataBridge.migratingLegacyDirectory(at: current) == current)
+        #expect(try Data(contentsOf: current.appendingPathComponent("snapshot.json")) == data)
+        #expect(try Data(contentsOf: legacy.appendingPathComponent("snapshot.json")) == data)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: legacy.path) == "Runway")
+        #expect(WidgetDataBridge.migratingLegacyDirectory(at: current) == current)
+    }
+
+    @Test("Runway app and widget expose their new names with stable identifiers")
+    func runwayBundleNames() throws {
+        #expect(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String == "Runway")
+        #expect(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String == "Runway")
+        let plugins = try #require(Bundle.main.builtInPlugInsURL)
+        let widget = try #require(Bundle(url: plugins.appendingPathComponent("RunwayWidget.appex")))
+        #expect(widget.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String == "Runway")
+    }
+
+    @Test("Widget extension reads synchronized data from its sandbox container")
+    func widgetExtensionDataLocation() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        let host = WidgetDataBridge.dataDirectoryURL(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor",
+            homeDirectory: home
+        )
+        let widget = WidgetDataBridge.dataDirectoryURL(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor.widget3",
+            homeDirectory: home
+        )
+
+        #expect(host.path == "/Users/example/Library/Application Support/Runway")
+        let debug = WidgetDataBridge.dataDirectoryURL(
+            bundleIdentifier: "com.codexusage.CodexUsageMonitor.debug", homeDirectory: home
+        )
+        #expect(debug != host)
+        #expect(widget.path == "/Users/example/Library/Containers/com.codexusage.CodexUsageMonitor.widget3/Data/Library/Application Support/Runway")
+    }
+
+    @Test("Widget data synchronization mirrors background image deletion")
+    func widgetBackgroundDeletionSync() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("destination", isDirectory: true)
+        let staleImage = destination
+            .appendingPathComponent("widget-backgrounds", isDirectory: true)
+            .appendingPathComponent("medium.jpg")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(
+            at: staleImage.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("stale".utf8).write(to: staleImage)
+
+        #expect(WidgetDataBridge.sync(from: source, to: destination))
+        #expect(!FileManager.default.fileExists(atPath: staleImage.path))
+    }
+
+    @Test("Debug builds cannot register as the production app or widget")
+    func debugBundleIdentifiersAreIsolated() throws {
+        #if DEBUG
+        #expect(Bundle.main.bundleIdentifier == "com.codexusage.CodexUsageMonitor.debug")
+
+        let plugInsURL = try #require(Bundle.main.builtInPlugInsURL)
+        let widgetBundle = try #require(
+            Bundle(url: plugInsURL.appendingPathComponent("RunwayWidget.appex"))
+        )
+        #expect(widgetBundle.bundleIdentifier == "com.codexusage.CodexUsageMonitor.debug.widget3")
+        #endif
+    }
+
+    @Test("Configuration preserves supported choices and scopes dashboard arrangements")
+    func configurationNormalization() {
+        for family in CodexWidgetFamily.allCases {
+            for style in CodexWidgetStyle.allCases {
+                for period in UsagePeriod.allCases {
+                    for arrangement in DashboardArrangement.allCases {
+                        let configuration = WidgetDisplayConfiguration(
+                            family: family,
+                            style: style,
+                            theme: .darkGlass,
+                            period: period,
+                            dashboardArrangement: arrangement
+                        )
+                        let normalized = configuration.normalized()
+
+                        #expect(normalized.family == family)
+                        #expect(normalized.style == style)
+                        #expect(normalized.theme == .darkGlass)
+                        #expect(normalized.period == period)
+                        #expect(normalized.dashboardArrangement == (family == .dashboard ? arrangement : .balanced))
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("Desktop widget choices stay scoped to Small, Medium, and Large")
+    func desktopWidgetConfigurationsAreIndependent() throws {
+        var configurations = DesktopWidgetConfigurations.defaults(
+            appearance: WidgetAppearanceSelection(style: .signalGrid, theme: .darkGlass)
+        )
+
+        #expect(configurations.small.family == .limits)
+        #expect(configurations.medium.family == .usagePulse)
+        #expect(configurations.large.family == .dashboard)
+        #expect(configurations.small.style == .signalGrid)
+
+        var medium = configurations.configuration(for: .medium)
+        medium.family = .costLens
+        medium.period = .month
+        medium.dashboardArrangement = .activityFirst
+        configurations.set(medium, for: .medium)
+
+        #expect(configurations.small.family == .limits)
+        #expect(configurations.medium.family == .costLens)
+        #expect(configurations.medium.period == .month)
+        #expect(configurations.medium.dashboardArrangement == .balanced)
+        #expect(configurations.large.family == .dashboard)
+
+        configurations.small.backgroundMode = .customImage
+        #expect(configurations.small.backgroundMode == .customImage)
+        #expect(WidgetBackgroundImageStore.url(for: .small) != WidgetBackgroundImageStore.url(for: .medium))
+
+        let encoded = try JSONEncoder().encode(configurations)
+        #expect(try JSONDecoder().decode(DesktopWidgetConfigurations.self, from: encoded) == configurations)
+    }
+
+    @Test("Desktop picker registers one widget with three system sizes")
+    func desktopPickerRegistersOneWidgetKind() {
+        #expect(CodexWidgetKind.primary == "CodexUsageWidget")
+        #expect(CodexWidgetKind.all == [CodexWidgetKind.primary])
+    }
+
+    @Test("App widget appearance overrides presentation without changing content choices")
+    func appWidgetAppearanceOverride() {
+        let configuration = WidgetDisplayConfiguration(
+            family: .dashboard,
+            style: .precisionInstrument,
+            theme: .crimson,
+            period: .month,
+            dashboardArrangement: .activityFirst
+        )
+        let result = configuration.applying(
+            WidgetAppearanceSelection(style: .signalGrid, theme: .frostedWhite)
+        )
+
+        #expect(result.style == .signalGrid)
+        #expect(result.theme == .frostedWhite)
+        #expect(result.family == .dashboard)
+        #expect(result.period == .month)
+        #expect(result.dashboardArrangement == .activityFirst)
+    }
+
+    @Test("Classic Red surfaces remain neutral and its gradient remains red")
+    @MainActor
+    func classicRedPanelTint() throws {
+        let color = try #require(NSColor(AppTheme.classicRed.panelTint).usingColorSpace(.deviceRGB))
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        #expect(abs(red - green) < 0.04)
+        #expect(abs(red - blue) < 0.04)
+
+        let gradient = try #require(NSColor(AppTheme.classicRed.gradientLeading).usingColorSpace(.deviceRGB))
+        gradient.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        #expect(red > green)
+        #expect(red > blue)
+    }
+
+    @Test("Curated, saved, and custom presentation presets resolve predictably")
+    func presentationPresets() {
+        let saved = SavedWidgetPreset(
+            id: UUID(),
+            name: "My Coast",
+            style: .signalGrid,
+            theme: .frostedWhite
+        )
+
+        #expect(WidgetPresetMode.summer.presentation().style == .precisionInstrument)
+        #expect(WidgetPresetMode.summer.presentation().theme == .crimson)
+        #expect(WidgetPresetMode.classicRed.presentation().theme == .classicRed)
+        #expect(WidgetPresetMode.saved.presentation(savedPreset: saved).style == .signalGrid)
+        #expect(WidgetPresetMode.saved.presentation(savedPreset: saved).theme == .frostedWhite)
+        #expect(
+            WidgetPresetMode.custom.presentation(
+                customStyle: .nativeGlass,
+                customTheme: .monochrome
+            ).theme == .monochrome
+        )
+    }
+
+    @Test("Each widget family exposes its required hero metric")
+    func familyHeroSemantics() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let snapshot = widgetFixture(now: now)
+
+        func hero(_ family: CodexWidgetFamily) -> WidgetSemanticContent {
+            WidgetFamilySemanticBuilder.content(
+                snapshot: snapshot,
+                configuration: WidgetDisplayConfiguration(
+                    family: family,
+                    style: .precisionInstrument,
+                    theme: .crimson,
+                    period: .today,
+                    dashboardArrangement: .balanced
+                ),
+                now: now
+            )
+        }
+
+        #expect(hero(.limits).heroValue == "75%")
+        #expect(hero(.limits).heroLabel == "5-hour remaining")
+        #expect(hero(.usagePulse).heroValue == 1_234.compactTokenString)
+        #expect(hero(.costLens).heroValue == 2.5.compactCurrencyString)
+        #expect(hero(.modelMix).heroValue == "GPT 5.6 Sol")
+        #expect(hero(.headroomImpact).heroValue == 400.compactTokenString)
+        #expect(hero(.sessionLive).heroValue == 321.compactTokenString)
+        #expect(hero(.dashboard).heroValue == 1_234.compactTokenString)
+    }
+
+    @Test("Allowance widgets exclude expired limit windows")
+    func expiredLimitWindows() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        var snapshot = widgetFixture(now: now)
+        snapshot.rateLimits?.fiveHour?.resetsAt = now.addingTimeInterval(-1)
+        let configuration = WidgetDisplayConfiguration(family: .limits, style: .nativeGlass,
+            theme: .rain, period: .today, dashboardArrangement: .balanced)
+        let weekly = WidgetFamilySemanticBuilder.content(snapshot: snapshot, configuration: configuration, now: now)
+        #expect(weekly.heroValue == "60%")
+        #expect(weekly.heroLabel == "Weekly remaining")
+
+        snapshot.rateLimits?.weekly?.resetsAt = now.addingTimeInterval(-1)
+        let expired = WidgetFamilySemanticBuilder.content(snapshot: snapshot, configuration: configuration, now: now)
+        #expect(expired.heroValue == "—")
+        #expect(expired.heroLabel == "No current limit window")
+    }
+
+    @MainActor
+    @Test("Widget foreground stays transparent for macOS vibrant rendering")
+    func widgetForegroundLayerRemainsTransparent() throws {
+        let renderer = ImageRenderer(
+            content: CodexWidgetStyledContainer(
+                style: .nativeGlass,
+                theme: .darkGlass,
+                monochrome: true
+            ) {
+                VStack {
+                    HStack {
+                        Color.red.frame(width: 8, height: 8)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+            }
+            .frame(width: 170, height: 170)
+        )
+        renderer.scale = 1
+
+        let image = try #require(renderer.cgImage)
+        let center = NSBitmapImageRep(cgImage: image).colorAt(x: 85, y: 85)
+        #expect(try #require(center).alphaComponent < 0.01)
+    }
+
+    @MainActor
+    @Test("Every widget family renders in every size and style")
+    func completeWidgetRenderMatrix() throws {
+        let snapshot = widgetFixture(now: Date(timeIntervalSinceReferenceDate: 800_000_000))
+
+        for family in CodexWidgetFamily.allCases {
+            for style in CodexWidgetStyle.allCases {
+                for size in CodexUsageCardSize.allCases {
+                  for theme in [WidgetTheme.darkGlass, .rain, .autumn] {
+                    let frame = switch size {
+                    case .small: CGSize(width: 170, height: 170)
+                    case .medium: CGSize(width: 340, height: 170)
+                    case .large: CGSize(width: 340, height: 340)
+                    }
+                    let renderer = ImageRenderer(
+                        content: CodexWidgetFamilyView(
+                            snapshot: snapshot,
+                            configuration: WidgetDisplayConfiguration(
+                                family: family,
+                                style: style,
+                                theme: theme,
+                                period: .sevenDays,
+                                dashboardArrangement: .balanced
+                            ),
+                            size: size,
+                            monochrome: false,
+                            paintsBackground: true
+                        )
+                        .frame(width: frame.width, height: frame.height)
+                    )
+                    renderer.scale = 1
+
+                    #expect(try #require(renderer.cgImage).width == Int(frame.width))
+                  }
+                }
+            }
+        }
+    }
+
+    @Test("Account token widgets identify their local secondary statistics")
+    func accountTokensKeepLocalStatisticsLabeled() {
+        let now = Date()
+        var snapshot = widgetFixture(now: now)
+        snapshot.accountLifetimeTokens = 10_000
+        snapshot.accountUsageDays = [AccountUsageDay(date: now, tokens: 10_000)]
+        snapshot.accountUsageObservedAt = now
+        snapshot.sessionCount = 3
+        snapshot.turnCount = 12
+        let content = WidgetFamilySemanticBuilder.content(snapshot: snapshot,
+            configuration: WidgetDisplayConfiguration(family: .usagePulse, style: .nativeGlass,
+                theme: .crimson, period: .lifetime, dashboardArrangement: .balanced), now: now)
+        #expect(content.heroValue == 10_000.compactTokenString)
+        #expect(content.secondaryValues.map(\.label) == ["Local sessions", "Local requests", "Local API equivalent"])
+        #expect(content.secondaryValues.first?.value == "3")
+        #expect(content.secondaryValues[1].value == "12")
+    }
+
+    @Test("Headroom cache avoids repeated reports and updates expiring savings windows")
+    func headroomCacheKeepsMovingWindowsCurrent() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = root.appendingPathComponent("headroom")
+        let ledger = root.appendingPathComponent("ledger.jsonl")
+        let calls = root.appendingPathComponent("calls")
+        let report = """
+        {"schema_version":2,"top_model":"gpt-6.1-sol","lifetime":{"tokens_saved":100,"tokens_before":210,"cost_usd":1,"calls":4,"savings_percent":47.6},"windows":{"today":{"tokens_saved":50,"tokens_before":110,"cost_usd":0.5,"calls":2,"savings_percent":45.5},"last_7_days":{"tokens_saved":75,"tokens_before":160,"cost_usd":0.75,"calls":3,"savings_percent":46.9}},"by_client":[{"client":"codex","tokens_saved":100,"calls":4}]}
+        """
+        let script = """
+        #!/bin/sh
+        printf x >> '\(calls.path)'
+        printf '%s' '\(String(repeating: "e", count: 262_144))' >&2
+        cat <<'REPORT'
+        \(report)
+        \(String(repeating: " ", count: 262_144))
+        REPORT
+        """
+        try Data(script.utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        let rows = """
+        {"client":"codex","ts":"2026-09-14T12:30:00Z","before":50,"after":25,"saved":25,"cost_usd":0.25}
+        {"client":"codex","ts":"2026-10-07T12:30:00Z","before":50,"after":25,"saved":25,"cost_usd":0.25}
+        {"client":"codex","ts":"2026-10-14T10:00:00Z","before":100,"after":50,"saved":50,"cost_usd":0.5}
+        {"client":"codex","ts":"2026-10-14T10:01:00Z","before":10,"after":10,"saved":0,"cost_usd":0}
+        """
+        try Data(rows.utf8).write(to: ledger)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-14T12:00:00Z"))
+        let collector = HeadroomSavingsCollector(executableURL: executable, ledgerURL: ledger,
+            calendar: calendar, cacheURL: root.appendingPathComponent("headroom-cache.plist"))
+        let initial = try #require(collector.collect(now: now))
+        #expect(initial.savings.last7DaysTokensSaved == 75)
+        #expect(collector.collect(now: now) == initial)
+        let later = try #require(collector.collect(now: now.addingTimeInterval(3600)))
+        #expect(later.savings.lifetimeTokensSaved == 75)
+        #expect(later.savings.trackedPeriodLabel == "Last 30 days")
+        #expect(later.savings.last7DaysTokensSaved == 50)
+        #expect(later.savings.todayCostSavedUSD == 0.5)
+        #expect(later.savings.todayRequests == 2)
+        #expect(try String(contentsOf: calls, encoding: .utf8) == "x")
+        try Data((rows + "\n").utf8).write(to: ledger)
+        #expect(collector.collect(now: now) != nil)
+        #expect(try String(contentsOf: calls, encoding: .utf8) == "xx")
+    }
+
+    private func widgetFixture(now: Date) -> CodexUsageSnapshot {
+        let usage = TokenUsage(input: 900, cachedInput: 100, output: 200, reasoningOutput: 34, total: 1_234)
+        var snapshot = CodexUsageSnapshot.empty
+        snapshot.today = usage
+        snapshot.lifetime = usage
+        snapshot.currentSession = TokenUsage(input: 200, cachedInput: 20, output: 90, reasoningOutput: 11, total: 321)
+        snapshot.currentSessionTurns = 7
+        snapshot.currentSessionStartedAt = now.addingTimeInterval(-900)
+        snapshot.currentModel = "gpt-5.6-sol"
+        snapshot.generatedAt = now
+        snapshot.activityDays = [
+            DailyUsage(
+                date: now,
+                usage: usage,
+                sessions: 3,
+                turns: 12,
+                headroomSaved: 400,
+                estimatedCostMicros: 2_500_000
+            )
+        ]
+        snapshot.dailyModelUsage = [
+            DailyModelUsage(
+                date: now,
+                models: [
+                    ModelUsage(model: "gpt-5.6-sol", usage: usage, turns: 12, estimatedCostUSD: 2.5)
+                ]
+            )
+        ]
+        var headroom = HeadroomSavings.zero
+        headroom.todayTokensSaved = 400
+        headroom.last7DaysTokensSaved = 800
+        headroom.lifetimeTokensSaved = 1_200
+        headroom.lifetimeRequests = 20
+        headroom.savingsPercent = 0.25
+        headroom.costSavedUSD = 4.2
+        headroom.lastUpdated = now
+        snapshot.headroom = headroom
+        snapshot.rateLimits = CodexRateLimits(
+            fiveHour: RateLimitWindow(
+                usedPercent: 25,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(3_600),
+                observedAt: now
+            ),
+            weekly: RateLimitWindow(
+                usedPercent: 40,
+                windowMinutes: 10_080,
+                resetsAt: now.addingTimeInterval(86_400),
+                observedAt: now
+            ),
+            history: []
+        )
+        return snapshot
+    }
+}
