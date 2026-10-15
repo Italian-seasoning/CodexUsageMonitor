@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#08090a">
+  <meta name="theme-color" content="#f4f1e9">
   <meta name="description" content="A private macOS app for local Codex usage, limits, model-aware cost estimates, and desktop widgets.">
   <meta property="og:title" content="Runway">
   <meta property="og:description" content="Know exactly what Codex is doing.">
@@ -13,7 +13,6 @@
   <title>Runway</title>
   <link rel="icon" href="assets/monitor-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
-  <script src="site.js" defer></script>
 </head>
 <body class="home-page">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -38,20 +37,12 @@
 
   <main id="main">
     <section class="hero" id="top">
-      <div class="hero-atmosphere" aria-hidden="true">
-        <div class="horizon-sun"></div>
-        <div class="tide tide-one"></div>
-        <div class="tide tide-two"></div>
-        <div class="tide tide-three"></div>
-      </div>
-
       <div class="hero-copy">
-        <img class="hero-mark" src="assets/monitor-mark.svg" alt="" width="104" height="104">
-        <p class="release-note"><span></span> Version 2.0.6 · macOS 14+</p>
-        <h1>A little clarity.<br> For every token.</h1>
-        <p class="hero-detail">Keep your Codex usage, model activity, and API-equivalent estimates in view. A private, native companion for your Mac.</p>
+        <p class="release-note">Codex usage for macOS</p>
+        <h1>Know where<br>your tokens go.</h1>
+        <p class="hero-detail">Usage, models, and limits in one clear view. Runway brings your local Codex activity to your Mac and desktop widgets.</p>
         <div class="hero-actions">
-          <a class="primary-action download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/Runway-macOS.dmg">
+          <a class="primary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/Runway-macOS.dmg">
             <span class="button-icon" aria-hidden="true">↓</span>
             <span>Download for Mac</span>
           </a>
@@ -59,35 +50,28 @@
             View on GitHub <span aria-hidden="true">↗</span>
           </a>
         </div>
-        <p class="requirements">Apple silicon + Intel <i></i> No account <i></i> No analytics</p>
+        <p class="requirements">macOS 14+ · Apple silicon &amp; Intel</p>
       </div>
 
       <div class="hero-product">
-        <div class="product-chrome">
-          <span class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span>Runway</span>
-          <span class="live-indicator"><i></i> Local</span>
-        </div>
         <img src="assets/analysis.jpg" alt="Runway Analysis screen showing token activity, model share, API estimate, sessions, and remaining limits.">
-        <div class="stage-note stage-note-left"><b>On your Mac</b><span>your local usage history</span></div>
-        <div class="stage-note stage-note-right"><b>At a glance</b><span>native desktop widgets</span></div>
       </div>
     </section>
 
-    <section class="intro reveal" id="product">
-      <p class="section-kicker">A clearer local record</p>
-      <h2>Everything useful.<br>Nothing sent away.</h2>
-      <p>Runway turns local session history into a calm, period-aware view of what you used, which models handled it, and where your limits stand.</p>
+    <section class="intro" id="product">
+      <p class="section-kicker">The overview</p>
+      <h2>The whole picture.<br>On your Mac.</h2>
+      <p>See what you used, which models handled it, and where your limits stand. Explore your activity by period, with local session history in one place.</p>
     </section>
 
-    <section class="feature feature-models reveal">
+    <section class="feature feature-models">
       <div class="feature-copy">
         <p class="section-kicker">Model attribution</p>
         <h2>See the work behind the total.</h2>
-        <p>Follow Astra and Luna alongside your other models. Ranked token share, request counts, and API-equivalent estimates make each period easy to understand.</p>
+        <p>Compare token share, request counts, and API-equivalent estimates across your models. See how the mix changes from one period to the next.</p>
         <ul class="feature-list">
           <li><span>01</span> Period-aware model mix</li>
-          <li><span>02</span> Recorded pricing estimates</li>
+          <li><span>02</span> API-equivalent cost estimates</li>
           <li><span>03</span> Local session attribution</li>
         </ul>
       </div>
@@ -97,22 +81,7 @@
       </div>
     </section>
 
-    <section class="pricing-update" aria-labelledby="pricing-heading">
-      <p class="section-kicker">September update · In development</p>
-      <h2 id="pricing-heading">Astra precision. Luna headroom.</h2>
-      <p>Updated Standard API-equivalent rates, checked against OpenAI on September 6, 2026. These estimate token value; they are not ChatGPT subscription charges.</p>
-      <div class="pricing-scroll">
-        <table>
-          <caption>USD per million tokens · short context</caption>
-          <thead><tr><th scope="col">Model</th><th scope="col">Input</th><th scope="col">Cached input</th><th scope="col">Output</th></tr></thead>
-          <tbody><tr><th scope="row">GPT-6 Astra</th><td>$10.00</td><td>$1.00</td><td>$50.00</td></tr><tr><th scope="row">GPT-5.6 Luna · Reserve</th><td>$0.20</td><td>$0.02</td><td>$1.20</td></tr></tbody>
-        </table>
-      </div>
-      <p>Reserve uses Luna. Model activity comes from local logs; it does not indicate a remaining Reserve allowance. Long-context rates differ. Cache-write and service-tier premiums are excluded from estimates.</p>
-      <a href="https://developers.openai.com/api/docs/pricing">View OpenAI pricing ↗</a>
-    </section>
-
-    <section class="feature feature-widgets reveal" id="widgets">
+    <section class="feature feature-widgets" id="widgets">
       <div class="feature-copy">
         <p class="section-kicker">Native desktop widgets</p>
         <h2>Your usage, where you work.</h2>
@@ -127,13 +96,13 @@
       </div>
     </section>
 
-    <section class="privacy reveal" id="privacy">
+    <section class="privacy" id="privacy">
       <div>
-        <p class="section-kicker">Private by architecture</p>
+        <p class="section-kicker">Privacy</p>
         <h2>Local means local.</h2>
       </div>
       <div class="privacy-copy">
-        <p>Runway reads session logs on your Mac, builds its snapshot on-device, and gives WidgetKit only the data it needs. Prompts and usage history never leave your computer.</p>
+        <p>Your session history stays on your Mac. Runway builds usage snapshots on-device and shares them with your desktop widgets. It has no analytics or advertising SDKs.</p>
         <a href="privacy.html">Read the privacy policy <span aria-hidden="true">→</span></a>
         <dl>
           <div><dt>Accounts</dt><dd>None</dd></div>
@@ -143,15 +112,14 @@
       </div>
     </section>
 
-    <section class="final-cta reveal">
-      <img src="assets/monitor-mark.svg" alt="" width="88" height="88">
-      <p class="section-kicker">Runway 4.0.8 preview</p>
-      <h2>Keep your Codex work in view.</h2>
-      <a class="primary-action download-glow" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/Runway-macOS.dmg">
+    <section class="final-cta">
+      <p class="section-kicker">Get Runway</p>
+      <h2>Make room<br>for the next idea.</h2>
+      <a class="primary-action" href="https://github.com/Italian-seasoning/CodexUsageMonitor/releases/latest/download/Runway-macOS.dmg">
         <span class="button-icon" aria-hidden="true">↓</span>
         <span>Download for Mac</span>
       </a>
-      <p class="preview-warning">Anonymous, ad-hoc signed preview. Not notarized by Apple; first launch may need approval in System Settings → Privacy &amp; Security.</p>
+      <p class="preview-warning">Preview build · Not notarized. First launch may require approval in System Settings → Privacy &amp; Security.</p>
     </section>
   </main>
 
