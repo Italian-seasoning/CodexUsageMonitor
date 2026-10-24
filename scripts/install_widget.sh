@@ -13,8 +13,13 @@ LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/Current/F
 INSTALL_COMPLETED=0
 LOCK_ACQUIRED=0
 LOCKFILE="$HOME/Library/Caches/com.codexusage.Runway/install.lock"
+AGENTS_RETIRED=0
+APP_STOPPED=0
+REOPEN_APP=""
+RECOVERY_NEEDED=0
 
 cleanup_build() {
+  set +e
   if [[ "$INSTALL_COMPLETED" -eq 0 ]]; then
     for installed in "$DEST" "$LEGACY_APP"; do
       previous="$DERIVED_DATA/Previous-$(basename "$installed")"
@@ -23,16 +28,42 @@ cleanup_build() {
           "$LSREGISTER" -f "$installed" >/dev/null 2>&1 || true
         else
           echo "Could not restore $installed; recovery copy: $previous" >&2
+          RECOVERY_NEEDED=1
         fi
       fi
     done
+    if [[ "$AGENTS_RETIRED" -eq 1 ]]; then
+      for agent in "$AGENT" "$LEGACY_AGENT"; do
+        saved="$DERIVED_DATA/Agents/$(basename "$agent")"
+        if [[ -e "$saved" || -L "$saved" ]]; then
+          if ! cp -pP "$saved" "$agent"; then
+            echo "Could not restore $agent; recovery copy: $saved" >&2
+            RECOVERY_NEEDED=1
+            continue
+          fi
+        fi
+        if [[ -f "$saved.loaded" ]]; then
+          service="gui/$(id -u)/$(basename "$agent" .plist)"
+          status=0
+          launchctl print "$service" >/dev/null 2>&1 || status=$?
+          if [[ "$status" -eq 113 ]]; then
+            launchctl bootstrap "gui/$(id -u)" "$agent" || RECOVERY_NEEDED=1
+          elif [[ "$status" -ne 0 ]]; then
+            RECOVERY_NEEDED=1
+          fi
+        fi
+      done
+    fi
+    if [[ "$APP_STOPPED" -eq 1 && -n "$REOPEN_APP" && -d "$REOPEN_APP" ]]; then
+      /usr/bin/open "$REOPEN_APP" || RECOVERY_NEEDED=1
+    fi
   fi
   if [[ -d "$APP" ]]; then
     pluginkit -r "$APP/Contents/PlugIns/RunwayWidget.appex" >/dev/null 2>&1 || true
     "$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true
   fi
-  if [[ "$INSTALL_COMPLETED" -eq 0 && ( -e "$DERIVED_DATA/Previous-Runway.app" || -L "$DERIVED_DATA/Previous-Runway.app" || -e "$DERIVED_DATA/Previous-CodexUsageMonitor.app" || -L "$DERIVED_DATA/Previous-CodexUsageMonitor.app" ) ]]; then
-    echo "Previous application retained in $DERIVED_DATA" >&2
+  if [[ "$RECOVERY_NEEDED" -eq 1 || ( "$INSTALL_COMPLETED" -eq 0 && ( -e "$DERIVED_DATA/Previous-Runway.app" || -L "$DERIVED_DATA/Previous-Runway.app" || -e "$DERIVED_DATA/Previous-CodexUsageMonitor.app" || -L "$DERIVED_DATA/Previous-CodexUsageMonitor.app" ) ) ]]; then
+    echo "Installation recovery files retained in $DERIVED_DATA" >&2
   else
     rm -rf "$DERIVED_DATA"
   fi
@@ -58,6 +89,32 @@ if ! /usr/bin/shlock -p "$$" -f "$LOCKFILE"; then
 fi
 LOCK_ACQUIRED=1
 
+# Finish preparation before interrupting the installed application or its jobs.
+BACKUP="$ROOT/build/install-backups.noindex/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$BACKUP"
+STAGED="$DERIVED_DATA/New-Runway.app"
+ditto "$APP" "$STAGED"
+for installed in "$LEGACY_APP" "$DEST"; do
+  if [[ -d "$installed" && ! -L "$installed" ]]; then
+    archive="$BACKUP/Previous-$(basename "$installed").zip"
+    ditto -c -k --sequesterRsrc --keepParent "$installed" "$archive"
+    unzip -tq "$archive" >/dev/null
+  fi
+done
+mkdir -p "$DERIVED_DATA/Agents"
+for agent in "$AGENT" "$LEGACY_AGENT"; do
+  saved="$DERIVED_DATA/Agents/$(basename "$agent")"
+  if [[ -e "$agent" || -L "$agent" ]]; then cp -pP "$agent" "$saved"; fi
+  status=0
+  launchctl print "gui/$(id -u)/$(basename "$agent" .plist)" >/dev/null 2>&1 || status=$?
+  if [[ "$status" -eq 0 && -f "$agent" ]]; then
+    touch "$saved.loaded"
+  elif [[ "$status" -ne 113 ]]; then
+    echo "Cannot safely preserve $agent (launchctl $status)" >&2
+    exit 1
+  fi
+done
+AGENTS_RETIRED=1
 for agent in "$AGENT" "$LEGACY_AGENT"; do
   label="$(basename "$agent" .plist)"
   service="gui/$(id -u)/$label"
@@ -77,18 +134,13 @@ for agent in "$AGENT" "$LEGACY_AGENT"; do
   fi
   rm -f "$agent"
 done
+if pgrep -f '^/Applications/Runway[.]app/Contents/' >/dev/null; then
+  REOPEN_APP="$DEST"
+elif pgrep -f '^/Applications/CodexUsageMonitor[.]app/Contents/' >/dev/null; then
+  REOPEN_APP="$LEGACY_APP"
+fi
+APP_STOPPED=1
 pkill -f '^/Applications/(Runway|CodexUsageMonitor)[.]app/Contents/' >/dev/null 2>&1 || true
-BACKUP="$ROOT/build/install-backups.noindex/$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$BACKUP"
-STAGED="$DERIVED_DATA/New-Runway.app"
-ditto "$APP" "$STAGED"
-for installed in "$LEGACY_APP" "$DEST"; do
-  if [[ -d "$installed" && ! -L "$installed" ]]; then
-    archive="$BACKUP/Previous-$(basename "$installed").zip"
-    ditto -c -k --sequesterRsrc --keepParent "$installed" "$archive"
-    unzip -tq "$archive" >/dev/null
-  fi
-done
 if [[ -e "$LEGACY_APP" && ! -L "$LEGACY_APP" ]]; then
   "$LSREGISTER" -u "$LEGACY_APP"
   mv "$LEGACY_APP" "$DERIVED_DATA/Previous-CodexUsageMonitor.app"

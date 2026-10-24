@@ -26,7 +26,7 @@ Original project: [Italian-seasoning/CodexUsageMonitor](https://github.com/Itali
 brew install --cask italian-seasoning/tap/runway
 ```
 
-Current preview: **4.0.8**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.8/Runway-macOS.dmg).
+Current preview: **4.0.9**. [Download the DMG](https://github.com/Italian-seasoning/CodexUsageMonitor/releases/download/v4.0.9/Runway-macOS.dmg).
 
 Requires macOS 14 or newer on Apple silicon or Intel.
 
@@ -121,7 +121,9 @@ Release packaging and GitHub publishing are documented in
 
 ## Version
 
-Latest published Mac preview: **4.0.8**. Windows and Linux clients: **4.0.1**.
+Latest published Mac preview: **4.0.9**. Windows and Linux clients: **4.0.1**.
+
+4.0.9 fixes installer rollback: preparation failures leave the running installation intact, and later failures restore previous refresh jobs and reopen the app if it was running. Successful installations retain duplicate-app cleanup and legacy-agent retirement.
 
 Includes GPT-6.1 Sol usage and API-equivalent cost estimates.
 Streams session and Headroom logs to reduce refresh memory use on large histories.
