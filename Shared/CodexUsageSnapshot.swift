@@ -34,10 +34,13 @@ enum JSONLFileReader {
         _ visit: ([String: Any]) -> Void
     ) throws -> ReadProgress {
         precondition(chunkSize > 0)
-        let handle = try FileHandle(forReadingFrom: url)
+        let descriptor = Darwin.open(url.path, O_RDONLY | O_NONBLOCK)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? handle.close() }
         var initial = stat()
         try checkPOSIX(Darwin.fstat(handle.fileDescriptor, &initial))
+        guard initial.st_mode & S_IFMT == S_IFREG else { throw ReadError.sourceChanged }
         let identity = sourceIdentity(initial)
         guard expectedIdentity == nil || expectedIdentity == identity else {
             throw ReadError.sourceReplaced

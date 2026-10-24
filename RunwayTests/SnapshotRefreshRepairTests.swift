@@ -83,7 +83,11 @@ struct SnapshotRefreshRepairTests {
         let timeoutStart = ProcessInfo.processInfo.systemUptime
         #expect(RefreshLock.acquire(at: url, timeout: 0.15) == nil)
         #expect(ProcessInfo.processInfo.systemUptime - timeoutStart >= 0.14)
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.15) { holder.release() }
+        // Waiting must not depend on a shared queue saturated by parallel blocking tests.
+        Thread.detachNewThread {
+            Thread.sleep(forTimeInterval: 0.15)
+            holder.release()
+        }
         let waiting = try #require(RefreshLock.acquire(at: url, timeout: 2))
         waiting.release()
     }
