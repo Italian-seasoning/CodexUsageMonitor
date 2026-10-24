@@ -43,4 +43,8 @@ jobs:
           xcodebuild -project Runway.xcodeproj -scheme Runway
           -configuration Debug -destination 'platform=macOS'
           CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
+          -resultBundlePath /tmp/RunwayTests.xcresult
           -quiet test
+      - name: Report failed assertions
+        if: failure()
+        run: xcrun xcresulttool get test-results summary --path /tmp/RunwayTests.xcresult
