@@ -6,6 +6,22 @@ import SwiftUI
 import Testing
 @testable import Runway
 
+@Test("Install registration keeps the current app and retires duplicate build and backup paths")
+func appRegistrationObsoletePaths() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let current = directory.appendingPathComponent("Runway.app", isDirectory: true)
+    try FileManager.default.createDirectory(at: current, withIntermediateDirectories: true)
+    let alias = directory.appendingPathComponent("CodexUsageMonitor.app")
+    try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: current)
+    let old = directory.appendingPathComponent("Build Products/Previous-Runway.app")
+    let debug = directory.appendingPathComponent("Debug/Runway.app")
+    let duplicate = directory.appendingPathComponent("Build Products/../Build Products/Previous-Runway.app")
+    #expect(AppRegistration.obsoletePaths(currentApp: current,
+        registeredApps: [current, alias, old, debug, duplicate]) == [old.path, debug.path].sorted())
+    #expect(AppRegistration.obsoletePaths(currentApp: current, registeredApps: [current, alias]).isEmpty)
+}
+
 @Test("Streaming JSONL handles split UTF-8, large rows, CRLF, malformed rows and a final row", arguments: [1, 7, 65_536])
 func streamingJSONLBoundaries(chunkSize: Int) throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -1,0 +1,46 @@
+name: macOS checks
+
+on:
+  pull_request:
+    paths:
+      - 'Runway/**'
+      - 'RunwayWidget/**'
+      - 'Shared/**'
+      - 'RunwayTests/**'
+      - 'Runway.xcodeproj/**'
+      - 'scripts/**'
+      - 'script/**'
+      - 'tests/install-selfcheck.py'
+      - '.github/workflows/macos.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Runway/**'
+      - 'RunwayWidget/**'
+      - 'Shared/**'
+      - 'RunwayTests/**'
+      - 'Runway.xcodeproj/**'
+      - 'scripts/**'
+      - 'script/**'
+      - 'tests/install-selfcheck.py'
+      - '.github/workflows/macos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify installer replacement and rollback
+        run: python3 tests/install-selfcheck.py
+      - name: Test macOS app
+        run: >-
+          xcodebuild -project Runway.xcodeproj -scheme Runway
+          -configuration Debug -destination 'platform=macOS'
+          CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
+          -quiet test
