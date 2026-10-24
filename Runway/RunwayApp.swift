@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         _ = AppUpdater.shared
         if BackgroundRefreshAgent.isStableInstall {
-            WidgetRegistration.refresh()
+            AppRegistration.refresh()
         }
         let hasCurrentAccess = OnboardingStateStore.hasCurrentCodexDataAccess()
         if OnboardingStateStore.completedCurrentVersion() {
@@ -177,16 +177,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 }
 
-private enum WidgetRegistration {
+enum AppRegistration {
+    static func obsoletePaths(currentApp: URL, registeredApps: [URL]) -> [String] {
+        let current = currentApp.resolvingSymlinksInPath().standardizedFileURL
+        return Set(registeredApps.filter {
+            $0.resolvingSymlinksInPath().standardizedFileURL != current
+        }.map { $0.standardizedFileURL.path }).sorted()
+    }
+
     static func refresh() {
+        guard Bundle.main.bundleIdentifier == "com.codexusage.CodexUsageMonitor" else { return }
         let app = Bundle.main.bundleURL.path
         let plugin = Bundle.main.bundleURL
             .appendingPathComponent("Contents/PlugIns/RunwayWidget.appex").path
-        guard FileManager.default.fileExists(atPath: plugin) else { return }
+        let registered = ["com.codexusage.CodexUsageMonitor", "com.codexusage.CodexUsageMonitor.debug"]
+            .flatMap { NSWorkspace.shared.urlsForApplications(withBundleIdentifier: $0) }
+        let obsolete = obsoletePaths(currentApp: Bundle.main.bundleURL, registeredApps: registered)
 
         DispatchQueue.global(qos: .utility).async {
-            run("/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister", ["-f", "-R", "-trusted", app])
-            run("/usr/bin/pluginkit", ["-a", plugin])
+            let lsregister = "/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister"
+            for path in obsolete {
+                run("/usr/bin/pluginkit", ["-r", path + "/Contents/PlugIns/RunwayWidget.appex"])
+                run(lsregister, ["-u", path])
+            }
+            run(lsregister, ["-f", "-R", "-trusted", app])
+            if FileManager.default.fileExists(atPath: plugin) {
+                run("/usr/bin/pluginkit", ["-a", plugin])
+            }
         }
     }
 
@@ -196,8 +213,12 @@ private enum WidgetRegistration {
         process.arguments = arguments
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            // Registration is retried on the next normal launch.
+        }
     }
 }
 
