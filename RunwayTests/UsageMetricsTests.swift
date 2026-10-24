@@ -90,9 +90,11 @@ struct UsageMetricsTests {
     func consumptionRate() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let reset = now.addingTimeInterval(3_600)
-        let samples = (0...3).map { index in
-            RateLimitWindow(usedPercent: Double(20 + index * 2), windowMinutes: 300,
-                resetsAt: reset, observedAt: now.addingTimeInterval(Double(index - 3) * 300))
+        let samples: [RateLimitWindow] = (0...3).map { index in
+            let usedPercent = Double(20 + index * 2)
+            let observedAt = now.addingTimeInterval(Double(index - 3) * 300)
+            return RateLimitWindow(usedPercent: usedPercent, windowMinutes: 300,
+                resetsAt: reset, observedAt: observedAt)
         }
         var limits = CodexRateLimits(fiveHour: samples.last, weekly: nil, history: [], consumptionSamples: samples)
         #expect(limits.consumptionPer15Minutes(for: limits.fiveHour, now: now) == 6)
