@@ -101,32 +101,15 @@ struct LimitPreferencesView: View {
     var showsMonitoring = true
     var showsNotifications = true
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
-    @State private var agentStatus = BackgroundRefreshAgentStatus(
-        enabled: CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled,
-        installed: false,
-        loaded: false,
-        lastSuccess: nil
-    )
     @State private var phoneTopicURL: String?
     @State private var phoneTestStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if showsMonitoring {
-            Toggle("Continue monitoring after you quit", isOn: $settingsModel.settings.backgroundRefreshEnabled)
-                .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
-                    updateAgentStatus { _ = BackgroundRefreshAgent.setEnabled(enabled) }
-                }
-            Text(agentStatus.detail)
+            Text("Updates follow local changes while Runway and ChatGPT or Codex are running. Widgets keep their last snapshot after either app quits. You can refresh manually at any time.")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
-
-            if settingsModel.settings.backgroundRefreshEnabled && (!agentStatus.installed || !agentStatus.loaded) {
-                Button("Repair background refresh") {
-                    updateAgentStatus { _ = BackgroundRefreshAgent.install() }
-                }
-                .buttonStyle(.link)
-            }
 
             LabeledContent("Menu bar") {
                 Picker("Menu bar", selection: $settingsModel.settings.menuBarDisplayMode) {
@@ -196,15 +179,13 @@ struct LimitPreferencesView: View {
                 .onChange(of: settingsModel.settings.phoneNotificationsEnabled) { _, enabled in
                     if enabled {
                         phoneTopicURL = PhoneResetNotificationManager.ensureTopic().map { "https://ntfy.sh/\($0)" }
-                        settingsModel.settings.backgroundRefreshEnabled = true
-                        updateAgentStatus { _ = BackgroundRefreshAgent.install() }
                     } else {
                         Task { await PhoneResetNotificationManager.cancelScheduled() }
                     }
                 }
 
             if settingsModel.settings.phoneNotificationsEnabled {
-                Text("Install ntfy on your iPhone, then subscribe to this private topic. The topic is stored in Keychain.")
+                Text("Automatic reset alerts require Runway and ChatGPT or Codex to be running. Install ntfy on your iPhone, then subscribe to this private topic. The topic is stored in Keychain.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                 if let phoneTopicURL {
@@ -247,19 +228,9 @@ struct LimitPreferencesView: View {
             }
         }
         .onAppear {
-            updateAgentStatus()
             if settingsModel.settings.phoneNotificationsEnabled {
                 phoneTopicURL = PhoneResetNotificationManager.topicURL
             }
-        }
-    }
-
-    private func updateAgentStatus(action: @escaping @Sendable () -> Void = {}) {
-        Task {
-            agentStatus = await Task.detached(priority: .utility) {
-                action()
-                return BackgroundRefreshAgent.status()
-            }.value
         }
     }
 }

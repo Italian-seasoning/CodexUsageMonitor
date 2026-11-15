@@ -18,16 +18,7 @@ struct CodexUsageProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CodexUsageEntry>) -> Void) {
-        let now = Date()
-        let next = Calendar.current.date(byAdding: .minute, value: 1, to: now)
-            ?? now.addingTimeInterval(60)
-        let current = entry(at: now, family: context.family)
-        // Age cached readings even when the system delays the requested reload.
-        let entries = (0...15).map { minute in
-            CodexUsageEntry(date: now.addingTimeInterval(Double(minute) * 60),
-                snapshot: current.snapshot, configuration: current.configuration)
-        }
-        completion(Timeline(entries: entries, policy: .after(next)))
+        completion(Timeline(entries: [entry(at: .now, family: context.family)], policy: .never))
     }
 
     private func entry(at date: Date, family: WidgetFamily) -> CodexUsageEntry {
@@ -58,6 +49,14 @@ struct CodexUsageWidgetView: View {
             monochrome: entry.configuration.theme == .monochrome,
             now: entry.date
         )
+        .overlay(alignment: .bottomTrailing) {
+            if let observedAt = entry.snapshot.generatedAt {
+                Text("Snapshot \(observedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.secondary)
+                    .padding(3)
+            }
+        }
         .containerBackground(for: .widget) {
             if let customBackground {
                 CodexWidgetCustomImageBackground(image: customBackground, light: entry.configuration.theme == .runway)

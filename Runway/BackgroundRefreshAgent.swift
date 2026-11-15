@@ -21,27 +21,9 @@ struct BackgroundRefreshRecord: Codable, Equatable {
     }
 }
 
-struct BackgroundRefreshAgentStatus: Sendable {
-    var enabled: Bool
-    var installed: Bool
-    var loaded: Bool
-    var lastSuccess: Date?
-
-    var detail: String {
-        if !enabled { return "Off" }
-        if !BackgroundRefreshAgent.isStableInstall {
-            return installed ? "Managed by the installed app" : "Move the app to Applications first"
-        }
-        if !installed || !loaded { return "Needs repair" }
-        guard let lastSuccess else { return "Scheduled every minute" }
-        return "Last refreshed \(lastSuccess.formatted(date: .omitted, time: .shortened))"
-    }
-}
-
 enum BackgroundRefreshAgent {
     static let identifier = "com.codexusage.Runway.refresh"
     static let legacyIdentifier = "com.codexusage.CodexUsageMonitor.refresh"
-    static let interval: TimeInterval = 60
 
     static var isStableInstall: Bool {
         let path = Bundle.main.bundleURL.standardizedFileURL.path
@@ -50,61 +32,20 @@ enum BackgroundRefreshAgent {
         return path.hasPrefix("/Applications/") || path.hasPrefix(homeApplications + "/")
     }
 
-    static func installIfEnabled() {
-        if CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled {
-            _ = install()
-        } else {
-            _ = uninstall()
-        }
-    }
-
-    @discardableResult
-    static func setEnabled(_ enabled: Bool) -> Bool {
-        return enabled ? install() : uninstall()
-    }
-
-    @discardableResult
-    static func install() -> Bool {
-        guard canManageInstalledAgents,
-              removeAgent(identifier: legacyIdentifier),
-              OnboardingStateStore.hasCurrentCodexDataAccess(),
-              let executable = Bundle.main.executableURL
-        else {
-            return false
-        }
-        let fileManager = FileManager.default
-        let directory = plistURL.deletingLastPathComponent()
-        let plist: [String: Any] = [
-            "Label": identifier,
-            "ProgramArguments": [executable.path, "--background-refresh"],
-            "RunAtLoad": true,
-            "StartInterval": Int(interval),
-            "ThrottleInterval": 60,
-            "ProcessType": "Background",
-            "LowPriorityIO": true,
-            "Nice": 10,
-            "AbandonProcessGroup": true
-        ]
-
-        do {
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-            if (try? Data(contentsOf: plistURL)) == data, isLoaded { return true }
-            if isLoaded { _ = launchctl(["bootout", domain, plistURL.path]) }
-            try data.write(to: plistURL, options: .atomic)
-            guard launchctl(["bootstrap", domain, plistURL.path]) == 0 else { return false }
-            return isLoaded
-        } catch {
-            return false
-        }
-    }
-
     @discardableResult
     static func uninstall() -> Bool {
         guard canManageInstalledAgents else { return false }
-        let legacyRemoved = removeAgent(identifier: legacyIdentifier)
-        let currentRemoved = removeAgent(identifier: identifier)
-        return legacyRemoved && currentRemoved
+        let ownService = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"]
+        // A launchd-invoked migration must boot out its own job last: that terminates this process.
+        let labels: [String] = ownService == legacyIdentifier
+            ? [identifier, legacyIdentifier] : [legacyIdentifier, identifier]
+        var removed = true
+        for label in labels {
+            let result = removeAgent(identifier: label, directory: plistURL.deletingLastPathComponent(),
+                domain: domain, allowed: true, isOwnService: label == ownService, run: launchctl)
+            removed = result && removed
+        }
+        return removed
     }
 
     static func canManageAgents(bundleIdentifier: String?, isStableInstall: Bool) -> Bool {
@@ -115,44 +56,38 @@ enum BackgroundRefreshAgent {
         canManageAgents(bundleIdentifier: Bundle.main.bundleIdentifier, isStableInstall: isStableInstall)
     }
 
-    private static func removeAgent(identifier: String) -> Bool {
-        removeAgent(identifier: identifier, directory: plistURL.deletingLastPathComponent(),
-            domain: domain, allowed: canManageInstalledAgents, run: launchctl)
-    }
-
     /// Use the service label so upgrades can stop a loaded job whose plist was moved or removed.
     /// Keep its registration file intact if launchctl cannot confirm the job was stopped.
     static func removeAgent(identifier: String, directory: URL, domain: String,
-                            allowed: Bool, run: ([String]) -> Int32) -> Bool {
+                            allowed: Bool, isOwnService: Bool = false, run: ([String]) -> Int32) -> Bool {
         guard allowed else { return false }
         let service = "\(domain)/\(identifier)"
         let status = run(["print", service])
         // `launchctl print` uses 113 for a missing service; other failures do not prove it is gone.
         let serviceNotFound: Int32 = 113
         guard status == 0 || status == serviceNotFound else { return false }
+        let registrationURL = directory.appendingPathComponent("\(identifier).plist")
+        let registration = isOwnService ? try? Data(contentsOf: registrationURL) : nil
+        if isOwnService && FileManager.default.fileExists(atPath: registrationURL.path) {
+            // Self-bootout may never return, so remove the recurring registration first.
+            guard registration != nil else { return false }
+            do { try FileManager.default.removeItem(at: registrationURL) } catch { return false }
+        }
         if status == 0 {
             guard run(["bootout", service]) == 0,
-                  run(["print", service]) == serviceNotFound else { return false }
+                  run(["print", service]) == serviceNotFound else {
+                if isOwnService, let registration { try? registration.write(to: registrationURL, options: .atomic) }
+                return false
+            }
         }
         do {
-            try FileManager.default.removeItem(at: directory.appendingPathComponent("\(identifier).plist"))
+            try FileManager.default.removeItem(at: registrationURL)
             return true
         } catch let error as CocoaError where error.code == .fileNoSuchFile {
             return true
         } catch {
             return false
         }
-    }
-
-    static func status() -> BackgroundRefreshAgentStatus {
-        BackgroundRefreshAgentStatus(
-            enabled: CodexUsageSettingsStore.load().settings.backgroundRefreshEnabled,
-            installed: isStableInstall
-                ? targetsCurrentExecutable
-                : FileManager.default.fileExists(atPath: plistURL.path),
-            loaded: isLoaded,
-            lastSuccess: loadRecord()?.lastSuccess
-        )
     }
 
     static func saveRecord(_ record: BackgroundRefreshRecord) {
@@ -162,6 +97,9 @@ enum BackgroundRefreshAgent {
                 withIntermediateDirectories: true
             )
             try JSONEncoder().encode(record).write(to: CodexUsageSnapshotStore.backgroundStatusURL, options: .atomic)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
+            }
         } catch {
             // Status is diagnostic only; a failed status write must not fail refresh.
         }
@@ -177,20 +115,7 @@ enum BackgroundRefreshAgent {
             .appendingPathComponent("Library/LaunchAgents/\(identifier).plist")
     }
 
-    private static var targetsCurrentExecutable: Bool {
-        guard let executable = Bundle.main.executableURL?.standardizedFileURL.path,
-              let data = try? Data(contentsOf: plistURL),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let arguments = plist["ProgramArguments"] as? [String]
-        else {
-            return false
-        }
-        return arguments.first.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == executable
-    }
-
     private static var domain: String { "gui/\(getuid())" }
-    private static var service: String { "\(domain)/\(identifier)" }
-    private static var isLoaded: Bool { launchctl(["print", service]) == 0 }
 
     private static func launchctl(_ arguments: [String]) -> Int32 {
         let process = Process()

@@ -27,7 +27,7 @@
 	<key>NSAppDataUsageDescription</key>
 	<string>Reads local Codex and Headroom usage files to update your statistics and widgets. Nothing is uploaded.</string>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
+	<false/>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 	<key>SUAutomaticallyUpdate</key>

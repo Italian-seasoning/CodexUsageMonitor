@@ -224,9 +224,12 @@ func emptySnapshotStartsAtZero() {
     #expect(CodexUsageSnapshot.empty.lifetime.total == 0)
 }
 
-@Test("Background refresh runs once per minute")
-func backgroundRefreshRunsOncePerMinute() {
-    #expect(BackgroundRefreshAgent.interval == 60)
+@Test("Only the ChatGPT and Codex desktop apps enable automatic monitoring")
+func desktopActivityGate() {
+    #expect(SourceChangeMonitor.isSourceApplication(bundleIdentifier: "com.openai.codex"))
+    #expect(SourceChangeMonitor.isSourceApplication(bundleIdentifier: "com.openai.chat"))
+    #expect(!SourceChangeMonitor.isSourceApplication(bundleIdentifier: nil))
+    #expect(!SourceChangeMonitor.isSourceApplication(bundleIdentifier: "com.codexusage.CodexUsageMonitor"))
 }
 
 @Test("Menu bar label formats both limit rows")

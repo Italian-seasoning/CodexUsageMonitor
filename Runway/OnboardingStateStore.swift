@@ -12,6 +12,8 @@ enum SetupRequirement: String, Codable, CaseIterable {
     case codexDataAccess
     case backgroundRefresh
     case widgetRegistration
+
+    static let currentRequirements: [Self] = [.codexDataAccess, .widgetRegistration]
 }
 
 struct OnboardingState: Codable, Equatable {
@@ -101,7 +103,7 @@ enum OnboardingStateStore {
 
     static func shouldPresent(appVersion: String, state: OnboardingState?) -> Bool {
         guard let state else { return true }
-        var unmet = Set(SetupRequirement.allCases).subtracting(state.completedRequirements)
+        var unmet = Set(SetupRequirement.currentRequirements).subtracting(state.completedRequirements)
         if !hasCurrentCodexDataAccess(appVersion: appVersion, state: state) {
             unmet.insert(.codexDataAccess)
         }
@@ -117,7 +119,7 @@ enum OnboardingStateStore {
         from url: URL = stateURL
     ) -> Bool {
         guard let state = load(from: url) else { return false }
-        return state.completedRequirements == Set(SetupRequirement.allCases)
+        return Set(SetupRequirement.currentRequirements).isSubset(of: state.completedRequirements)
     }
 
     static func hasCurrentCodexDataAccess(

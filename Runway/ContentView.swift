@@ -24,7 +24,6 @@ struct DetailedContentView: View {
     @State private var refreshRecord = BackgroundRefreshAgent.loadRecord()
     @State private var isRefreshing = false
     @State private var presentsDataHealth = false
-    private let snapshotTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     private var health: SnapshotHealth {
         SnapshotHealth(snapshot: snapshot, record: refreshRecord, isRefreshing: isRefreshing)
@@ -86,10 +85,6 @@ struct DetailedContentView: View {
             snapshot = SnapshotDisplay.load() ?? snapshot
             refreshRecord = BackgroundRefreshAgent.loadRecord()
         }
-        .onReceive(snapshotTimer) { _ in
-            snapshot = SnapshotDisplay.load() ?? snapshot
-            refreshRecord = BackgroundRefreshAgent.loadRecord()
-        }
     }
 }
 
@@ -114,7 +109,6 @@ struct ContentView: View {
     @State private var refreshRecord = BackgroundRefreshAgent.loadRecord()
     @State private var showsRefreshFailure = false
     @State private var refreshFailureMessage = ""
-    private let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     private var activity: CodexSessionActivity? {
         snapshot.sessionActivity.first { $0.id == selectedSessionID }
@@ -147,7 +141,6 @@ struct ContentView: View {
                     .hidden().accessibilityHidden(true)
             }
         }
-        .onReceive(timer) { _ in reload() }
         .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in reload() }
         .onExitCommand(perform: dismissRail)
         .alert("Refresh failed", isPresented: $showsRefreshFailure) {

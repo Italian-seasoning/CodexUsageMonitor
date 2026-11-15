@@ -97,7 +97,7 @@ enum WidgetFamilySemanticBuilder {
             secondaryValues: [
                 .init(label: "Weekly", value: weekly.map { "\(Int($0.remainingPercent.rounded()))%" } ?? "—"),
                 .init(label: "Pace", value: preferred?.pace(at: now).label ?? "Unavailable"),
-                .init(label: "Reset", value: [fiveHour, weekly].compactMap { $0 }.min { $0.resetsAt < $1.resetsAt }?.resetText(at: now) ?? "—")
+                .init(label: "Reset", value: [fiveHour, weekly].compactMap { $0 }.min { $0.resetsAt < $1.resetsAt }?.resetsAt.formatted(date: .abbreviated, time: .shortened) ?? "—")
             ],
             chart: WidgetChartContent(
                 points: history.suffix(14).map {
@@ -137,7 +137,7 @@ enum WidgetFamilySemanticBuilder {
 
     private static func session(snapshot: CodexUsageSnapshot, now: Date) -> WidgetSemanticContent {
         let activity = snapshot.sessionActivity.first { $0.status(at: now) == "Working" } ?? snapshot.sessionActivity.first
-        let age = (activity?.observedAt ?? snapshot.generatedAt).map { compactDuration(max(0, now.timeIntervalSince($0))) + " ago" } ?? "—"
+        let age = (activity?.observedAt ?? snapshot.generatedAt)?.formatted(date: .abbreviated, time: .shortened) ?? "—"
         return WidgetSemanticContent(
             eyebrow: "Session Live",
             heroValue: (activity?.usage ?? snapshot.currentSession).total.compactTokenString,

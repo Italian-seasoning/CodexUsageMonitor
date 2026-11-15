@@ -11,7 +11,7 @@ final class GlassWorkspaceWindow: NSWindow {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var compactObserver: NSObjectProtocol?
-    private var refreshTimer: Timer?
+    private var sourceAppObservers: [NSObjectProtocol] = []
     private var wakeObserver: NSObjectProtocol?
     private var dataAccessObserver: NSObjectProtocol?
     private let sourceChangeMonitor = SourceChangeMonitor()
@@ -39,25 +39,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if BackgroundRefreshAgent.isStableInstall {
             AppRegistration.refresh()
         }
-        let hasCurrentAccess = OnboardingStateStore.hasCurrentCodexDataAccess()
-        if OnboardingStateStore.completedCurrentVersion() {
-            DispatchQueue.global(qos: .utility).async {
-                BackgroundRefreshAgent.installIfEnabled()
-            }
-        } else {
-            DispatchQueue.global(qos: .utility).async {
-                _ = BackgroundRefreshAgent.uninstall()
-            }
+        DispatchQueue.global(qos: .utility).async {
+            _ = BackgroundRefreshAgent.uninstall()
         }
-        if hasCurrentAccess {
-            sourceChangeMonitor.start()
+        updateSourceMonitoring()
+        sourceAppObservers = [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification].map { name in
+            NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      SourceChangeMonitor.isSourceApplication(bundleIdentifier: app.bundleIdentifier) else { return }
+                self?.updateSourceMonitoring()
+            }
         }
         dataAccessObserver = NotificationCenter.default.addObserver(
             forName: .codexDataAccessApproved,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.sourceChangeMonitor.start()
+            self?.updateSourceMonitoring()
         }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
@@ -66,13 +64,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ) { _ in
             Task { _ = await RefreshCoordinator.shared.refresh(trigger: .wake) }
         }
-        scheduleWidgetRefresh()
-        requestRefresh(.launch)
         showMainWindowSoon()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
         guard !ProcessInfo.processInfo.arguments.contains("--background-refresh") else { return }
+        NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
         requestRefresh(.foreground)
     }
 
@@ -82,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }
+        sourceAppObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         if let dataAccessObserver {
             NotificationCenter.default.removeObserver(dataAccessObserver)
         }
@@ -110,9 +108,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func scheduleWidgetRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
-            Task { _ = await RefreshCoordinator.shared.refresh(trigger: .fallbackTimer) }
+    private func updateSourceMonitoring() {
+        if OnboardingStateStore.hasCurrentCodexDataAccess() && SourceChangeMonitor.isSourceAppRunning {
+            sourceChangeMonitor.start()
+            requestRefresh(.launch)
+        } else {
+            sourceChangeMonitor.stop()
         }
     }
 
@@ -234,12 +235,7 @@ enum RunwayEntry {
             return
         }
         if arguments.contains("--safe-verification") { exit(EXIT_SUCCESS) }
-        Task.detached(priority: .utility) {
-            let result = await RefreshCoordinator.shared.refresh(trigger: .backgroundAgent)
-            await PhoneResetNotificationManager.scheduleIfNeeded(result.snapshot)
-            exit(result.outcome == .failed ? EXIT_FAILURE : EXIT_SUCCESS)
-        }
-        dispatchMain()
+        exit(BackgroundRefreshAgent.uninstall() ? EXIT_SUCCESS : EXIT_FAILURE)
     }
 }
 

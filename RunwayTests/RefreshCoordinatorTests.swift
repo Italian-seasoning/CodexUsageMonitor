@@ -4,6 +4,114 @@ import Testing
 
 @Suite
 struct RefreshCoordinatorTests {
+    @MainActor
+    @Test("An index created after monitoring starts refreshes without a polling fallback")
+    func newlyCreatedSessionIndexTriggersRefresh() async throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let codex = home.appendingPathComponent(".codex")
+        try FileManager.default.createDirectory(at: codex.appendingPathComponent("sessions"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        var refreshes = 0
+        let monitor = SourceChangeMonitor(home: home, headroomDirectory: home.appendingPathComponent("headroom")) {
+            refreshes += 1
+        }
+        monitor.start()
+        defer { monitor.stop() }
+        try await Task.sleep(for: .seconds(2))
+        let before = refreshes
+        try Data("{}\n".utf8).write(to: codex.appendingPathComponent("session_index.jsonl"), options: .atomic)
+        for _ in 0..<80 where refreshes == before { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(refreshes > before)
+        try await Task.sleep(for: .seconds(2))
+        let beforeDeletion = refreshes
+        try FileManager.default.removeItem(at: codex.appendingPathComponent("session_index.jsonl"))
+        for _ in 0..<80 where refreshes == beforeDeletion { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(refreshes > beforeDeletion)
+        try await Task.sleep(for: .seconds(2))
+        let afterIndex = refreshes
+        try Data("ignored".utf8).write(to: codex.appendingPathComponent("unrelated-cache.json"))
+        try await Task.sleep(for: .seconds(2))
+        #expect(refreshes == afterIndex)
+    }
+
+    @Test("A final source event arriving during another pass gets a follow-up without a timer")
+    func lateSourceEventIsNotLost() async {
+        let calls = CallRecorder()
+        let coordinator = RefreshCoordinator(engine: { trigger, force in
+            await calls.record(trigger: trigger, force: force)
+            try? await Task.sleep(for: .milliseconds(50))
+            return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
+        })
+        async let foreground = coordinator.refresh(trigger: .foreground)
+        while await calls.count == 0 { await Task.yield() }
+        _ = await coordinator.refreshAfterSourceChange()
+        _ = await foreground
+        #expect(await calls.count == 2)
+        #expect(await calls.values.last?.trigger == .sourceChange)
+    }
+
+    @Test("Observation-only changes do not rewrite snapshots; limits, retries and consumption samples do")
+    func semanticSnapshotChanges() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var previous = CodexUsageSnapshot.empty
+        previous.generatedAt = now
+        previous.accountUsageObservedAt = now
+        let window = RateLimitWindow(usedPercent: 20, windowMinutes: 300,
+            resetsAt: now.addingTimeInterval(3_600), observedAt: now)
+        previous.rateLimits = CodexRateLimits(fiveHour: window, weekly: nil, history: [], accountObservedAt: now)
+        var candidate = previous
+        candidate.generatedAt = now.addingTimeInterval(10)
+        candidate.accountUsageObservedAt = candidate.generatedAt
+        candidate.rateLimits?.accountObservedAt = candidate.generatedAt
+        candidate.rateLimits?.fiveHour?.observedAt = now.addingTimeInterval(10)
+        #expect(!SnapshotRefresh.hasSemanticChanges(candidate, from: previous))
+        candidate.rateLimits?.fiveHour?.usedPercent = 21
+        #expect(SnapshotRefresh.hasSemanticChanges(candidate, from: previous))
+        candidate = previous
+        candidate.rateLimits?.fiveHour = nil
+        #expect(SnapshotRefresh.hasSemanticChanges(candidate, from: previous))
+        candidate = previous
+        candidate.sourceReadPending = true
+        #expect(SnapshotRefresh.hasSemanticChanges(candidate, from: previous))
+        candidate = previous
+        candidate.rateLimits?.consumptionSamples = [window]
+        #expect(SnapshotRefresh.hasSemanticChanges(candidate, from: previous))
+    }
+
+    @Test("Closed desktop apps prevent every automatic refresh while manual refresh stays available")
+    func closedDesktopAppsAreIdle() async {
+        let calls = CallRecorder()
+        let coordinator = RefreshCoordinator(isSourceAppRunning: { false }) { trigger, force in
+            await calls.record(trigger: trigger, force: force)
+            return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
+        }
+        for trigger: RefreshTrigger in [.launch, .foreground, .sourceChange, .fallbackTimer, .backgroundAgent, .wake] {
+            let result = await coordinator.refresh(trigger: trigger)
+            #expect(result.outcome == .unchanged)
+        }
+        #expect(await calls.count == 0)
+        _ = await coordinator.refresh(trigger: .manual)
+        #expect(await calls.values == [RecordedCall(trigger: .manual, force: true)])
+    }
+
+    @Test("Queued source events recheck desktop presence before collecting data")
+    func queuedRefreshRechecksPresence() async {
+        let calls = CallRecorder()
+        let coordinator = RefreshCoordinator(isSourceAppRunning: { await calls.count == 0 }) { trigger, force in
+            await calls.record(trigger: trigger, force: force)
+            try? await Task.sleep(for: .milliseconds(50))
+            return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
+        }
+        async let foreground = coordinator.refresh(trigger: .foreground)
+        while await calls.count == 0 { await Task.yield() }
+        let result = await coordinator.refreshAfterSourceChange()
+        _ = await foreground
+        #expect(result.outcome == .unchanged)
+        #expect(await calls.count == 1)
+        _ = await coordinator.refresh(trigger: .manual)
+        #expect(await calls.count == 2)
+    }
+
     @Test("ISO account dates stay Gregorian in the user's time zone", arguments: [Calendar.Identifier.buddhist, .japanese])
     func accountUsageDatesUseGregorianCalendar(identifier: Calendar.Identifier) throws {
         var calendar = Calendar(identifier: identifier)
@@ -99,7 +207,8 @@ struct RefreshCoordinatorTests {
         #expect(!SnapshotRefresh.shouldReadAccount(lastAttempt: now.addingTimeInterval(-15), trigger: .sourceChange, now: now))
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now.addingTimeInterval(-60), trigger: .fallbackTimer, now: now))
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .manual, now: now))
-        #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .wake, now: now))
+        #expect(!SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .wake, now: now))
+        #expect(!SnapshotRefresh.shouldReadAccount(lastAttempt: now, trigger: .launch, now: now))
         #expect(SnapshotRefresh.shouldReadAccount(lastAttempt: now.addingTimeInterval(3600), trigger: .backgroundAgent, now: now))
     }
 
@@ -114,11 +223,11 @@ struct RefreshCoordinatorTests {
     @Test("Simultaneous refresh requests share one engine pass")
     func coalescesSimultaneousRequests() async {
         let calls = CallRecorder()
-        let coordinator = RefreshCoordinator { trigger, force in
+        let coordinator = RefreshCoordinator(engine: { trigger, force in
             await calls.record(trigger: trigger, force: force)
             try? await Task.sleep(for: .milliseconds(50))
             return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
-        }
+        })
 
         await withTaskGroup(of: RefreshResult.self) { group in
             for _ in 0..<10 {
@@ -137,10 +246,10 @@ struct RefreshCoordinatorTests {
     @Test("Manual refresh always reaches the engine as forced")
     func manualRefreshIsForced() async {
         let calls = CallRecorder()
-        let coordinator = RefreshCoordinator { trigger, force in
+        let coordinator = RefreshCoordinator(engine: { trigger, force in
             await calls.record(trigger: trigger, force: force)
             return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
-        }
+        })
 
         _ = await coordinator.refresh(trigger: .manual)
 
@@ -150,11 +259,11 @@ struct RefreshCoordinatorTests {
     @Test("A forced request behind an unforced pass queues one follow-up")
     func queuesOneForcedFollowUp() async {
         let calls = CallRecorder()
-        let coordinator = RefreshCoordinator { trigger, force in
+        let coordinator = RefreshCoordinator(engine: { trigger, force in
             await calls.record(trigger: trigger, force: force)
             try? await Task.sleep(for: .milliseconds(40))
             return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
-        }
+        })
 
         async let background = coordinator.refresh(trigger: .backgroundAgent)
         while await calls.count == 0 {
@@ -170,7 +279,7 @@ struct RefreshCoordinatorTests {
 
     @Test("Matching fingerprints make an unforced background pass unchanged")
     func matchingFingerprintIsUnchanged() async {
-        let coordinator = RefreshCoordinator { trigger, force in
+        let coordinator = RefreshCoordinator(engine: { trigger, force in
             let unchanged = SnapshotRefresh.canReuseSnapshot(
                 previousFingerprint: "same",
                 currentFingerprint: "same",
@@ -182,24 +291,24 @@ struct RefreshCoordinatorTests {
                 snapshot: nil,
                 message: "complete"
             )
-        }
+        })
 
         let result = await coordinator.refresh(trigger: .backgroundAgent)
 
         #expect(result.outcome == .unchanged)
     }
 
-    @Test("Widget sync retries after failure and refreshes on launch")
+    @Test("Widgets reload for changed data and pending retries, never an unchanged launch")
     func widgetSyncRetry() {
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: true))
-        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .launch, syncPending: false))
-        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .manual, syncPending: false))
+        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .launch, syncPending: false))
+        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .manual, syncPending: false))
         #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false))
         let now = Date()
-        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now, now: now))
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now, now: now))
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .sourceChange, syncPending: false, lastRequested: now.addingTimeInterval(-60), now: now))
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .updated, trigger: .backgroundAgent, syncPending: false, lastRequested: now.addingTimeInterval(3600), now: now))
-        #expect(!SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false,
+        #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false,
             reloadPending: true, lastRequested: now, now: now))
         #expect(SnapshotRefresh.shouldReloadWidget(outcome: .unchanged, trigger: .backgroundAgent, syncPending: false,
             reloadPending: true, lastRequested: now, now: now.addingTimeInterval(60)))

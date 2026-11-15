@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Combine
 import SwiftUI
 
 extension AppPresenceMode {
@@ -22,7 +23,7 @@ extension MenuBarDisplayMode {
         switch self {
         case .percentage: "Remaining percentage"
         case .meter: "Meter"
-        case .reset: "Reset countdown"
+        case .reset: "Reset time"
         case .hidden: "Hidden"
         }
     }
@@ -33,20 +34,16 @@ final class MenuBarSnapshotModel: ObservableObject {
     @Published private(set) var snapshot = CodexUsageSnapshotStore.load() ?? .empty
     @Published private(set) var isRefreshing = false
     @Published private(set) var refreshRecord = BackgroundRefreshAgent.loadRecord()
-    private var timer: Timer?
+    private var observation: AnyCancellable?
+
+    init() {
+        observation = NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.reload() }
+    }
 
     var health: SnapshotHealth {
         SnapshotHealth(snapshot: snapshot, record: refreshRecord, isRefreshing: isRefreshing)
-    }
-
-    init() {
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.reload() }
-        }
-    }
-
-    deinit {
-        timer?.invalidate()
     }
 
     func reload() {
@@ -119,7 +116,7 @@ struct CodexMenuBarLabel: View {
             let filled = min(5, max(0, Int(ceil(window.remainingPercent / 20))))
             return "\(prefix) " + String(repeating: "●", count: filled) + String(repeating: "○", count: 5 - filled)
         case .reset:
-            return "\(prefix) \(window.resetText())"
+            return "\(prefix) \(window.resetsAt.formatted(date: .omitted, time: .shortened))"
         case .hidden:
             return ""
         }
@@ -194,6 +191,6 @@ struct CodexMenuBarView: View {
         .preferredColorScheme(settingsModel.settings.appTheme.colorScheme)
         .environment(\.colorScheme, settingsModel.settings.appTheme.colorScheme)
         .tint(accent)
-        .onReceive(NotificationCenter.default.publisher(for: .codexUsageSnapshotDidChange)) { _ in model.reload() }
+        .onAppear { model.reload() }
     }
 }

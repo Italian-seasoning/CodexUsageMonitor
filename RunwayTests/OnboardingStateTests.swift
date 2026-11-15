@@ -63,24 +63,34 @@ struct OnboardingStateTests {
     }
 
     @MainActor
-    @Test("Installing background refresh cannot grant Codex access")
-    func backgroundRefreshDoesNotGrantAccess() {
+    @Test("Current setup completes without the retired background service")
+    func currentSetupDoesNotRequireBackgroundRefresh() {
+        let state = OnboardingState(
+            lastPresentedVersion: "2.0",
+            completedRequirements: [.codexDataAccess, .widgetRegistration],
+            dismissedUpdateChecklistVersion: nil,
+            updatedAt: .now
+        )
         let model = OnboardingModel(
             appVersion: "2.0",
-            state: .empty,
+            state: state,
             save: { _ in },
             probe: { .approved }
         )
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("onboarding.json")
+        OnboardingStateStore.save(state, to: url)
 
-        model.recordBackgroundRefresh(installed: true)
-
-        #expect(model.state.completedRequirements == [.backgroundRefresh])
-        #expect(model.dataAccessState == .notRequested)
+        #expect(model.unmetRequirements.isEmpty)
+        #expect(!model.isPresented)
+        #expect(!OnboardingStateStore.shouldPresent(appVersion: "2.0", state: state))
+        #expect(OnboardingStateStore.completedCurrentVersion(appVersion: "2.0", from: url))
     }
 
     @MainActor
-    @Test("A failed service recheck revokes stale completion")
-    func failedServiceRecheckRevokesCompletion() {
+    @Test("A failed widget recheck revokes stale completion")
+    func failedWidgetRecheckRevokesCompletion() {
         let model = OnboardingModel(
             appVersion: "2.0",
             state: OnboardingState(
@@ -93,10 +103,9 @@ struct OnboardingStateTests {
             probe: { .approved }
         )
 
-        model.recordBackgroundRefresh(installed: false)
         model.recordWidgetRegistration(registered: false)
 
-        #expect(model.unmetRequirements == [.backgroundRefresh, .widgetRegistration])
+        #expect(model.unmetRequirements == [.widgetRegistration])
     }
 
     @MainActor
