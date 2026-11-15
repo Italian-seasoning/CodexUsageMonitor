@@ -48,7 +48,7 @@ final class OnboardingModel: ObservableObject {
     }
 
     var unmetRequirements: [SetupRequirement] {
-        SetupRequirement.allCases.filter { !state.completedRequirements.contains($0) }
+        SetupRequirement.currentRequirements.filter { !state.completedRequirements.contains($0) }
     }
 
     func present() {
@@ -79,10 +79,6 @@ final class OnboardingModel: ObservableObject {
             _ = await RefreshCoordinator.shared.refresh(trigger: .manual, force: true)
             NotificationCenter.default.post(name: .codexDataAccessApproved, object: nil)
         }
-    }
-
-    func recordBackgroundRefresh(installed: Bool) {
-        update(.backgroundRefresh, satisfied: installed)
     }
 
     func recordWidgetRegistration(registered: Bool) {
@@ -149,7 +145,6 @@ struct CodexUsageRootView: View {
 
 private struct SetupSheet: View {
     @ObservedObject var model: OnboardingModel
-    @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
     @State private var showsSkipWarning = false
 
     var body: some View {
@@ -223,8 +218,7 @@ private struct SetupSheet: View {
                 detail: "Runway reads local session totals and optional Headroom savings. Your prompts and logs are never uploaded."
             )
             setupRow(.codexDataAccess, symbol: "folder.fill", detail: "Read local Codex session totals")
-            setupRow(.backgroundRefresh, symbol: "arrow.clockwise", detail: "Keep the shared snapshot current")
-            setupRow(.widgetRegistration, symbol: "rectangle.3.group.fill", detail: "Show live data in macOS widgets")
+            setupRow(.widgetRegistration, symbol: "rectangle.3.group.fill", detail: "Show cached usage in macOS widgets")
             Spacer()
         }
     }
@@ -261,29 +255,9 @@ private struct SetupSheet: View {
                 symbol: model.unmetRequirements.isEmpty ? "checkmark.seal.fill" : "slider.horizontal.3",
                 title: model.unmetRequirements.isEmpty ? "You’re ready to go" : "Keep widgets up to date",
                 detail: model.unmetRequirements.isEmpty
-                    ? "The local reader, background refresh, and widget extension are ready."
-                    : "Finish the two services that keep your desktop widgets current."
+                    ? "The local reader and widget extension are ready. Updates run while Runway and ChatGPT or Codex are open; widgets keep their last snapshot after either app quits."
+                    : "Check the widget extension. Runway updates it while Runway and ChatGPT or Codex are open, or when you refresh manually."
             )
-
-            serviceRow(
-                title: "Background refresh",
-                detail: BackgroundRefreshAgent.status().detail,
-                symbol: "arrow.clockwise",
-                complete: model.state.completedRequirements.contains(.backgroundRefresh)
-            ) {
-                Toggle("", isOn: $settingsModel.settings.backgroundRefreshEnabled)
-                    .labelsHidden()
-                    .onChange(of: settingsModel.settings.backgroundRefreshEnabled) { _, enabled in
-                        model.recordBackgroundRefresh(installed: BackgroundRefreshAgent.setEnabled(enabled))
-                    }
-                if settingsModel.settings.backgroundRefreshEnabled,
-                   !model.state.completedRequirements.contains(.backgroundRefresh) {
-                    Button("Repair") {
-                        model.recordBackgroundRefresh(installed: BackgroundRefreshAgent.setEnabled(true))
-                    }
-                    .controlSize(.small)
-                }
-            }
 
             serviceRow(
                 title: "Widget extension",
@@ -308,15 +282,6 @@ private struct SetupSheet: View {
         }
         .onAppear {
             model.recordWidgetRegistration(registered: widgetRegistered)
-            guard settingsModel.settings.backgroundRefreshEnabled,
-                  BackgroundRefreshAgent.isStableInstall
-            else { return }
-            Task {
-                let installed = await Task.detached(priority: .utility) {
-                    BackgroundRefreshAgent.setEnabled(true)
-                }.value
-                model.recordBackgroundRefresh(installed: installed)
-            }
         }
     }
 

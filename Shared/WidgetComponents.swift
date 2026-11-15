@@ -232,7 +232,7 @@ struct WidgetLimitDial: View {
                 .frame(width: diameter, height: diameter)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.primary)
-                Text(current.map { "Resets \($0.resetText(at: now))" } ?? "Awaiting data")
+                Text(current.map { "Resets \($0.resetsAt.formatted(date: .abbreviated, time: .shortened))" } ?? "Awaiting data")
                     .font(.system(size: 10)).foregroundStyle(palette.secondary)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
@@ -242,7 +242,7 @@ struct WidgetLimitDial: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title) allowance")
-        .accessibilityValue(current.map { "\($0.remainingPercent.compactPercentString) remaining, resets \($0.resetText(at: now))" } ?? "Awaiting current data")
+        .accessibilityValue(current.map { "\($0.remainingPercent.compactPercentString) remaining, resets \($0.resetsAt.formatted(date: .abbreviated, time: .shortened))" } ?? "Awaiting current data")
     }
 }
 
@@ -281,8 +281,8 @@ struct WidgetAllowanceMeter: View {
             }.frame(height: 4)
             if !compact {
                 Text(current.map { now.timeIntervalSince($0.observedAt) > 180
-                    ? "Last read \(Int(now.timeIntervalSince($0.observedAt) / 60))m ago"
-                    : "Resets \($0.resetText(at: now))" } ?? "Not reported")
+                    ? "Read \($0.observedAt.formatted(date: .abbreviated, time: .shortened))"
+                    : "Resets \($0.resetsAt.formatted(date: .abbreviated, time: .shortened))" } ?? "Not reported")
                     .font(.system(size: 10))
                     .foregroundStyle(palette.secondary)
                     .lineLimit(2)
@@ -299,7 +299,7 @@ struct WidgetAllowanceMeter: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title) allowance")
-        .accessibilityValue((current.map { "\($0.remainingPercent.compactPercentString) remaining, resets \($0.resetText(at: now))" } ?? "Awaiting current data")
+        .accessibilityValue((current.map { "\($0.remainingPercent.compactPercentString) remaining, resets \($0.resetsAt.formatted(date: .abbreviated, time: .shortened))" } ?? "Awaiting current data")
             + (showsConsumption ? consumptionRate.map { ", approximately \($0.formatted(.number.precision(.fractionLength(1)))) percentage points consumed per 15 minutes" } ?? ", rate awaiting samples" : ""))
     }
 }

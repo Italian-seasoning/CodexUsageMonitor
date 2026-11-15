@@ -27,7 +27,7 @@ struct SettingsMigrationTests {
         )
 
         #expect(result.settings.appTheme == .graphite)
-        #expect(result.settings.backgroundRefreshEnabled)
+        #expect(!result.settings.backgroundRefreshEnabled)
         #expect(result.settings.appPresence == .dock)
         #expect(result.settings.menuBarDisplayMode == .reset)
         #expect(result.settings.notificationsEnabled)
@@ -48,7 +48,7 @@ struct SettingsMigrationTests {
 
         #expect(result.settings.schemaVersion == CodexUsageSettings.currentSchemaVersion)
         #expect(result.settings.appTheme == .rain)
-        #expect(result.settings.backgroundRefreshEnabled)
+        #expect(!result.settings.backgroundRefreshEnabled)
         #expect(!result.settings.phoneNotificationsEnabled)
         #expect(result.settings.warningThreshold == 70)
         #expect(result.repairedFields.isEmpty)
@@ -67,6 +67,26 @@ struct SettingsMigrationTests {
         #expect(result.settings.backgroundRefreshEnabled == false)
         #expect(result.settings.warningThreshold == 70)
         #expect(result.repairedFields == ["warningThreshold"])
+    }
+
+    @Test("Retiring background refresh preserves every other saved preference")
+    func retiresBackgroundRefreshWithoutResettingPreferences() throws {
+        var settings = CodexUsageSettings.default
+        settings.appTheme = .graphite
+        settings.defaultWidgetTheme = .monochrome
+        settings.backgroundRefreshEnabled = true
+        settings.appPresence = .dock
+        settings.menuBarDisplayMode = .reset
+        settings.notificationsEnabled = true
+        settings.phoneNotificationsEnabled = true
+        settings.warningThreshold = 80
+        settings.criticalThreshold = 95
+
+        let result = CodexUsageSettingsStore.load(data: try JSONEncoder().encode(settings), legacy: .empty)
+        settings.backgroundRefreshEnabled = false
+
+        #expect(result.settings == settings)
+        #expect(result.repairedFields.isEmpty)
     }
 
     @Test("Unknown future fields are ignored and thresholds are clamped")

@@ -28,7 +28,9 @@ Avoid SaaS dashboard gradients, decorative glassmorphism, vague neon palettes, o
 - Prefer native macOS and WidgetKit behavior over custom machinery.
 - The default Summer theme uses ocean teal, sky blue, warm sand, and sunlit amber over deep coastal surfaces.
 - Use teal for selection and primary actions, amber for warmth and attention, and semantic system colors for status.
-- First run uses one aligned setup sheet with explicit Codex access, background refresh, and widget-registration requirements. Setup remains replayable from Help.
+- First run uses one aligned setup sheet with explicit Codex access and widget-registration requirements. Setup remains replayable from Help.
+- Refresh from local source events while Runway and ChatGPT or Codex are running, plus explicit launch, foreground, and manual actions. Keep cached usage readable after either app quits without scheduled background work.
+- Widgets keep their last observation between changed snapshots. Optional reset alerts require a confirming refresh; automatic alerts require Runway and ChatGPT or Codex to be running.
 - The app icon and decorative symbols may use restrained beach, sun, wave, and palm motifs without competing with the data.
 - Widget surfaces stay restrained and instrument-like while respecting WidgetKit monochrome and tinted rendering.
 - Label graph scaling explicitly: each chart is normalized to the largest visible day, shown as its peak value rather than an unexplained percentage.

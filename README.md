@@ -34,11 +34,11 @@ These previews use an anonymous ad-hoc signature and are not Apple-notarized. Ho
 
 ## See the app
 
-![Runway appearance and background monitoring settings in Runway Glass](docs/screenshots/runway-settings.png)
+![Runway appearance and monitoring settings in Runway Glass](docs/screenshots/runway-settings.png)
 
 ![Runway appearance and monitoring settings in the Graphite theme](docs/screenshots/runway-dark-settings.png)
 
-Screenshots show local preview builds. Empty queues and standby states are shown where applicable.
+Screenshots show local preview builds and may include retired controls. Empty queues and standby states are shown where applicable.
 
 
 ## Forks and attribution
@@ -90,9 +90,18 @@ are available in the release downloads. The native macOS app retains the full wi
 - Top model today, seven days, this month, and lifetime
 - Headroom tokens saved, savings rate, and estimated cost avoided
 - Live account five-hour and weekly Codex limits, reset times, pace, and local seven-day history
-- A native menu bar meter with percentage, meter, and reset-countdown modes
-- Background widget snapshots every minute while the app is closed
+- A native menu bar meter with percentage, meter, and reset-time modes
+- Event-driven usage updates while Runway and ChatGPT or Codex are running; cached widgets remain readable after either app quits
 - Independent settings for small, medium, and large widgets
+
+Runway has no periodic background refresh service. Open Runway to resume automatic
+updates, or refresh manually at any time. Widgets retain their last observation
+until Runway publishes a changed snapshot. Optional desktop and iPhone reset alerts
+depend on a refresh confirming the reset; automatic alerts require Runway and
+ChatGPT or Codex to be running.
+
+App updates are checked manually with **Runway → Check for Updates…**; there are
+no scheduled update checks.
 
 ## Privacy
 

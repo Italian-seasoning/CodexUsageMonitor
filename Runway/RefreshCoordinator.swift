@@ -26,7 +26,9 @@ struct RefreshResult: @unchecked Sendable {
 actor RefreshCoordinator {
     typealias Engine = @Sendable (RefreshTrigger, Bool) async -> RefreshResult
 
-    static let shared = RefreshCoordinator()
+    static let shared = RefreshCoordinator(isSourceAppRunning: {
+        await MainActor.run { SourceChangeMonitor.isSourceAppRunning }
+    })
 
     private struct Flight {
         var id: UUID
@@ -37,12 +39,25 @@ actor RefreshCoordinator {
     private let engine: Engine
     private var inFlight: Flight?
 
-    init(engine: @escaping Engine = { trigger, force in
-        await Task.detached(priority: .utility) {
+    init(isSourceAppRunning: @escaping @Sendable () async -> Bool = { true },
+         engine: @escaping Engine = { trigger, force in
+        let result = await Task.detached(priority: .utility) {
             SnapshotRefresh.run(trigger: trigger, force: force)
         }.value
+        if result.outcome == .updated || result.outcome == .unchanged {
+            await PhoneResetNotificationManager.scheduleIfNeeded(result.snapshot)
+        }
+        return result
     }) {
-        self.engine = engine
+        self.engine = { trigger, force in
+            if trigger != .manual {
+                guard await isSourceAppRunning() else {
+                    return RefreshResult(outcome: .unchanged, snapshot: nil,
+                        message: "Automatic refresh is paused while ChatGPT and Codex are closed.")
+                }
+            }
+            return await engine(trigger, force)
+        }
     }
 
     func refresh(trigger: RefreshTrigger, force: Bool = false) async -> RefreshResult {
@@ -71,6 +86,12 @@ actor RefreshCoordinator {
         operation: @escaping @Sendable () async -> RefreshResult
     ) -> Flight {
         Flight(id: UUID(), force: force, task: Task(operation: operation))
+    }
+
+    func refreshAfterSourceChange() async -> RefreshResult {
+        // A source event can arrive after the current pass already read its fingerprint.
+        if let current = inFlight { _ = await finish(current) }
+        return await refresh(trigger: .sourceChange)
     }
 
     private func finish(_ flight: Flight) async -> RefreshResult {

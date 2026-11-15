@@ -80,7 +80,6 @@ enum SnapshotRefresh {
         let account = shouldReadAccount ? CodexAccountReader.read() : nil
         let headroom = headroomCollector.collect() ?? previous?.cachedHeadroomActivity
         var candidate: CodexUsageSnapshot
-        var outcome: RefreshOutcome
         var retainedPreviousLocal = false
         var sourceReadPending = false
 
@@ -93,9 +92,7 @@ enum SnapshotRefresh {
                 cached.rateLimits = limits
             }
             candidate = cached
-            outcome = .unchanged
             candidate.headroom = headroom?.savings
-            if candidate.headroom != previous?.headroom { outcome = .updated }
         } else {
             let read = reader.snapshotResult(headroomActivity: headroom)
             sourceReadPending = read.sourceReadPending
@@ -105,7 +102,6 @@ enum SnapshotRefresh {
                 .mergingLegacyHistory(CodexUsageSnapshotStore.loadLegacyHistory())
             if snapshot.hasUsage {
                 candidate = snapshot
-                outcome = .updated
             } else if let previous, previous.lifetime.hasUsage || previous.headroom?.isAvailable == true {
                 guard accountAvailableWhenLocalMissing(
                     fetched: account?.lifetimeTokens,
@@ -119,11 +115,9 @@ enum SnapshotRefresh {
                     return RefreshResult(outcome: .failed, snapshot: previous, message: message)
                 }
                 candidate = previous
-                outcome = .unchanged
                 retainedPreviousLocal = true
             } else {
                 candidate = previous ?? snapshot
-                outcome = .unchanged
             }
         }
 
@@ -133,15 +127,6 @@ enum SnapshotRefresh {
             candidate.accountLifetimeTokens = account.lifetimeTokens ?? previous?.accountLifetimeTokens
             candidate.accountUsageDays = account.lifetimeTokens != nil ? account.usageDays : previous?.accountUsageDays
             candidate.accountUsageObservedAt = account.lifetimeTokens != nil ? Date() : previous?.accountUsageObservedAt
-            if candidate.accountLifetimeTokens != previous?.accountLifetimeTokens
-                || candidate.accountUsageDays != previous?.accountUsageDays
-                || candidate.accountUsageObservedAt != previous?.accountUsageObservedAt
-                || candidate.rateLimits?.fiveHour?.usedPercent != previous?.rateLimits?.fiveHour?.usedPercent
-                || candidate.rateLimits?.weekly?.usedPercent != previous?.rateLimits?.weekly?.usedPercent
-                || candidate.rateLimits?.fiveHour?.resetsAt != previous?.rateLimits?.fiveHour?.resetsAt
-                || candidate.rateLimits?.weekly?.resetsAt != previous?.rateLimits?.weekly?.resetsAt {
-                outcome = .updated
-            }
         } else {
             candidate.accountLifetimeTokens = previous?.accountLifetimeTokens
             candidate.accountUsageDays = previous?.accountUsageDays
@@ -157,18 +142,17 @@ enum SnapshotRefresh {
         if account?.lifetimeTokens != nil && !candidate.lifetime.hasUsage {
             candidate.generatedAt = Date()
         }
-        if candidate.rateLimits != previous?.rateLimits { outcome = .updated }
 
         // Refresh names even when token logs are unchanged: chat renames live in a separate index.
         let namesURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex/session_index.jsonl")
-        let namedCandidate = CodexSessionNames.applying(to: candidate, from: namesURL)
-        if namedCandidate.sessionActivity != candidate.sessionActivity
-            || namedCandidate.recentSessions != candidate.recentSessions { outcome = .updated }
-        candidate = namedCandidate
+        candidate = CodexSessionNames.applying(to: candidate, from: namesURL)
         candidate.appearanceTheme = CodexUsageSettingsStore.load().settings.appTheme.rawValue
-        if candidate.appearanceTheme != previous?.appearanceTheme { outcome = .updated }
-        guard CodexUsageSnapshotStore.save(candidate) else {
+        let changed = hasSemanticChanges(candidate, from: previous)
+        let outcome: RefreshOutcome = changed ? .updated : .unchanged
+        if changed { candidate.generatedAt = Date() }
+        else if let previous { candidate = previous }
+        guard !changed || CodexUsageSnapshotStore.save(candidate) else {
             let message = "Could not save the refreshed snapshot."
             saveRecord(
                 startedAt: startedAt,
@@ -189,13 +173,12 @@ enum SnapshotRefresh {
             reloadPending: previousRecord?.widgetReloadPending == true,
             lastRequested: previousRecord?.widgetReloadRequestedAt
         )
-        // Keep the heartbeat current even when WidgetKit does not need a redraw.
-        let widgetSynced = shouldReloadWidget
-            ? CodexWidgetReloader.reloadAll()
-            : WidgetDataBridge.syncToWidgetExtension()
+        let widgetSynced = !shouldReloadWidget || CodexWidgetReloader.reloadAll()
         let widgetReloaded = shouldReloadWidget && widgetSynced
         let widgetReloadRequestedAt = widgetReloaded ? Date() : nil
-        LimitNotificationManager.evaluate(candidate)
+        if changed || trigger == .manual || trigger == .launch {
+            LimitNotificationManager.evaluate(candidate)
+        }
         saveRecord(
             startedAt: startedAt,
             outcome: outcome,
@@ -207,9 +190,6 @@ enum SnapshotRefresh {
             lastAccountAttempt: lastAccountAttempt,
             lastAccountSuccess: account?.lifetimeTokens != nil ? Date() : previousRecord?.lastAccountSuccess
         )
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .codexUsageSnapshotDidChange, object: nil)
-        }
         let message = outcome == .updated
             ? "Snapshot refreshed with the latest Codex data."
             : "Sources are unchanged; the cached snapshot remains current."
@@ -226,8 +206,24 @@ enum SnapshotRefresh {
         !force && hasSnapshot && previousFingerprint == currentFingerprint
     }
 
+    static func hasSemanticChanges(_ candidate: CodexUsageSnapshot, from previous: CodexUsageSnapshot?) -> Bool {
+        guard let previous else { return true }
+        var comparable = candidate
+        // Observation clocks alone do not change displayed usage; keep real history and rate samples.
+        comparable.generatedAt = previous.generatedAt
+        comparable.accountUsageObservedAt = previous.accountUsageObservedAt
+        comparable.rateLimits?.accountObservedAt = previous.rateLimits?.accountObservedAt
+        if let observedAt = previous.rateLimits?.fiveHour?.observedAt {
+            comparable.rateLimits?.fiveHour?.observedAt = observedAt
+        }
+        if let observedAt = previous.rateLimits?.weekly?.observedAt {
+            comparable.rateLimits?.weekly?.observedAt = observedAt
+        }
+        return comparable != previous
+    }
+
     static func shouldReadAccount(lastAttempt: Date?, trigger: RefreshTrigger, now: Date) -> Bool {
-        trigger == .manual || trigger == .wake || trigger == .launch
+        trigger == .manual
             || lastAttempt.map { $0 > now || now.timeIntervalSince($0) >= 60 } != false
     }
 
@@ -306,8 +302,7 @@ enum SnapshotRefresh {
         lastRequested: Date? = nil,
         now: Date = .now
     ) -> Bool {
-        if syncPending || trigger == .launch || trigger == .wake || trigger == .manual { return true }
-        return (outcome == .updated || reloadPending) && lastRequested.map { $0 > now || now.timeIntervalSince($0) >= 60 } != false
+        syncPending || reloadPending || outcome == .updated
     }
 
     static func saveRecord(

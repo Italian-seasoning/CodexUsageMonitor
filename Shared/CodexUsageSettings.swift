@@ -47,6 +47,7 @@ struct CodexUsageSettings: Codable, Equatable, Sendable {
     var schemaVersion: Int
     var appTheme: AppTheme
     var defaultWidgetTheme: WidgetTheme
+    // Retained for older settings; scheduled background refresh is retired.
     var backgroundRefreshEnabled: Bool
     var appPresence: AppPresenceMode
     var menuBarDisplayMode: MenuBarDisplayMode
@@ -110,6 +111,7 @@ enum CodexUsageSettingsStore {
     static func save(_ settings: CodexUsageSettings) throws {
         var settings = settings
         settings.schemaVersion = CodexUsageSettings.currentSchemaVersion
+        settings.backgroundRefreshEnabled = false
         try FileManager.default.createDirectory(
             at: CodexUsageSnapshotStore.settingsV2URL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -131,6 +133,7 @@ enum CodexUsageSettingsStore {
         importValue("CodexUsageMonitor.limitNotificationsEnabled", from: legacy, into: &settings.notificationsEnabled, imported: &imported)
         importValue("CodexUsageMonitor.limitWarningThreshold", from: legacy, into: &settings.warningThreshold, imported: &imported)
         importValue("CodexUsageMonitor.limitCriticalThreshold", from: legacy, into: &settings.criticalThreshold, imported: &imported)
+        settings.backgroundRefreshEnabled = false
         settings.warningThreshold = settings.warningThreshold.clamped(to: 1...100)
         settings.criticalThreshold = settings.criticalThreshold.clamped(to: 1...100)
 
@@ -193,6 +196,7 @@ private struct SettingsPayload: Decodable {
         settings.appTheme = decode(.appTheme, from: container, default: settings.appTheme, repairedFields: &repairedFields)
         settings.defaultWidgetTheme = decode(.defaultWidgetTheme, from: container, default: settings.defaultWidgetTheme, repairedFields: &repairedFields)
         settings.backgroundRefreshEnabled = decode(.backgroundRefreshEnabled, from: container, default: settings.backgroundRefreshEnabled, repairedFields: &repairedFields)
+        settings.backgroundRefreshEnabled = false
         settings.appPresence = decode(.appPresence, from: container, default: settings.appPresence, repairedFields: &repairedFields)
         settings.menuBarDisplayMode = decode(.menuBarDisplayMode, from: container, default: settings.menuBarDisplayMode, repairedFields: &repairedFields)
         settings.notificationsEnabled = decode(.notificationsEnabled, from: container, default: settings.notificationsEnabled, repairedFields: &repairedFields)

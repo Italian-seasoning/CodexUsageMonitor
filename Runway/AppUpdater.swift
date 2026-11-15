@@ -11,11 +11,12 @@ final class AppUpdater: ObservableObject {
 
     private init() {
         controller = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: false,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
-        controller.updater.checkForUpdatesInBackground()
+        controller.updater.automaticallyChecksForUpdates = false
+        controller.startUpdater()
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
     }

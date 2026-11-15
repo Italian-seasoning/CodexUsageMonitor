@@ -1,6 +1,6 @@
 # Runway Usage Snapshot V2
 
-Runway writes one local JSON snapshot for the macOS app, menu bar, refresh helper, and WidgetKit extension. This document defines the platform-neutral data contract for a possible future Windows reader. It does not define a cross-platform runtime.
+Runway writes one local JSON snapshot for the macOS app, menu bar, and WidgetKit extension. This document defines the platform-neutral data contract for a possible future Windows reader. It does not define a cross-platform runtime.
 
 ## Contract
 
@@ -21,9 +21,15 @@ Runway writes one local JSON snapshot for the macOS app, menu bar, refresh helpe
 - Stale: a valid snapshot exists but is older than 10 minutes.
 - Partial: valid usage exists, but a source read is pending, account coverage is incomplete, or an optional model, limit, or Headroom source is missing.
 - Unavailable: no valid usage source was found.
-- Permission blocked and refresh errors are stored in the separate background refresh status record, not inferred from zero usage.
+- Permission blocked and refresh errors are stored in the separate refresh status record, not inferred from zero usage.
 
-Widget timelines request a new shared snapshot every minute. WidgetKit may delay the visible redraw after a reload request.
+Widget timelines contain one cached observation and request no periodic reload.
+Runway requests a widget reload after publishing a changed snapshot; WidgetKit may
+delay the visible redraw. Automatic local updates require Runway and ChatGPT or
+Codex to be running. Launch, foreground, and manual refreshes remain available;
+widgets keep the last snapshot after either app quits. The retired interval
+LaunchAgent is removed on upgrade, and saved `backgroundRefreshEnabled` values are
+treated as false without resetting other preferences or usage history.
 
 ## Root fields
 

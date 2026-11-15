@@ -5,6 +5,34 @@ import Testing
 
 @Suite
 struct SnapshotRefreshRepairTests {
+    @Test("Self-migration removes its registration before launchd can terminate it")
+    func selfMigrationRemovesRegistrationBeforeBootout() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("\(BackgroundRefreshAgent.identifier).plist")
+        let registration = Data("registration".utf8)
+        try registration.write(to: url)
+        var loaded = true
+        let removed = BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.identifier,
+            directory: directory, domain: "gui/123", allowed: true, isOwnService: true) { arguments in
+            if arguments.first == "bootout" {
+                #expect(!FileManager.default.fileExists(atPath: url.path))
+                loaded = false
+                return 0
+            }
+            return loaded ? 0 : 113
+        }
+        #expect(removed)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        try registration.write(to: url)
+        #expect(!BackgroundRefreshAgent.removeAgent(identifier: BackgroundRefreshAgent.identifier,
+            directory: directory, domain: "gui/123", allowed: true, isOwnService: true) { arguments in
+            arguments.first == "bootout" ? 5 : 0
+        })
+        #expect(try Data(contentsOf: url) == registration)
+    }
+
     @Test("An account child closing stdin after initialization cannot kill Runway")
     func accountChildClosesStdin() throws {
         let process = Process()
