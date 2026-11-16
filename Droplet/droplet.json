@@ -1,0 +1,37 @@
+{
+  "id": "codexusage",
+  "name": "Runway",
+  "version": "1.1.0",
+  "summary": "Codex session graph, tokens and allowance from Runway",
+  "description": "Session graph, token usage and remaining 5-hour and weekly allowance from Runway. Reads Runway's local snapshot; no model calls, no Codex logs.",
+  "category": "Productivity",
+  "kit": {
+    "abi": 1,
+    "minAPI": "1.8.0"
+  },
+  "minAppVersion": "15.3.0",
+  "capabilities": [],
+  "surfaces": [
+    "shelf-widget"
+  ],
+  "icon": "Codexusage.icon",
+  "creator": {
+    "name": "Italian-seasoning",
+    "kind": "community",
+    "url": "https://github.com/Italian-seasoning",
+    "avatar": "Creator.png"
+  },
+  "source": {
+    "repository": "https://github.com/Italian-seasoning/CodexUsageMonitor",
+    "license": "All rights reserved"
+  },
+  "screenshots": [],
+  "keywords": [
+    "Codex",
+    "Runway",
+    "tokens",
+    "usage",
+    "limits",
+    "local"
+  ]
+}
