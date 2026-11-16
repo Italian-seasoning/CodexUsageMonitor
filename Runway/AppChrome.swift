@@ -793,8 +793,8 @@ extension View {
         } else if #available(macOS 26.0, *) {
             background {
                 RoundedRectangle(cornerRadius: AppRadius.panel)
-                    .fill(Color.clear)
-                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: AppRadius.panel))
+                    .fill(AppPalette.windowTint)
+                    .glassEffect(.regular.tint(AppPalette.panelTint).interactive(), in: RoundedRectangle(cornerRadius: AppRadius.panel))
                     .glassEffectID("navigation", in: namespace)
                     .glassEffectTransition(.identity)
             }

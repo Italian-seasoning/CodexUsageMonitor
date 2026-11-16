@@ -255,6 +255,8 @@ struct WidgetAllowanceMeter: View {
     var now: Date = .now
     var showsConsumption = false
     var consumptionRate: Double? = nil
+    /// Per-meter read/reset line. Hosts that show one shared timestamp turn this off.
+    var showsFootnotes = true
 
     private var current: RateLimitWindow? {
         window.flatMap { $0.isCurrent(at: now) ? $0 : nil }
@@ -279,7 +281,13 @@ struct WidgetAllowanceMeter: View {
                             .frame(width: geometry.size.width * CGFloat(min(1, max(0, (current?.remainingPercent ?? 0) / 100))))
                     }
             }.frame(height: 4)
-            if !compact {
+            if !compact, showsConsumption, !showsFootnotes, let consumptionRate {
+                Text("≈\(consumptionRate.formatted(.number.precision(.fractionLength(1))))% / 15 min")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+            }
+            if !compact && showsFootnotes {
                 Text(current.map { now.timeIntervalSince($0.observedAt) > 180
                     ? "Read \($0.observedAt.formatted(date: .abbreviated, time: .shortened))"
                     : "Resets \($0.resetsAt.formatted(date: .abbreviated, time: .shortened))" } ?? "Not reported")

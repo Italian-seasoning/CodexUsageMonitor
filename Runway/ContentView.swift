@@ -152,7 +152,7 @@ struct ContentView: View {
 
     private var workspace: some View {
         GeometryReader { geometry in
-            let shape = WorkspaceGlassShape(pull: reduceMotion ? 0 : stretch, anchor: edgeAnchor)
+            let shape = WorkspaceGlassShape(pull: 0, anchor: edgeAnchor)
             ZStack(alignment: .topLeading) {
                 workspaceSurface(shape)
                     .allowsHitTesting(false)
@@ -180,21 +180,10 @@ struct ContentView: View {
                 .padding(.vertical, AppSpacing.sm)
                 .workspaceGlass(shape: shape, namespace: glassNamespace, opaque: reduceTransparency)
 
-                if !railOpen {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.38))
-                        .frame(width: 3, height: 32)
-                        .position(x: 82 - stretch * 32, y: geometry.size.height / 2)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-                if railOpen {
-                    navigationRail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                        .padding(.leading, 41 - WorkspaceNavigationGeometry.width / 2)
-                        .transition(reduceMotion ? .opacity : .offset(x: 18).combined(with: .opacity))
-                }
-                mouseTracking(height: geometry.size.height)
+                // The rail is always present so the left edge reads as navigation, not empty space.
+                navigationRail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .padding(.leading, 41 - WorkspaceNavigationGeometry.width / 2)
             }
             .coordinateSpace(name: "workspace")
             .animation(motion, value: section)
@@ -242,11 +231,6 @@ struct ContentView: View {
             } else {
                 Spacer()
             }
-            if section == .analysis {
-                Text(section.title)
-                    .font(.system(size: AppTypeScale.caption, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
         }
         .buttonStyle(.plain)
         .padding(.horizontal, AppSpacing.lg).padding(.top, AppSpacing.md).padding(.bottom, AppSpacing.xxs)
@@ -287,7 +271,7 @@ struct ContentView: View {
     private var navigationRail: some View {
         VStack(spacing: 0) {
             ForEach(AppSection.allCases) { item in
-                Button { select(item); dismissRail() } label: {
+                Button { select(item) } label: {
                     Image(systemName: item.symbol)
                         .font(.system(size: AppTypeScale.pageTitle, weight: .medium))
                         .frame(width: 40, height: 42)
@@ -369,33 +353,42 @@ struct ContentView: View {
                             points: points.map { WidgetChartPoint(date: $0.date, value: Double($0.totalTokens)) },
                             accessibilitySummary: "Session token history, latest \(usage.total.compactTokenString) tokens"
                         ), palette: activityPalette)
-                        .frame(height: max(24, height - 362))
-                        HStack {
-                            Text("Recent history")
-                            Spacer()
-                            Text("Latest")
-                        }
-                        .font(.system(size: AppTypeScale.micro))
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.top, AppSpacing.xxs)
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text("Remaining allowance")
-                        .font(.system(size: AppTypeScale.caption, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    HStack(alignment: .top, spacing: AppSpacing.lg) {
-                        if snapshot.rateLimits?.showsFiveHour == true {
-                        WidgetAllowanceMeter(title: "5-hour", window: snapshot.rateLimits?.fiveHour, palette: activityPalette,
-                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour))
-                        }
-                        WidgetAllowanceMeter(title: "Weekly", window: snapshot.rateLimits?.weekly, palette: activityPalette,
-                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly))
+                        .frame(minHeight: 40, maxHeight: .infinity)
+                    } else {
+                        Spacer(minLength: 0)
                     }
                 }
                 .padding(AppSpacing.sm)
-                .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: AppRadius.card))
-                Spacer(minLength: 0)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .appGlassPanel()
+                .cursorGlowBorder(radius: AppRadius.card, accent: settingsModel.settings.appTheme.accent, isEnabled: !reduceMotion)
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Remaining allowance")
+                        Spacer(minLength: AppSpacing.xs)
+                        if let observed = snapshot.rateLimits?.weekly?.observedAt ?? snapshot.rateLimits?.fiveHour?.observedAt {
+                            Text(observed.formatted(date: .omitted, time: .shortened)).monospacedDigit()
+                                .help("Last read \(observed.formatted(date: .abbreviated, time: .shortened))")
+                        }
+                    }
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: AppSpacing.lg) {
+                        if snapshot.rateLimits?.showsFiveHour == true {
+                        WidgetAllowanceMeter(title: "5-hour", window: snapshot.rateLimits?.fiveHour, palette: activityPalette,
+                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour),
+                            showsFootnotes: false)
+                        .help(resetHelp(snapshot.rateLimits?.fiveHour))
+                        }
+                        WidgetAllowanceMeter(title: "Weekly", window: snapshot.rateLimits?.weekly, palette: activityPalette,
+                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly),
+                            showsFootnotes: false)
+                        .help(resetHelp(snapshot.rateLimits?.weekly))
+                    }
+                }
+                .padding(AppSpacing.sm)
+                .appGlassPanel()
+                .cursorGlowBorder(radius: AppRadius.card, accent: settingsModel.settings.appTheme.accent, isEnabled: !reduceMotion)
                 HStack {
                     Button { presentsDataHealth = true } label: {
                         HStack(spacing: AppSpacing.xxs) {
@@ -428,7 +421,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             }
             .padding(.horizontal, AppSpacing.xs)
-            .frame(minHeight: height, alignment: .top)
+            .frame(height: height, alignment: .top)
         } details: {
             InspectorSection(title: "Session details") {
                 let usage = activity?.usage ?? snapshot.currentSession
@@ -523,6 +516,11 @@ struct ContentView: View {
             .appGlassPanel(cornerRadius: AppRadius.control)
         }.buttonStyle(.plain)
             .help("View activity for \(session.displayTitle)")
+    }
+
+    private func resetHelp(_ window: RateLimitWindow?) -> String {
+        guard let window else { return "Not reported" }
+        return "Resets \(window.resetsAt.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private var health: SnapshotHealth { SnapshotHealth(snapshot: snapshot, record: refreshRecord, isRefreshing: isRefreshing) }
