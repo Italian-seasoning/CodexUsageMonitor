@@ -2236,7 +2236,16 @@ enum CodexUsageSnapshotStore {
     private static let dataDirectoryURL = WidgetDataBridge.currentDirectoryURL
 
     static func load() -> CodexUsageSnapshot? {
-        guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
+        let local = decodeSnapshot(at: snapshotURL)
+        let appURL = WidgetDataBridge.appDirectoryURL.appendingPathComponent("snapshot.json")
+        // In the widget, prefer the app's own copy when it is newer.
+        guard appURL != snapshotURL, let app = decodeSnapshot(at: appURL) else { return local }
+        guard let local else { return app }
+        return (app.generatedAt ?? .distantPast) > (local.generatedAt ?? .distantPast) ? app : local
+    }
+
+    private static func decodeSnapshot(at url: URL) -> CodexUsageSnapshot? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(CodexUsageSnapshot.self, from: data)
     }
 
