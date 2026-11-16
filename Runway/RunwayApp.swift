@@ -232,6 +232,10 @@ enum RunwayEntry {
     @MainActor
     static func main() {
         let arguments = ProcessInfo.processInfo.arguments
+        // The Codex "runway-monitor" plugin starts this binary as an MCP helper.
+        // This build has no MCP server, so never open the full app for it:
+        // doing so launched a new Runway window with every Codex thread.
+        if arguments.contains("--monitor-mcp") { exit(EXIT_FAILURE) }
         guard arguments.contains("--background-refresh"),
               ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
         else {
