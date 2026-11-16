@@ -1,8 +1,33 @@
+import ServiceManagement
 import SwiftUI
+
+/// Widgets and the Droppy droplet only show what the app last wrote, so Runway
+/// opens at login by default. The first launch of an installed copy turns it on once;
+/// after that the user's choice in Settings wins.
+enum LoginItem {
+    private static let configuredKey = "Runway.loginItemConfigured"
+
+    static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
+
+    static func set(_ enabled: Bool) {
+        UserDefaults.standard.set(true, forKey: configuredKey)
+        do {
+            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            NSLog("Runway login item change failed: \(error.localizedDescription)")
+        }
+    }
+
+    static func enableOnFirstLaunch() {
+        guard !UserDefaults.standard.bool(forKey: configuredKey) else { return }
+        set(true)
+    }
+}
 
 struct SettingsView: View {
     @EnvironmentObject private var settingsModel: CodexUsageSettingsModel
     @ObservedObject private var updater = AppUpdater.shared
+    @State private var openAtLogin = LoginItem.isEnabled
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +48,11 @@ struct SettingsView: View {
                     }
 
                     InspectorSection(title: "Monitoring") {
+                        Toggle("Open at login", isOn: Binding(get: { openAtLogin }, set: { value in
+                            LoginItem.set(value)
+                            openAtLogin = LoginItem.isEnabled
+                        }))
+                        .help("Keeps widgets and the Droppy droplet current. Runway does no work while Codex is closed.")
                         LimitPreferencesView()
                     }
                     HStack {

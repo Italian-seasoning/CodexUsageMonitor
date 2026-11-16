@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         _ = AppUpdater.shared
         if BackgroundRefreshAgent.isStableInstall {
+            LoginItem.enableOnFirstLaunch()
             AppRegistration.refresh()
         }
         DispatchQueue.global(qos: .utility).async {
