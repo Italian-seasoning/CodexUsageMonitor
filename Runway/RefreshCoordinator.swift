@@ -50,7 +50,8 @@ actor RefreshCoordinator {
         return result
     }) {
         self.engine = { trigger, force in
-            if trigger != .manual {
+            // Manual and launch refreshes always run; launch happens once per app start.
+            if trigger != .manual && trigger != .launch {
                 guard await isSourceAppRunning() else {
                     return RefreshResult(outcome: .unchanged, snapshot: nil,
                         message: "Automatic refresh is paused while ChatGPT and Codex are closed.")

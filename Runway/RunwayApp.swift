@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         // One refresh at launch, so a login launch updates widgets and the droplet
         // even when the window never comes to the front.
-        Task { _ = await RefreshCoordinator.shared.refresh(trigger: .wake) }
+        requestRefresh(.launch)
         showMainWindowSoon()
     }
 
