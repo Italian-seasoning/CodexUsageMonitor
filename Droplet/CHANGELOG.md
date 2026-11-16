@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.2] - 2026-11-16
+
+- Thinner, square-cornered activity bars so tall bars no longer look like blobs.
+
 ## [1.1.1] - 2026-11-16
 
 - Show session activity as bars instead of a running total that looked flat.

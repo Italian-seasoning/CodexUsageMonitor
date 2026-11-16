@@ -176,7 +176,7 @@ private struct TokenSparkline: View {
     private var buckets: [Double] {
         guard points.count > 1, let first = points.first?.date, let last = points.last?.date,
               last > first else { return [] }
-        let count = 24
+        let count = 40
         let span = last.timeIntervalSince(first)
         var values = Array(repeating: 0.0, count: count)
         for (previous, point) in zip(points, points.dropFirst()) {
@@ -192,9 +192,9 @@ private struct TokenSparkline: View {
         let peak = values.max() ?? 0
         Group {
             if peak > 0 {
-                HStack(alignment: .bottom, spacing: 2) {
+                HStack(alignment: .bottom, spacing: 3) {
                     ForEach(values.indices, id: \.self) { index in
-                        Capsule()
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                             .fill(values[index] > 0 ? accent : accent.opacity(0.18))
                             .frame(maxWidth: .infinity)
                             .frame(height: values[index] > 0 ? max(3, values[index] / peak * 30) : 2)

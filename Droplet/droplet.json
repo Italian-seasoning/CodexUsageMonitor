@@ -1,7 +1,7 @@
 {
   "id": "codexusage",
   "name": "Runway",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "summary": "Codex session graph, tokens and allowance from Runway",
   "description": "Session graph, token usage and remaining 5-hour and weekly allowance from Runway. Reads Runway's local snapshot; no model calls, no Codex logs.",
   "category": "Productivity",
