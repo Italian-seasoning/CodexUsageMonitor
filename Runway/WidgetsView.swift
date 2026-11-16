@@ -53,21 +53,21 @@ struct WidgetsView: View {
         GeometryReader { geometry in
             if geometry.size.width < 650 {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: AppSpacing.sm) {
                         sizeControls
                         compactPreview(height: min(selectedSize.previewFrame.height, geometry.size.width - 28))
                         contentControls
                         appearanceControls
                     }
-                    .padding(14)
+                    .padding(AppSpacing.sm)
                 }
             } else {
                 ScrollView {
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .top, spacing: AppSpacing.sm) {
                         controls.frame(width: 310)
                         preview.frame(maxWidth: .infinity, minHeight: 448)
                     }
-                    .padding(16)
+                    .padding(AppSpacing.md)
                 }
                 .task { await loadWallpaper() }
             }
@@ -89,7 +89,7 @@ struct WidgetsView: View {
                     size: selectedSize.cardSize, monochrome: currentConfiguration.theme == .monochrome)
             }
             .frame(width: frame.width, height: frame.height)
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.panel))
             .scaleEffect(scale)
             .position(x: geometry.size.width / 2, y: height / 2)
         }
@@ -109,7 +109,7 @@ struct WidgetsView: View {
     }
 
     private var controls: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: AppSpacing.sm) {
             sizeControls
             contentControls
             appearanceControls
@@ -117,9 +117,9 @@ struct WidgetsView: View {
     }
 
     private var sizeControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("Size").font(.system(size: 12, weight: .semibold))
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack(spacing: AppSpacing.xs) {
+                Text("Size").font(.system(size: AppTypeScale.label, weight: .semibold))
                 Spacer()
                 Circle()
                     .fill(configuredSizes.contains(selectedSize) ? AppPalette.positive : AppPalette.muted)
@@ -226,7 +226,7 @@ struct WidgetsView: View {
                 }
 
                 LabeledContent("Background") {
-                    HStack(spacing: 8) {
+                    HStack(spacing: AppSpacing.xs) {
                         Button(currentConfiguration.backgroundMode == .customImage ? "Replace…" : "Choose Image…") {
                             chooseBackgroundImage()
                         }
@@ -246,7 +246,7 @@ struct WidgetsView: View {
                 Divider().overlay(AppPalette.divider)
 
                 LabeledContent("Save mix") {
-                    HStack(spacing: 6) {
+                    HStack(spacing: AppSpacing.xs) {
                         TextField("Name", text: $presetName)
                         Button("Save") { savePreset() }
                             .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -467,7 +467,7 @@ private struct DesktopWidgetPreview: View {
                 .fill(.ultraThinMaterial)
                 .frame(height: 25)
 
-            HStack(spacing: 6) {
+            HStack(spacing: AppSpacing.xs) {
                 Circle().fill(.white.opacity(0.82)).frame(width: 4, height: 4)
                 Text("Desktop · top-left preview")
                     .font(.system(size: AppTypeScale.caption, weight: .semibold))
@@ -477,16 +477,16 @@ private struct DesktopWidgetPreview: View {
                     .font(.system(size: AppTypeScale.caption, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, AppSpacing.sm)
             .frame(height: 25)
 
             widget
-                .padding(.leading, 28)
+                .padding(.leading, AppSpacing.lg)
                 .padding(.top, 48)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
                 .stroke(AppPalette.panelBorder, lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
@@ -526,9 +526,9 @@ private struct DesktopWidgetPreview: View {
             )
         }
         .frame(width: size.previewFrame.width, height: size.previewFrame.height)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.3), radius: 14, y: 8)

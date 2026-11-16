@@ -87,10 +87,10 @@ struct ModelsView: View {
                             )
                             .frame(height: max(80, height - 100))
                         } else {
-                            VStack(spacing: 10) {
+                            VStack(spacing: AppSpacing.xs) {
                                 ForEach(Array(comparedModels.prefix(height < 350 ? 4 : 6))) { model in
-                                    VStack(spacing: 5) {
-                                        HStack(spacing: 8) {
+                                    VStack(spacing: AppSpacing.xxs) {
+                                        HStack(spacing: AppSpacing.xs) {
                                             Text(ModelPricingCatalog.displayName(for: model.model))
                                                 .lineLimit(1)
                                                 .help(ModelPricingCatalog.displayName(for: model.model))
@@ -116,7 +116,7 @@ struct ModelsView: View {
                         }
                     }
             } details: {
-                VStack(spacing: 10) {
+                VStack(spacing: AppSpacing.xs) {
                     InspectorSection(
                         title: "Attributed models",
                         subtitle: "Tokens, share, requests, and recorded API-equivalent estimate"
@@ -126,7 +126,7 @@ struct ModelsView: View {
                                 .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
                         }
                         ForEach(Array(comparedModels.enumerated()), id: \.element.id) { index, model in
-                            VStack(spacing: 8) {
+                            VStack(spacing: AppSpacing.xs) {
                                 HStack {
                                     Text("\(index + 1). \(ModelPricingCatalog.displayName(for: model.model))")
                                         .font(.system(size: AppTypeScale.body, weight: .semibold)).lineLimit(1)
@@ -141,7 +141,7 @@ struct ModelsView: View {
                                     modelValue(model.availableCostEstimateUSD?.compactCurrencyString ?? "Unpriced", label: "API est.")
                                 }
                             }
-                            .padding(.vertical, 7)
+                            .padding(.vertical, AppSpacing.xs)
 
                             if model.id != comparedModels.last?.id {
                                 Divider().overlay(AppPalette.divider)

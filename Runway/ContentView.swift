@@ -64,14 +64,14 @@ struct DetailedContentView: View {
                         record: $refreshRecord,
                         isRefreshing: $isRefreshing
                     )
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                             .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
                     .padding(.leading, 64)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, AppSpacing.md)
                 }
             }
         }
@@ -176,8 +176,8 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .padding(.leading, 76)
-                .padding(.trailing, 12)
-                .padding(.vertical, 12)
+                .padding(.trailing, AppSpacing.sm)
+                .padding(.vertical, AppSpacing.sm)
                 .workspaceGlass(shape: shape, namespace: glassNamespace, opaque: reduceTransparency)
 
                 if !railOpen {
@@ -213,7 +213,7 @@ struct ContentView: View {
     }
 
     private var windowControls: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: AppSpacing.xs) {
             Button { NSApp.keyWindow?.close() } label: {
                 Circle().fill(Color.red.opacity(0.8)).frame(width: 11, height: 11)
                     .frame(width: 20, height: 20).contentShape(Rectangle())
@@ -244,12 +244,12 @@ struct ContentView: View {
             }
             if section == .analysis {
                 Text(section.title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
                     .foregroundStyle(.secondary)
             }
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 22).padding(.top, 15).padding(.bottom, 3)
+        .padding(.horizontal, AppSpacing.lg).padding(.top, AppSpacing.md).padding(.bottom, AppSpacing.xxs)
     }
 
     private func mouseTracking(height: CGFloat) -> some View {
@@ -289,13 +289,13 @@ struct ContentView: View {
             ForEach(AppSection.allCases) { item in
                 Button { select(item); dismissRail() } label: {
                     Image(systemName: item.symbol)
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.system(size: AppTypeScale.pageTitle, weight: .medium))
                         .frame(width: 40, height: 42)
                         .foregroundStyle(section == item ? settingsModel.settings.appTheme.accent : .primary)
                         .background(
                             section == item ? settingsModel.settings.appTheme.accent.opacity(0.18)
                                 : hoveredSection == item ? Color.white.opacity(0.08) : .clear,
-                            in: RoundedRectangle(cornerRadius: 12)
+                            in: RoundedRectangle(cornerRadius: AppRadius.control)
                         )
                         .frame(width: WorkspaceNavigationGeometry.width, height: WorkspaceNavigationGeometry.rowHeight)
                         .contentShape(Rectangle())
@@ -306,15 +306,15 @@ struct ContentView: View {
                 .accessibilityAddTraits(section == item ? .isSelected : [])
             }
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, AppSpacing.xs)
         .frame(width: WorkspaceNavigationGeometry.width, height: WorkspaceNavigationGeometry.height)
         .navigationGlass(namespace: glassNamespace, opaque: reduceTransparency)
     }
 
     private var activityPage: some View {
         MagneticScrollView { height in
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                     HStack {
                         Menu {
                             Button("Follow latest activity") { selectedSessionID = nil }
@@ -332,10 +332,10 @@ struct ContentView: View {
                         Text(activity?.status() ?? "Awaiting data")
                             .foregroundStyle(activity?.status() == "Working" ? AppPalette.positive : .secondary)
                     }
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
                     if let title = activity?.displayTitle {
                         Text(title)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: AppTypeScale.sectionTitle, weight: .medium))
                             .lineLimit(2)
                             .help(title)
                     }
@@ -349,20 +349,20 @@ struct ContentView: View {
                                 .help("\(tokens.compactTokenString) / \(window.compactTokenString) context tokens")
                         }
                     }
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(.system(size: AppTypeScale.label)).foregroundStyle(.secondary)
                 }
                 let usage = activity?.usage ?? snapshot.currentSession
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
                     Text("Session usage")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: AppTypeScale.caption, weight: .medium))
                         .foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                         Text(usage.total.compactTokenString)
-                            .font(.system(size: 36, weight: .semibold)).tracking(-1.2).monospacedDigit()
-                        Text("tokens").font(.system(size: 12)).foregroundStyle(.secondary)
+                            .font(.system(size: AppTypeScale.display, weight: .semibold)).tracking(-1.2).monospacedDigit()
+                        Text("tokens").font(.system(size: AppTypeScale.label)).foregroundStyle(.secondary)
                         Spacer(minLength: 8)
                         Text("\((activity?.requests ?? snapshot.currentSessionTurns ?? 0).formatted()) requests")
-                            .font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary)
+                            .font(.system(size: AppTypeScale.label)).monospacedDigit().foregroundStyle(.secondary)
                     }
                     if let points = activity?.usageHistory, !points.isEmpty {
                         WidgetSparkline(chart: WidgetChartContent(
@@ -375,16 +375,16 @@ struct ContentView: View {
                             Spacer()
                             Text("Latest")
                         }
-                        .font(.system(size: 10))
+                        .font(.system(size: AppTypeScale.micro))
                         .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.top, 4)
-                VStack(alignment: .leading, spacing: 10) {
+                .padding(.top, AppSpacing.xxs)
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
                     Text("Remaining allowance")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: AppTypeScale.caption, weight: .medium))
                         .foregroundStyle(.secondary)
-                    HStack(alignment: .top, spacing: 20) {
+                    HStack(alignment: .top, spacing: AppSpacing.lg) {
                         if snapshot.rateLimits?.showsFiveHour == true {
                         WidgetAllowanceMeter(title: "5-hour", window: snapshot.rateLimits?.fiveHour, palette: activityPalette,
                             showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour))
@@ -393,20 +393,20 @@ struct ContentView: View {
                             showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly))
                     }
                 }
-                .padding(12)
-                .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
+                .padding(AppSpacing.sm)
+                .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: AppRadius.card))
                 Spacer(minLength: 0)
                 HStack {
                     Button { presentsDataHealth = true } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: AppSpacing.xxs) {
                             Circle().fill(health.color).frame(width: 5, height: 5)
-                            Text(health.title).font(.system(size: 11))
+                            Text(health.title).font(.system(size: AppTypeScale.caption))
                         }
                     }
                     .buttonStyle(.plain).help(health.detail)
                     .popover(isPresented: $presentsDataHealth) {
                         DataHealthView(snapshot: $snapshot, record: $refreshRecord, isRefreshing: $isRefreshing)
-                            .frame(width: 320).padding(14)
+                            .frame(width: 320).padding(AppSpacing.sm)
                     }
                     Spacer()
                     Button {
@@ -427,12 +427,12 @@ struct ContentView: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, AppSpacing.xs)
             .frame(minHeight: height, alignment: .top)
         } details: {
             InspectorSection(title: "Session details") {
                 let usage = activity?.usage ?? snapshot.currentSession
-                VStack(spacing: 8) {
+                VStack(spacing: AppSpacing.xs) {
                     detail("Reasoning", activity?.reasoningEffort?.capitalized)
                     detail("Recorded events", (activity?.usageHistory).map { $0.count.formatted() })
                     detail("Tools", activity?.toolCalls.map(String.init))
@@ -451,7 +451,7 @@ struct ContentView: View {
                     detail("CLI version", activity?.cliVersion)
                     detail("Approvals", activity?.approvalPolicy)
                     detail("Sandbox", activity?.sandboxMode)
-                }.font(.system(size: 11))
+                }.font(.system(size: AppTypeScale.caption))
             }
         }
     }
@@ -478,22 +478,22 @@ struct ContentView: View {
 
     private var activeSessionsPage: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.xs) {
                 HStack {
                     Text("Recent chats").font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                     Spacer()
                     Text("\(snapshot.sessionActivity.filter { $0.status() == "Working" }.count) working")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                }.padding(.bottom, 4)
+                        .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
+                }.padding(.bottom, AppSpacing.xxs)
                 if snapshot.sessionActivity.isEmpty {
                     ContentUnavailableView("No recent activity", systemImage: "rectangle.stack",
                         description: Text("Chats appear after the next local refresh."))
                 }
                 ForEach(snapshot.sessionActivity) { session in sessionButton(session) }
                 Button("Browse chat history", systemImage: "clock.arrow.circlepath") { showsSessionHistory = true }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
-                    .padding(.top, 8)
-            }.padding(18)
+                    .buttonStyle(.plain).font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
+                    .padding(.top, AppSpacing.xs)
+            }.padding(AppSpacing.md)
         }
     }
 
@@ -503,24 +503,24 @@ struct ContentView: View {
             select(.analysis)
         } label: {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                     Text(session.displayTitle).fontWeight(.medium).lineLimit(2).help(session.displayTitle)
                     Text(ModelPricingCatalog.displayName(for: session.model))
-                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                        .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
                     Text(session.usage.total.compactTokenString)
                         .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                    Text(session.status()).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(session.status()).font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: AppTypeScale.micro, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(12)
-            .appGlassPanel(cornerRadius: 12)
+            .padding(AppSpacing.sm)
+            .appGlassPanel(cornerRadius: AppRadius.control)
         }.buttonStyle(.plain)
             .help("View activity for \(session.displayTitle)")
     }
@@ -573,7 +573,7 @@ struct SessionUsageChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
             if showsCaption {
                 HStack {
                     Text("SESSION ACTIVITY").tracking(1.2)
@@ -584,11 +584,11 @@ struct SessionUsageChart: View {
                         Text("\(points.count) recorded events")
                     }
                 }
-                .font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                .font(.system(size: AppTypeScale.micro, weight: .medium)).foregroundStyle(.secondary)
             }
             if points.isEmpty {
                 Text("Waiting for recorded token events")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Chart {
@@ -611,7 +611,7 @@ struct SessionUsageChart: View {
                 .chartYAxis(.hidden)
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 3)) { _ in
-                        AxisValueLabel(format: .dateTime.hour().minute()).font(.system(size: 10))
+                        AxisValueLabel(format: .dateTime.hour().minute()).font(.system(size: AppTypeScale.micro))
                     }
                 }
                 .accessibilityLabel("Recorded cumulative session tokens")
@@ -627,7 +627,7 @@ struct CompactLimitRow: View {
     var accent: Color
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: AppSpacing.xxs) {
             HStack {
                 Text(title).fontWeight(.medium)
                 Spacer()
@@ -638,7 +638,7 @@ struct CompactLimitRow: View {
                     Text("Awaiting data").foregroundStyle(.secondary)
                 }
             }
-            .font(.system(size: 11))
+            .font(.system(size: AppTypeScale.caption))
             ProgressView(value: window?.isCurrent() == true ? (window?.remainingPercent ?? 0) / 100 : 0)
                 .tint(accent)
         }

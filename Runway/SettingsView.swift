@@ -11,7 +11,7 @@ struct SettingsView: View {
             }
 
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: AppSpacing.sm) {
                     InspectorSection(title: "Appearance") {
                         LabeledContent("App theme") {
                             Picker("App theme", selection: $settingsModel.settings.appTheme) {
@@ -31,10 +31,10 @@ struct SettingsView: View {
                         Spacer()
                         Link("GitHub", destination: URL(string: "https://github.com/Italian-seasoning/CodexUsageMonitor")!)
                     }
-                    .font(.system(size: 11, weight: .medium))
-                    .padding(.horizontal, 4)
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
+                    .padding(.horizontal, AppSpacing.xxs)
                     DisclosureGroup("Setup and updates") {
-                        VStack(spacing: 12) {
+                        VStack(spacing: AppSpacing.sm) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Codex data access").font(.system(size: AppTypeScale.body, weight: .semibold))
@@ -63,15 +63,15 @@ struct SettingsView: View {
                         }
                         LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
                         LabeledContent("Built", value: buildDate)
-                        }.padding(.top, 10)
+                        }.padding(.top, AppSpacing.xs)
                     }
                 }
                 .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity)
-                .padding(14)
+                .padding(AppSpacing.sm)
             }
         }
-        .font(.system(size: 12))
+        .font(.system(size: AppTypeScale.label))
         .controlSize(.small)
     }
 

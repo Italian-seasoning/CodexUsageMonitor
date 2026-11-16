@@ -138,13 +138,13 @@ struct CodexMenuBarView: View {
             if settingsModel.settings.appTheme == .runway {
                 settingsModel.settings.appTheme.windowTint
             }
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 HStack {
                     Label("Runway", systemImage: "terminal")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: AppTypeScale.label, weight: .semibold))
                     Spacer()
                     Text(activity?.status() ?? "Last recorded")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                 }
                 if model.snapshot.rateLimits?.showsFiveHour == true {
                     CompactLimitRow(title: "5-hour", window: model.snapshot.rateLimits?.fiveHour, accent: accent)
@@ -158,11 +158,11 @@ struct CodexMenuBarView: View {
                     Text(ModelPricingCatalog.displayName(for: activity?.model ?? model.snapshot.currentModel))
                         .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
-                .font(.system(size: 11)).monospacedDigit()
+                .font(.system(size: AppTypeScale.caption)).monospacedDigit()
                 HStack {
                     Circle().fill(model.health.color).frame(width: 5, height: 5)
                     Text(model.health.title)
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                         .help(model.health.detail)
                     Spacer()
                     Button { model.refresh() } label: {
@@ -185,7 +185,7 @@ struct CodexMenuBarView: View {
                     } label: { Image(systemName: "ellipsis") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.buttonStyle(.plain)
-            }.padding(14)
+            }.padding(AppSpacing.sm)
         }
         .frame(width: 280)
         .preferredColorScheme(settingsModel.settings.appTheme.colorScheme)
