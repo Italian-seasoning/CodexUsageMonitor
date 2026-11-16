@@ -1,13 +1,37 @@
 import AppKit
 import SwiftUI
 
+/// Runway's single source for type, spacing, radius and surfaces.
+/// Views use these tokens instead of literals so every screen reads as one app.
 enum AppTypeScale {
+    static let micro: CGFloat = 10
     static let caption: CGFloat = 11
     static let label: CGFloat = 12
     static let body: CGFloat = 13
     static let sectionTitle: CGFloat = 14
     static let pageTitle: CGFloat = 18
     static let value: CGFloat = 22
+    static let display: CGFloat = 30
+}
+
+enum AppSpacing {
+    static let xxs: CGFloat = 4
+    static let xs: CGFloat = 8
+    static let sm: CGFloat = 12
+    static let md: CGFloat = 16
+    static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+}
+
+enum AppRadius {
+    /// Bars, chips and small marks.
+    static let small: CGFloat = 8
+    /// Buttons, fields and rows.
+    static let control: CGFloat = 10
+    /// Cards and grouped panels.
+    static let card: CGFloat = 14
+    /// Window-level glass: navigation rail and workspace.
+    static let panel: CGFloat = 22
 }
 
 enum AppSection: String, CaseIterable, Identifiable {
@@ -765,29 +789,29 @@ extension View {
     @ViewBuilder
     func navigationGlass(namespace: Namespace.ID, opaque: Bool) -> some View {
         if opaque {
-            background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 22))
+            background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: AppRadius.panel))
         } else if #available(macOS 26.0, *) {
             background {
-                RoundedRectangle(cornerRadius: 22)
+                RoundedRectangle(cornerRadius: AppRadius.panel)
                     .fill(Color.clear)
-                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 22))
+                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: AppRadius.panel))
                     .glassEffectID("navigation", in: namespace)
                     .glassEffectTransition(.identity)
             }
         } else {
             background {
-                RoundedRectangle(cornerRadius: 22)
+                RoundedRectangle(cornerRadius: AppRadius.panel)
                     .fill(.regularMaterial)
             }
         }
     }
 
     @ViewBuilder
-    func appGlassPanel(cornerRadius: CGFloat) -> some View {
-        background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    func appGlassPanel(cornerRadius: CGFloat = AppRadius.card) -> some View {
+        background(AppPalette.panelTint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    .stroke(AppPalette.panelBorder, lineWidth: 1)
             }
     }
 }
