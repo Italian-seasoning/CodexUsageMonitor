@@ -149,15 +149,15 @@ private struct SetupSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
+            HStack(spacing: AppSpacing.sm) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Set up Runway")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                     Text("Private, local, and ready for widgets")
                         .font(.caption)
                         .foregroundStyle(AppPalette.muted)
@@ -165,7 +165,7 @@ private struct SetupSheet: View {
                 Spacer()
                 stepProgress
             }
-            .padding(20)
+            .padding(AppSpacing.lg)
 
             Divider()
 
@@ -177,12 +177,12 @@ private struct SetupSheet: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 34)
-            .padding(.vertical, 26)
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.vertical, AppSpacing.lg)
 
             Divider()
             footer
-                .padding(20)
+                .padding(AppSpacing.lg)
         }
         .frame(width: 660, height: 520)
         .background(AppPalette.windowTint)
@@ -195,7 +195,7 @@ private struct SetupSheet: View {
     }
 
     private var stepProgress: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: AppSpacing.xs) {
             ForEach(0..<3) { step in
                 Capsule()
                     .fill(step <= model.page ? AppPalette.accent : Color.white.opacity(0.14))
@@ -211,7 +211,7 @@ private struct SetupSheet: View {
     }
 
     private var privacyPage: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             pageHeading(
                 symbol: "lock.shield.fill",
                 title: "Your usage stays on this Mac",
@@ -224,13 +224,13 @@ private struct SetupSheet: View {
     }
 
     private var accessPage: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             pageHeading(
                 symbol: "folder.badge.questionmark",
                 title: "Connect your local Codex data",
                 detail: "macOS may ask once for permission to read the Codex sessions folder. Nothing leaves your Mac."
             )
-            HStack(spacing: 14) {
+            HStack(spacing: AppSpacing.sm) {
                 accessStatus
                 Spacer()
                 if model.dataAccessState != .approved {
@@ -239,10 +239,10 @@ private struct SetupSheet: View {
                         .disabled(model.dataAccessState == .requesting)
                 }
             }
-            .padding(16)
-            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .padding(AppSpacing.md)
+            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                     .stroke(Color.white.opacity(0.09), lineWidth: 1)
             }
             Spacer()
@@ -250,7 +250,7 @@ private struct SetupSheet: View {
     }
 
     private var servicesPage: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             pageHeading(
                 symbol: model.unmetRequirements.isEmpty ? "checkmark.seal.fill" : "slider.horizontal.3",
                 title: model.unmetRequirements.isEmpty ? "You’re ready to go" : "Keep widgets up to date",
@@ -313,7 +313,7 @@ private struct SetupSheet: View {
         case .notRequested:
             statusLabel("Ready to check", symbol: "circle.dashed", color: AppPalette.muted)
         case .requesting:
-            HStack(spacing: 10) {
+            HStack(spacing: AppSpacing.xs) {
                 ProgressView().controlSize(.small)
                 Text("Checking access…")
             }
@@ -342,15 +342,15 @@ private struct SetupSheet: View {
     }
 
     private func pageHeading(symbol: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: AppSpacing.md) {
             Image(systemName: symbol)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: AppTypeScale.value, weight: .semibold))
                 .foregroundStyle(AppPalette.accent)
                 .frame(width: 48, height: 48)
-                .background(AppPalette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(AppPalette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: AppTypeScale.value, weight: .semibold))
                 Text(detail)
                     .font(.system(size: AppTypeScale.body))
                     .foregroundStyle(AppPalette.muted)
@@ -360,12 +360,12 @@ private struct SetupSheet: View {
     }
 
     private func setupRow(_ requirement: SetupRequirement, symbol: String, detail: String) -> some View {
-        HStack(spacing: 13) {
+        HStack(spacing: AppSpacing.sm) {
             Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                 .foregroundStyle(AppPalette.accent)
                 .frame(width: 34, height: 34)
-                .background(AppPalette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background(AppPalette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(requirement.title).font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                 Text(detail).font(.caption).foregroundStyle(AppPalette.muted)
@@ -374,10 +374,10 @@ private struct SetupSheet: View {
             Image(systemName: model.state.completedRequirements.contains(requirement) ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(model.state.completedRequirements.contains(requirement) ? .green : AppPalette.muted)
         }
-        .padding(13)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(AppSpacing.sm)
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                 .stroke(Color.white.opacity(0.09), lineWidth: 1)
         }
     }
@@ -389,14 +389,14 @@ private struct SetupSheet: View {
         complete: Bool,
         @ViewBuilder controls: () -> Controls
     ) -> some View {
-        HStack(spacing: 13) {
+        HStack(spacing: AppSpacing.sm) {
             Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                 .foregroundStyle(complete ? Color.green : AppPalette.accent)
                 .frame(width: 34, height: 34)
                 .background(
                     (complete ? Color.green : AppPalette.accent).opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 )
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
@@ -405,10 +405,10 @@ private struct SetupSheet: View {
             Spacer()
             controls()
         }
-        .padding(13)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(AppSpacing.sm)
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                 .stroke(Color.white.opacity(0.09), lineWidth: 1)
         }
     }

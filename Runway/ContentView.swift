@@ -64,14 +64,14 @@ struct DetailedContentView: View {
                         record: $refreshRecord,
                         isRefreshing: $isRefreshing
                     )
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
                             .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
                     .padding(.leading, 64)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, AppSpacing.md)
                 }
             }
         }
@@ -152,7 +152,7 @@ struct ContentView: View {
 
     private var workspace: some View {
         GeometryReader { geometry in
-            let shape = WorkspaceGlassShape(pull: reduceMotion ? 0 : stretch, anchor: edgeAnchor)
+            let shape = WorkspaceGlassShape(pull: 0, anchor: edgeAnchor)
             ZStack(alignment: .topLeading) {
                 workspaceSurface(shape)
                     .allowsHitTesting(false)
@@ -176,25 +176,14 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .padding(.leading, 76)
-                .padding(.trailing, 12)
-                .padding(.vertical, 12)
+                .padding(.trailing, AppSpacing.sm)
+                .padding(.vertical, AppSpacing.sm)
                 .workspaceGlass(shape: shape, namespace: glassNamespace, opaque: reduceTransparency)
 
-                if !railOpen {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.38))
-                        .frame(width: 3, height: 32)
-                        .position(x: 82 - stretch * 32, y: geometry.size.height / 2)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-                if railOpen {
-                    navigationRail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                        .padding(.leading, 41 - WorkspaceNavigationGeometry.width / 2)
-                        .transition(reduceMotion ? .opacity : .offset(x: 18).combined(with: .opacity))
-                }
-                mouseTracking(height: geometry.size.height)
+                // The rail is always present so the left edge reads as navigation, not empty space.
+                navigationRail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .padding(.leading, 41 - WorkspaceNavigationGeometry.width / 2)
             }
             .coordinateSpace(name: "workspace")
             .animation(motion, value: section)
@@ -213,7 +202,7 @@ struct ContentView: View {
     }
 
     private var windowControls: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: AppSpacing.xs) {
             Button { NSApp.keyWindow?.close() } label: {
                 Circle().fill(Color.red.opacity(0.8)).frame(width: 11, height: 11)
                     .frame(width: 20, height: 20).contentShape(Rectangle())
@@ -242,14 +231,9 @@ struct ContentView: View {
             } else {
                 Spacer()
             }
-            if section == .analysis {
-                Text(section.title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 22).padding(.top, 15).padding(.bottom, 3)
+        .padding(.horizontal, AppSpacing.lg).padding(.top, AppSpacing.md).padding(.bottom, AppSpacing.xxs)
     }
 
     private func mouseTracking(height: CGFloat) -> some View {
@@ -287,15 +271,15 @@ struct ContentView: View {
     private var navigationRail: some View {
         VStack(spacing: 0) {
             ForEach(AppSection.allCases) { item in
-                Button { select(item); dismissRail() } label: {
+                Button { select(item) } label: {
                     Image(systemName: item.symbol)
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.system(size: AppTypeScale.pageTitle, weight: .medium))
                         .frame(width: 40, height: 42)
                         .foregroundStyle(section == item ? settingsModel.settings.appTheme.accent : .primary)
                         .background(
                             section == item ? settingsModel.settings.appTheme.accent.opacity(0.18)
                                 : hoveredSection == item ? Color.white.opacity(0.08) : .clear,
-                            in: RoundedRectangle(cornerRadius: 12)
+                            in: RoundedRectangle(cornerRadius: AppRadius.control)
                         )
                         .frame(width: WorkspaceNavigationGeometry.width, height: WorkspaceNavigationGeometry.rowHeight)
                         .contentShape(Rectangle())
@@ -306,15 +290,15 @@ struct ContentView: View {
                 .accessibilityAddTraits(section == item ? .isSelected : [])
             }
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, AppSpacing.xs)
         .frame(width: WorkspaceNavigationGeometry.width, height: WorkspaceNavigationGeometry.height)
         .navigationGlass(namespace: glassNamespace, opaque: reduceTransparency)
     }
 
     private var activityPage: some View {
         MagneticScrollView { height in
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                     HStack {
                         Menu {
                             Button("Follow latest activity") { selectedSessionID = nil }
@@ -332,10 +316,10 @@ struct ContentView: View {
                         Text(activity?.status() ?? "Awaiting data")
                             .foregroundStyle(activity?.status() == "Working" ? AppPalette.positive : .secondary)
                     }
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
                     if let title = activity?.displayTitle {
                         Text(title)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: AppTypeScale.sectionTitle, weight: .medium))
                             .lineLimit(2)
                             .help(title)
                     }
@@ -349,64 +333,71 @@ struct ContentView: View {
                                 .help("\(tokens.compactTokenString) / \(window.compactTokenString) context tokens")
                         }
                     }
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(.system(size: AppTypeScale.label)).foregroundStyle(.secondary)
                 }
                 let usage = activity?.usage ?? snapshot.currentSession
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
                     Text("Session usage")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: AppTypeScale.caption, weight: .medium))
                         .foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                         Text(usage.total.compactTokenString)
-                            .font(.system(size: 36, weight: .semibold)).tracking(-1.2).monospacedDigit()
-                        Text("tokens").font(.system(size: 12)).foregroundStyle(.secondary)
+                            .font(.system(size: AppTypeScale.display, weight: .semibold)).tracking(-1.2).monospacedDigit()
+                        Text("tokens").font(.system(size: AppTypeScale.label)).foregroundStyle(.secondary)
                         Spacer(minLength: 8)
                         Text("\((activity?.requests ?? snapshot.currentSessionTurns ?? 0).formatted()) requests")
-                            .font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary)
+                            .font(.system(size: AppTypeScale.label)).monospacedDigit().foregroundStyle(.secondary)
                     }
                     if let points = activity?.usageHistory, !points.isEmpty {
-                        WidgetSparkline(chart: WidgetChartContent(
-                            points: points.map { WidgetChartPoint(date: $0.date, value: Double($0.totalTokens)) },
-                            accessibilitySummary: "Session token history, latest \(usage.total.compactTokenString) tokens"
-                        ), palette: activityPalette)
-                        .frame(height: max(24, height - 362))
-                        HStack {
-                            Text("Recent history")
-                            Spacer()
-                            Text("Latest")
-                        }
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        SessionUsageChart(points: points, accent: settingsModel.settings.appTheme.accent,
+                                          highlight: activityPalette.highlight)
+                        .frame(minHeight: 40, maxHeight: .infinity)
+                    } else {
+                        Spacer(minLength: 0)
                     }
                 }
-                .padding(.top, 4)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Remaining allowance")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    HStack(alignment: .top, spacing: 20) {
+                .padding(AppSpacing.sm)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .appGlassPanel()
+                .cursorGlowBorder(radius: AppRadius.card, accent: settingsModel.settings.appTheme.accent, isEnabled: !reduceMotion)
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Remaining allowance")
+                        Spacer(minLength: AppSpacing.xs)
+                        if let observed = snapshot.rateLimits?.weekly?.observedAt ?? snapshot.rateLimits?.fiveHour?.observedAt {
+                            Text(observed.formatted(date: .omitted, time: .shortened)).monospacedDigit()
+                                .help("Last read \(observed.formatted(date: .abbreviated, time: .shortened))")
+                        }
+                    }
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: AppSpacing.lg) {
                         if snapshot.rateLimits?.showsFiveHour == true {
                         WidgetAllowanceMeter(title: "5-hour", window: snapshot.rateLimits?.fiveHour, palette: activityPalette,
-                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour))
+                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.fiveHour),
+                            showsFootnotes: false)
+                        .help(resetHelp(snapshot.rateLimits?.fiveHour))
                         }
                         WidgetAllowanceMeter(title: "Weekly", window: snapshot.rateLimits?.weekly, palette: activityPalette,
-                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly))
+                            showsConsumption: true, consumptionRate: snapshot.rateLimits?.consumptionPer15Minutes(for: snapshot.rateLimits?.weekly),
+                            showsFootnotes: false)
+                        .help(resetHelp(snapshot.rateLimits?.weekly))
                     }
                 }
-                .padding(12)
-                .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
-                Spacer(minLength: 0)
+                .padding(AppSpacing.sm)
+                .appGlassPanel()
+                .cursorGlowBorder(radius: AppRadius.card, accent: settingsModel.settings.appTheme.accent, isEnabled: !reduceMotion)
                 HStack {
                     Button { presentsDataHealth = true } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: AppSpacing.xxs) {
                             Circle().fill(health.color).frame(width: 5, height: 5)
-                            Text(health.title).font(.system(size: 11))
+                            Text(health.title).font(.system(size: AppTypeScale.caption))
                         }
                     }
                     .buttonStyle(.plain).help(health.detail)
                     .popover(isPresented: $presentsDataHealth) {
                         DataHealthView(snapshot: $snapshot, record: $refreshRecord, isRefreshing: $isRefreshing)
-                            .frame(width: 320).padding(14)
+                            .frame(width: 320).padding(AppSpacing.sm)
                     }
                     Spacer()
                     Button {
@@ -427,12 +418,12 @@ struct ContentView: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 8)
-            .frame(minHeight: height, alignment: .top)
+            .padding(.horizontal, AppSpacing.xs)
+            .frame(height: height, alignment: .top)
         } details: {
             InspectorSection(title: "Session details") {
                 let usage = activity?.usage ?? snapshot.currentSession
-                VStack(spacing: 8) {
+                VStack(spacing: AppSpacing.xs) {
                     detail("Reasoning", activity?.reasoningEffort?.capitalized)
                     detail("Recorded events", (activity?.usageHistory).map { $0.count.formatted() })
                     detail("Tools", activity?.toolCalls.map(String.init))
@@ -451,7 +442,7 @@ struct ContentView: View {
                     detail("CLI version", activity?.cliVersion)
                     detail("Approvals", activity?.approvalPolicy)
                     detail("Sandbox", activity?.sandboxMode)
-                }.font(.system(size: 11))
+                }.font(.system(size: AppTypeScale.caption))
             }
         }
     }
@@ -478,22 +469,22 @@ struct ContentView: View {
 
     private var activeSessionsPage: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.xs) {
                 HStack {
                     Text("Recent chats").font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                     Spacer()
                     Text("\(snapshot.sessionActivity.filter { $0.status() == "Working" }.count) working")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                }.padding(.bottom, 4)
+                        .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
+                }.padding(.bottom, AppSpacing.xxs)
                 if snapshot.sessionActivity.isEmpty {
                     ContentUnavailableView("No recent activity", systemImage: "rectangle.stack",
                         description: Text("Chats appear after the next local refresh."))
                 }
                 ForEach(snapshot.sessionActivity) { session in sessionButton(session) }
                 Button("Browse chat history", systemImage: "clock.arrow.circlepath") { showsSessionHistory = true }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
-                    .padding(.top, 8)
-            }.padding(18)
+                    .buttonStyle(.plain).font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
+                    .padding(.top, AppSpacing.xs)
+            }.padding(AppSpacing.md)
         }
     }
 
@@ -503,26 +494,31 @@ struct ContentView: View {
             select(.analysis)
         } label: {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                     Text(session.displayTitle).fontWeight(.medium).lineLimit(2).help(session.displayTitle)
                     Text(ModelPricingCatalog.displayName(for: session.model))
-                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                        .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
                     Text(session.usage.total.compactTokenString)
                         .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                    Text(session.status()).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(session.status()).font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: AppTypeScale.micro, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(12)
-            .appGlassPanel(cornerRadius: 12)
+            .padding(AppSpacing.sm)
+            .appGlassPanel(cornerRadius: AppRadius.control)
         }.buttonStyle(.plain)
             .help("View activity for \(session.displayTitle)")
+    }
+
+    private func resetHelp(_ window: RateLimitWindow?) -> String {
+        guard let window else { return "Not reported" }
+        return "Resets \(window.resetsAt.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private var health: SnapshotHealth { SnapshotHealth(snapshot: snapshot, record: refreshRecord, isRefreshing: isRefreshing) }
@@ -561,63 +557,82 @@ struct ContentView: View {
     }
 }
 
+/// Session activity: bars show when tokens were spent, a faint line shows the running total.
+/// Hover reads out one bucket; nothing else is labelled, so the card stays quiet.
 struct SessionUsageChart: View {
     var points: [CodexTokenPoint]
     var accent: Color
-    var showsCaption = true
+    var highlight: Color
     @State private var selectedDate: Date?
 
-    private var selectedPoint: CodexTokenPoint? {
-        guard let selectedDate else { return nil }
-        return points.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
+    private struct Bucket: Identifiable {
+        var start: Date
+        var end: Date
+        var tokens: Int
+        var cumulative: Int
+        var id: Date { start }
+        var mid: Date { start.addingTimeInterval(end.timeIntervalSince(start) / 2) }
+    }
+
+    private var buckets: [Bucket] {
+        let sorted = points.sorted { $0.date < $1.date }
+        guard let first = sorted.first, let last = sorted.last else { return [] }
+        let span = max(last.date.timeIntervalSince(first.date), 60)
+        let count = min(32, max(8, sorted.count))
+        let width = span / Double(count)
+        var result = (0..<count).map { index in
+            Bucket(start: first.date.addingTimeInterval(Double(index) * width),
+                   end: first.date.addingTimeInterval(Double(index + 1) * width), tokens: 0, cumulative: 0)
+        }
+        var previous = 0
+        for point in sorted {
+            let index = min(count - 1, Int(point.date.timeIntervalSince(first.date) / width))
+            result[index].tokens += max(0, point.totalTokens - previous)
+            previous = max(previous, point.totalTokens)
+            result[index].cumulative = previous
+        }
+        var running = 0
+        for index in result.indices {
+            running = max(running, result[index].cumulative)
+            result[index].cumulative = running
+        }
+        return result
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if showsCaption {
-                HStack {
-                    Text("SESSION ACTIVITY").tracking(1.2)
-                    Spacer()
-                    if let point = selectedPoint {
-                        Text(point.totalTokens.compactTokenString).monospacedDigit()
-                    } else {
-                        Text("\(points.count) recorded events")
-                    }
-                }
-                .font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+        let buckets = buckets
+        let peak = Double(max(1, buckets.map(\.tokens).max() ?? 1))
+        let total = Double(max(1, buckets.last?.cumulative ?? 1))
+        let selected = selectedDate.flatMap { date in buckets.first { $0.start <= date && date < $0.end } }
+        Chart {
+            ForEach(buckets) { bucket in
+                BarMark(x: .value("Time", bucket.mid), y: .value("Tokens", Double(bucket.tokens) / peak), width: .ratio(0.62))
+                    .foregroundStyle(selected == nil || selected?.id == bucket.id ? accent : accent.opacity(0.35))
+                    .clipShape(RoundedRectangle(cornerRadius: 2))
+                LineMark(x: .value("Time", bucket.mid), y: .value("Running total", Double(bucket.cumulative) / total))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(highlight.opacity(0.55))
+                    .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round))
             }
-            if points.isEmpty {
-                Text("Waiting for recorded token events")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                Chart {
-                    ForEach(points) { point in
-                        AreaMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens))
-                            .interpolationMethod(.monotone)
-                            .foregroundStyle(LinearGradient(colors: [accent.opacity(0.22), accent.opacity(0.01)], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens))
-                            .interpolationMethod(.monotone).foregroundStyle(accent).lineStyle(StrokeStyle(lineWidth: 1.8))
-                        if points.count == 1 {
-                            PointMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens)).foregroundStyle(accent)
+            if let selected {
+                RuleMark(x: .value("Selected", selected.mid))
+                    .foregroundStyle(.secondary.opacity(0.35))
+                    .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("+\(selected.tokens.compactTokenString)").font(.system(size: AppTypeScale.label, weight: .semibold)).monospacedDigit()
+                            Text("\(selected.start.formatted(date: .omitted, time: .shortened)) · \(selected.cumulative.compactTokenString) total")
+                                .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary).monospacedDigit()
                         }
+                        .padding(.horizontal, AppSpacing.xs).padding(.vertical, AppSpacing.xxs)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.small))
                     }
-                    if let point = selectedPoint {
-                        RuleMark(x: .value("Selected event", point.date))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                    }
-                }
-                .chartXSelection(value: $selectedDate)
-                .chartYAxis(.hidden)
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 3)) { _ in
-                        AxisValueLabel(format: .dateTime.hour().minute()).font(.system(size: 10))
-                    }
-                }
-                .accessibilityLabel("Recorded cumulative session tokens")
-                .accessibilityValue(points.last.map { "\($0.totalTokens.formatted()) tokens across \(points.count) events" } ?? "No events")
             }
         }
+        .chartYScale(domain: 0...1.08)
+        .chartXAxis(.hidden).chartYAxis(.hidden).chartLegend(.hidden)
+        .chartXSelection(value: $selectedDate)
+        .accessibilityLabel("Session token activity")
+        .accessibilityValue(buckets.last.map { "\($0.cumulative.compactTokenString) tokens over \(buckets.count) intervals, busiest interval \(Int(peak).compactTokenString)" } ?? "No events")
     }
 }
 
@@ -627,7 +642,7 @@ struct CompactLimitRow: View {
     var accent: Color
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: AppSpacing.xxs) {
             HStack {
                 Text(title).fontWeight(.medium)
                 Spacer()
@@ -638,7 +653,7 @@ struct CompactLimitRow: View {
                     Text("Awaiting data").foregroundStyle(.secondary)
                 }
             }
-            .font(.system(size: 11))
+            .font(.system(size: AppTypeScale.caption))
             ProgressView(value: window?.isCurrent() == true ? (window?.remainingPercent ?? 0) / 100 : 0)
                 .tint(accent)
         }

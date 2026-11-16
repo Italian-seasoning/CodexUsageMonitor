@@ -113,8 +113,8 @@ struct DataHealthView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 9) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(spacing: AppSpacing.xs) {
                 Image(systemName: health.symbol)
                     .foregroundStyle(health.color)
                 VStack(alignment: .leading, spacing: 1) {
@@ -164,7 +164,7 @@ struct DataHealthView: View {
             .disabled(isRefreshing)
             .accessibilityHint("Waits for Codex usage sources and WidgetKit to finish refreshing")
         }
-        .padding(16)
+        .padding(AppSpacing.md)
         .frame(width: 320)
     }
 

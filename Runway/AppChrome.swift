@@ -1,13 +1,37 @@
 import AppKit
 import SwiftUI
 
+/// Runway's single source for type, spacing, radius and surfaces.
+/// Views use these tokens instead of literals so every screen reads as one app.
 enum AppTypeScale {
+    static let micro: CGFloat = 10
     static let caption: CGFloat = 11
     static let label: CGFloat = 12
     static let body: CGFloat = 13
     static let sectionTitle: CGFloat = 14
     static let pageTitle: CGFloat = 18
     static let value: CGFloat = 22
+    static let display: CGFloat = 30
+}
+
+enum AppSpacing {
+    static let xxs: CGFloat = 4
+    static let xs: CGFloat = 8
+    static let sm: CGFloat = 12
+    static let md: CGFloat = 16
+    static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+}
+
+enum AppRadius {
+    /// Bars, chips and small marks.
+    static let small: CGFloat = 8
+    /// Buttons, fields and rows.
+    static let control: CGFloat = 10
+    /// Cards and grouped panels.
+    static let card: CGFloat = 14
+    /// Window-level glass: navigation rail and workspace.
+    static let panel: CGFloat = 22
 }
 
 enum AppSection: String, CaseIterable, Identifiable {
@@ -68,29 +92,29 @@ struct AppRail: View {
     var health: SnapshotHealth
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: AppSpacing.xs) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                         .stroke(AppPalette.panelBorder, lineWidth: 1)
                 }
                 .accessibilityLabel("Runway")
-                .padding(.bottom, 5)
+                .padding(.bottom, AppSpacing.xxs)
 
             ForEach(AppSection.allCases.filter { $0 != .analysis }) { section in
                 Button {
                     selection = section
                 } label: {
                     Image(systemName: section.symbol)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                         .frame(width: 34, height: 30)
                         .background(
                             selection == section ? AppPalette.accent.opacity(0.9) : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                         )
                         .contentShape(Rectangle())
                 }
@@ -108,10 +132,10 @@ struct AppRail: View {
                 presentsDataHealth.toggle()
             } label: {
                 Image(systemName: health.symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: AppTypeScale.body, weight: .semibold))
                     .foregroundStyle(health.color)
                     .frame(width: 34, height: 30)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -119,7 +143,7 @@ struct AppRail: View {
             .help("Data health: \(health.title)")
             .accessibilityLabel("Data health, \(health.title)")
         }
-        .padding(.vertical, 13)
+        .padding(.vertical, AppSpacing.sm)
         .frame(width: 52)
         .background(.thinMaterial)
         .overlay(alignment: .trailing) { Divider().overlay(AppPalette.divider) }
@@ -132,19 +156,19 @@ struct AppSectionHeader<Trailing: View>: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 16) {
+            HStack(alignment: .center, spacing: AppSpacing.md) {
                 labels.fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 12)
                 trailing
             }
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 labels
                 trailing
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
         .controlSize(.small)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
         .overlay(alignment: .bottom) { Divider().overlay(AppPalette.divider) }
     }
 
@@ -169,7 +193,7 @@ struct InspectorSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 11) {
             if subtitleInline {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                         Text(title)
                             .font(.system(size: AppTypeScale.sectionTitle, weight: .semibold))
                         if let subtitle {
@@ -186,9 +210,9 @@ struct InspectorSection<Content: View>: View {
             }
             content
         }
-        .padding(15)
+        .padding(AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .appGlassPanel(cornerRadius: 16)
+        .appGlassPanel(cornerRadius: AppRadius.card)
     }
 
     private var labels: some View {
@@ -216,8 +240,8 @@ struct MagneticScrollView<Overview: View, Details: View>: View {
             let height = max(0, geometry.size.height - 28)
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: AppSpacing.md) {
+                        VStack(spacing: AppSpacing.xs) {
                             overview(max(0, height - 32))
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
                             Spacer(minLength: 0)
@@ -228,8 +252,8 @@ struct MagneticScrollView<Overview: View, Details: View>: View {
                             } label: {
                                 Label("Details", systemImage: "chevron.down")
                                     .font(.system(size: AppTypeScale.caption, weight: .medium))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, AppSpacing.sm)
+                                    .padding(.vertical, AppSpacing.xxs)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -244,7 +268,7 @@ struct MagneticScrollView<Overview: View, Details: View>: View {
                             .frame(minHeight: height, alignment: .top)
                             .id("details")
                     }
-                    .padding(14)
+                    .padding(AppSpacing.sm)
                 }
                 .scrollIndicators(.hidden)
             }
@@ -261,7 +285,7 @@ struct MetricModule: View {
     var accent = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
             HStack {
                 Label(eyebrow, systemImage: symbol)
                     .font(.system(size: AppTypeScale.caption, weight: .semibold))
@@ -288,9 +312,9 @@ struct MetricModule: View {
                     .foregroundStyle(state.color)
             }
         }
-        .padding(12)
+        .padding(AppSpacing.sm)
         .frame(maxWidth: .infinity, minHeight: 108, maxHeight: 108, alignment: .topLeading)
-        .appGlassPanel(cornerRadius: 15)
+        .appGlassPanel(cornerRadius: AppRadius.card)
         .accessibilityElement(children: .combine)
         .accessibilityHint(state.title)
     }
@@ -765,29 +789,29 @@ extension View {
     @ViewBuilder
     func navigationGlass(namespace: Namespace.ID, opaque: Bool) -> some View {
         if opaque {
-            background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 22))
+            background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: AppRadius.panel))
         } else if #available(macOS 26.0, *) {
             background {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(Color.clear)
-                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 22))
+                RoundedRectangle(cornerRadius: AppRadius.panel)
+                    .fill(AppPalette.windowTint)
+                    .glassEffect(.regular.tint(AppPalette.panelTint).interactive(), in: RoundedRectangle(cornerRadius: AppRadius.panel))
                     .glassEffectID("navigation", in: namespace)
                     .glassEffectTransition(.identity)
             }
         } else {
             background {
-                RoundedRectangle(cornerRadius: 22)
+                RoundedRectangle(cornerRadius: AppRadius.panel)
                     .fill(.regularMaterial)
             }
         }
     }
 
     @ViewBuilder
-    func appGlassPanel(cornerRadius: CGFloat) -> some View {
-        background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    func appGlassPanel(cornerRadius: CGFloat = AppRadius.card) -> some View {
+        background(AppPalette.panelTint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    .stroke(AppPalette.panelBorder, lineWidth: 1)
             }
     }
 }

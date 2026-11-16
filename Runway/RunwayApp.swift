@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         _ = AppUpdater.shared
         if BackgroundRefreshAgent.isStableInstall {
+            LoginItem.enableOnFirstLaunch()
             AppRegistration.refresh()
         }
         DispatchQueue.global(qos: .utility).async {
@@ -64,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ) { _ in
             Task { _ = await RefreshCoordinator.shared.refresh(trigger: .wake) }
         }
+        // One refresh at launch, so a login launch updates widgets and the droplet
+        // even when the window never comes to the front.
+        requestRefresh(.launch)
         showMainWindowSoon()
     }
 
@@ -228,6 +232,10 @@ enum RunwayEntry {
     @MainActor
     static func main() {
         let arguments = ProcessInfo.processInfo.arguments
+        // The Codex "runway-monitor" plugin starts this binary as an MCP helper.
+        // This build has no MCP server, so never open the full app for it:
+        // doing so launched a new Runway window with every Codex thread.
+        if arguments.contains("--monitor-mcp") { exit(EXIT_FAILURE) }
         guard arguments.contains("--background-refresh"),
               ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
         else {

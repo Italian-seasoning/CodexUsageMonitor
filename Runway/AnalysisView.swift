@@ -72,7 +72,7 @@ struct AnalysisView: View {
     var body: some View {
         VStack(spacing: 0) {
             AppSectionHeader(section: section) {
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.xs) {
                     Picker("Period", selection: periodBinding) {
                         ForEach(UsagePeriod.allCases) { period in
                             Text(period.title).tag(Optional(period))
@@ -93,21 +93,21 @@ struct AnalysisView: View {
             }
 
             if selection.usesCustomDates {
-                HStack(spacing: 12) {
+                HStack(spacing: AppSpacing.sm) {
                     DatePicker("From", selection: $selection.startDate, in: ...selection.endDate, displayedComponents: .date)
                     DatePicker("To", selection: $selection.endDate, in: selection.startDate...max(selection.startDate, Date()), displayedComponents: .date)
                 }
                 .datePickerStyle(.field)
-                .font(.system(size: 11))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 8)
+                .font(.system(size: AppTypeScale.caption))
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.xs)
             }
 
             MagneticScrollView { height in
                 activityChart(height: max(80, height - 116))
             } details: {
-                    VStack(spacing: 10) {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 10)], spacing: 10) {
+                    VStack(spacing: AppSpacing.xs) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 10)], spacing: AppSpacing.xs) {
                             modules
                         }
 
@@ -115,35 +115,35 @@ struct AnalysisView: View {
 
                         InspectorSection(title: "More detail") {
                             DisclosureGroup("Token breakdown") {
-                                VStack(spacing: 8) {
+                                VStack(spacing: AppSpacing.xs) {
                                     dataRow("Input", summary.usage.input.compactTokenString)
                                     dataRow("Cached input", summary.usage.cachedInput.compactTokenString)
                                     dataRow("Output", summary.usage.output.compactTokenString)
                                     dataRow("Unpriced lifetime tokens", (snapshot.unpricedTokens ?? 0).compactTokenString)
-                                }.padding(.top, 8)
+                                }.padding(.top, AppSpacing.xs)
                             }
                             DisclosureGroup("Headroom savings") {
                                 if let headroom = snapshot.headroom, headroom.isAvailable {
-                                    VStack(spacing: 8) {
+                                    VStack(spacing: AppSpacing.xs) {
                                         dataRow("Today", headroom.todayTokensSaved.compactTokenString)
                                         dataRow("7 days", headroom.last7DaysTokensSaved.compactTokenString)
                                         dataRow(headroom.trackedPeriodLabel, headroom.lifetimeTokensSaved.compactTokenString)
                                         dataRow("Requests compressed", headroom.lifetimeRequests.formatted())
                                         dataRow("\(headroom.trackedPeriodLabel) API estimate avoided", headroom.costSavedUSD.compactCurrencyString)
-                                    }.padding(.top, 8)
+                                    }.padding(.top, AppSpacing.xs)
                                 } else { Text("No Headroom data recorded").foregroundStyle(.secondary) }
                             }
                             DisclosureGroup("Statistics") {
-                                VStack(spacing: 8) {
+                                VStack(spacing: AppSpacing.xs) {
                                     dataRow("Current streak", "\(snapshot.currentStreak) days")
                                     dataRow("Longest streak", "\(snapshot.longestStreak) days")
                                     dataRow("Peak day", snapshot.peakDay?.usage.total.compactTokenString ?? "—")
                                     dataRow("Peak date", snapshot.peakDay?.date.formatted(date: .abbreviated, time: .omitted) ?? "—")
-                                }.padding(.top, 8)
+                                }.padding(.top, AppSpacing.xs)
                             }
                             DisclosureGroup("Limit history") {
                                 LimitHistoryChart(history: snapshot.rateLimits?.history ?? [], showsFiveHour: snapshot.rateLimits?.showsFiveHour == true)
-                                    .frame(height: 125).padding(.top, 8)
+                                    .frame(height: 125).padding(.top, AppSpacing.xs)
                             }
                         }
                     }
@@ -152,26 +152,26 @@ struct AnalysisView: View {
     }
 
     private func activityChart(height: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(hoveredPoint.map { chartPeriod == .lifetime ? "Week of \($0.date.formatted(date: .abbreviated, time: .omitted))" : $0.date.formatted(date: .abbreviated, time: .omitted) }
                     ?? "\(selection.measure == .tokens && (accountDays != nil || accountLifetimeWithoutDays) ? "Account" : "Local") \(periodLabel.lowercased())")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: AppTypeScale.caption, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                     Text(hoveredPoint.map { exactValue($0.value) } ?? formatted(displayedChartValue))
-                        .font(.system(size: 30, weight: .semibold)).tracking(-0.7)
+                        .font(.system(size: AppTypeScale.display, weight: .semibold)).tracking(-0.7)
                         .monospacedDigit().minimumScaleFactor(0.65).lineLimit(1)
                     Text(selection.measure.title.lowercased())
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(AppPalette.muted)
+                        .font(.system(size: AppTypeScale.label, weight: .medium)).foregroundStyle(AppPalette.muted)
                 }
                 if summary.hasPartialLegacyCoverage {
                     Label("Partial local history · Saved daily totals differ from surviving logs", systemImage: "circle.lefthalf.filled")
-                        .font(.system(size: 11)).foregroundStyle(AppPalette.muted)
+                        .font(.system(size: AppTypeScale.caption)).foregroundStyle(AppPalette.muted)
                 }
                 if selection.measure == .tokens, accountPeriodPending {
                     Label(accountDays == nil ? "Account reporting pending · Showing local logs" : "Account today is pending · Showing reported totals", systemImage: "clock")
-                        .font(.system(size: 11)).foregroundStyle(AppPalette.muted)
+                        .font(.system(size: AppTypeScale.caption)).foregroundStyle(AppPalette.muted)
                 }
             }
             Chart(chartPoints) { point in
@@ -206,7 +206,7 @@ struct AnalysisView: View {
                 }
             }
             .chartPlotStyle { plot in
-                plot.padding(.horizontal, 8)
+                plot.padding(.horizontal, AppSpacing.xs)
             }
             .frame(height: height)
             .chartOverlay { proxy in
@@ -240,8 +240,8 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
+        .padding(.horizontal, AppSpacing.xs)
+        .padding(.top, AppSpacing.xxs)
         .onChange(of: selection.period) { hoveredDate = nil }
         .onChange(of: selection.measure) { hoveredDate = nil }
     }
@@ -325,7 +325,7 @@ struct AnalysisView: View {
             Text(title).foregroundStyle(.secondary)
             Spacer(minLength: 8)
             Text(value).monospacedDigit()
-        }.font(.system(size: 11))
+        }.font(.system(size: AppTypeScale.caption))
     }
 
     private var comparisonText: String? {

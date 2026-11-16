@@ -30,7 +30,7 @@ struct LimitSummaryStrip: View {
                 detail: "Local Codex record"
             )
         }
-        .appGlassPanel(cornerRadius: 16)
+        .appGlassPanel(cornerRadius: AppRadius.card)
     }
 
     private func percent(_ window: RateLimitWindow?) -> String {
@@ -50,21 +50,21 @@ private struct LimitSummaryCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(.system(size: AppTypeScale.sectionTitle, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: AppTypeScale.micro, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(detail)
-                .font(.system(size: 9))
+                .font(.system(size: AppTypeScale.micro))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
         .background(Color.clear)
     }
 }
@@ -76,7 +76,7 @@ struct LimitHistoryChart: View {
     var body: some View {
         if history.isEmpty {
             Text("Rate-limit history will appear after Codex reports a limit window.")
-                .font(.system(size: 11))
+                .font(.system(size: AppTypeScale.caption))
                 .foregroundStyle(.secondary)
         } else {
             Chart(history) { point in
@@ -105,10 +105,10 @@ struct LimitPreferencesView: View {
     @State private var phoneTestStatus: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
             if showsMonitoring {
             Text("Updates follow local changes while Runway and ChatGPT or Codex are running. Widgets keep their last snapshot after either app quits. You can refresh manually at any time.")
-                .font(.system(size: 10))
+                .font(.system(size: AppTypeScale.micro))
                 .foregroundStyle(.secondary)
 
             LabeledContent("Menu bar") {
@@ -122,7 +122,7 @@ struct LimitPreferencesView: View {
             }
             if settingsModel.settings.menuBarDisplayMode == .hidden {
                 Text("Reopen Runway to show the menu bar item again.")
-                    .font(.system(size: 10))
+                    .font(.system(size: AppTypeScale.micro))
                     .foregroundStyle(.secondary)
             }
 
@@ -142,7 +142,7 @@ struct LimitPreferencesView: View {
             }
             if showsNotifications {
             DisclosureGroup("Notifications") {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
             Toggle("Desktop reset and limit alerts", isOn: $settingsModel.settings.notificationsEnabled)
                 .onChange(of: settingsModel.settings.notificationsEnabled) { _, enabled in
                     guard enabled else {
@@ -186,11 +186,11 @@ struct LimitPreferencesView: View {
 
             if settingsModel.settings.phoneNotificationsEnabled {
                 Text("Automatic reset alerts require Runway and ChatGPT or Codex to be running. Install ntfy on your iPhone, then subscribe to this private topic. The topic is stored in Keychain.")
-                    .font(.system(size: 10))
+                    .font(.system(size: AppTypeScale.micro))
                     .foregroundStyle(.secondary)
                 if let phoneTopicURL {
                     Text(phoneTopicURL)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: AppTypeScale.micro, design: .monospaced))
                         .textSelection(.enabled)
                     HStack {
                         Button("Copy topic URL") {
@@ -207,7 +207,7 @@ struct LimitPreferencesView: View {
                         }
                         if let phoneTestStatus {
                             Text(phoneTestStatus)
-                                .font(.system(size: 10))
+                                .font(.system(size: AppTypeScale.micro))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -223,7 +223,7 @@ struct LimitPreferencesView: View {
                 }
             }
             }
-                }.padding(.top, 8)
+                }.padding(.top, AppSpacing.xs)
             }
             }
         }

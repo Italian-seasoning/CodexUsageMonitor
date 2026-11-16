@@ -85,13 +85,14 @@ struct RefreshCoordinatorTests {
             await calls.record(trigger: trigger, force: force)
             return RefreshResult(outcome: .updated, snapshot: nil, message: "updated")
         }
-        for trigger: RefreshTrigger in [.launch, .foreground, .sourceChange, .fallbackTimer, .backgroundAgent, .wake] {
+        for trigger: RefreshTrigger in [.foreground, .sourceChange, .fallbackTimer, .backgroundAgent, .wake] {
             let result = await coordinator.refresh(trigger: trigger)
             #expect(result.outcome == .unchanged)
         }
         #expect(await calls.count == 0)
+        _ = await coordinator.refresh(trigger: .launch)
         _ = await coordinator.refresh(trigger: .manual)
-        #expect(await calls.values == [RecordedCall(trigger: .manual, force: true)])
+        #expect(await calls.values.map(\.trigger) == [.launch, .manual])
     }
 
     @Test("Queued source events recheck desktop presence before collecting data")

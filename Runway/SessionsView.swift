@@ -25,7 +25,7 @@ struct SessionsView: View {
                 Picker("Range", selection: $range) {
                     ForEach(SessionRange.allCases) { Text($0.title).tag($0) }
                 }.pickerStyle(.segmented).labelsHidden()
-                    .padding(.horizontal, 18).padding(.top, 8)
+                    .padding(.horizontal, AppSpacing.md).padding(.top, AppSpacing.xs)
             } else {
                 AppSectionHeader(section: .sessions) {
                     Picker("Range", selection: $range) {
@@ -33,8 +33,8 @@ struct SessionsView: View {
                     }.pickerStyle(.segmented).frame(width: 176)
                 }
             }
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
+            VStack(spacing: AppSpacing.xs) {
+                HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField("Find a chat or model", text: $search)
                         .textFieldStyle(.plain).accessibilityLabel("Search chats")
@@ -50,13 +50,13 @@ struct SessionsView: View {
                     .menuStyle(.borderlessButton).fixedSize()
                     .help("Order within each day: \(sort.rawValue)").accessibilityLabel("Sort chats")
                 }
-                .font(.system(size: 12)).padding(10).appGlassPanel(cornerRadius: 10)
+                .font(.system(size: AppTypeScale.label)).padding(AppSpacing.xs).appGlassPanel(cornerRadius: AppRadius.control)
                 HStack {
                     Text("\(Set(sessions.map(\.sessionID)).count) chats")
                     Spacer()
                     Text("\(sessions.reduce(0) { $0 + $1.usage.total }.compactTokenString) tokens").monospacedDigit()
-                }.font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            }.padding(.horizontal, 18).padding(.vertical, 12)
+                }.font(.system(size: AppTypeScale.caption, weight: .medium)).foregroundStyle(.secondary)
+            }.padding(.horizontal, AppSpacing.md).padding(.vertical, AppSpacing.sm)
 
             if sessions.isEmpty {
                 ContentUnavailableView(
@@ -67,14 +67,14 @@ struct SessionsView: View {
                 ).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
+                    LazyVStack(alignment: .leading, spacing: AppSpacing.md) {
                         ForEach(days) { day in
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: AppSpacing.xs) {
                                 HStack {
                                     Text(day.title)
                                     Spacer()
                                     Text(day.sessions.reduce(0) { $0 + $1.usage.total }.compactTokenString).monospacedDigit()
-                                }.font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                                }.font(.system(size: AppTypeScale.micro, weight: .semibold)).foregroundStyle(.secondary)
                                 ForEach(day.sessions) { session in
                                     Button { selectedSession = session } label: { SessionRow(session: session) }
                                         .buttonStyle(.plain).help("Inspect \(session.displayTitle)")
@@ -82,9 +82,9 @@ struct SessionsView: View {
                             }
                         }
                         Text("Each row shows a chat’s usage for that day. API estimates are not subscription spending.")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                            .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                    }.padding(.horizontal, 18).padding(.bottom, 18)
+                    }.padding(.horizontal, AppSpacing.md).padding(.bottom, AppSpacing.md)
                 }
             }
         }
@@ -110,25 +110,25 @@ private struct SessionDay: Identifiable {
 private struct SessionRow: View {
     var session: CodexSessionSummary
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(session.displayTitle).font(.system(size: 12, weight: .semibold)).lineLimit(2)
+        HStack(alignment: .top, spacing: AppSpacing.sm) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text(session.displayTitle).font(.system(size: AppTypeScale.label, weight: .semibold)).lineLimit(2)
                 Text(ModelPricingCatalog.displayName(for: session.model))
-                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary).lineLimit(1)
                 Text("\(session.startedAt.formatted(date: .omitted, time: .shortened)) · \(session.turns.formatted()) \(session.turns == 1 ? "request" : "requests")")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 5) {
-                Text(session.usage.total.compactTokenString).font(.system(size: 14, weight: .semibold, design: .rounded))
-                Text("tokens").font(.system(size: 9)).foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
+                Text(session.usage.total.compactTokenString).font(.system(size: AppTypeScale.sectionTitle, weight: .semibold, design: .rounded))
+                Text("tokens").font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                 Text(session.estimatedCostUSD?.compactCurrencyString ?? "Unpriced")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
             }.monospacedDigit()
-            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.tertiary).padding(.top, 4)
-        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .appGlassPanel(cornerRadius: 12).contentShape(Rectangle())
+            Image(systemName: "chevron.right").font(.system(size: AppTypeScale.micro, weight: .semibold))
+                .foregroundStyle(.tertiary).padding(.top, AppSpacing.xxs)
+        }.padding(AppSpacing.sm).frame(maxWidth: .infinity, alignment: .leading)
+            .appGlassPanel(cornerRadius: AppRadius.control).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }
 }
@@ -139,18 +139,18 @@ private struct SessionDetailView: View {
     var onSelectActivity: ((String) -> Void)?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(session.displayTitle).font(.system(size: 20, weight: .semibold)).lineLimit(3)
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    Text(session.displayTitle).font(.system(size: AppTypeScale.pageTitle, weight: .semibold)).lineLimit(3)
                     Text(session.updatedAt.formatted(.dateTime.month(.wide).day().year()))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
                     InspectorSection(title: "Recorded usage", subtitle: "For this day") {
                         row("Model", ModelPricingCatalog.displayName(for: session.model))
                         row("Tokens", session.usage.total.formatted())
@@ -165,7 +165,7 @@ private struct SessionDetailView: View {
                         row("Output", session.usage.output.formatted())
                         row("Reasoning output", session.usage.reasoningOutput.formatted())
                         Text("Cached input is part of input. Reasoning is part of output.")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                            .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                     }
                     if let activity {
                         InspectorSection(title: "Latest chat activity") {
@@ -181,19 +181,19 @@ private struct SessionDetailView: View {
                         }
                     }
                     Text("Session ID: \(session.sessionID)")
-                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                        .font(.system(size: AppTypeScale.micro, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
                     Text("API estimates use recorded model rates and do not represent subscription spending.")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary)
                 }
             }
-        }.padding(20).frame(minWidth: 360, idealWidth: 420, maxWidth: 520, minHeight: 440, idealHeight: 540)
+        }.padding(AppSpacing.lg).frame(minWidth: 360, idealWidth: 420, maxWidth: 520, minHeight: 440, idealHeight: 540)
     }
     private func row(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label).foregroundStyle(.secondary)
             Spacer(minLength: 12)
             Text(value).multilineTextAlignment(.trailing).textSelection(.enabled)
-        }.font(.system(size: 12)).accessibilityElement(children: .ignore)
+        }.font(.system(size: AppTypeScale.label)).accessibilityElement(children: .ignore)
             .accessibilityLabel("\(label), \(value)")
     }
 }

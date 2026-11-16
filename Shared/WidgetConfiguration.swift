@@ -28,6 +28,16 @@ enum WidgetDataBridge {
         ))
     }
 
+    /// The main app's data folder, seen from either process. The widget's sandbox
+    /// has a read-only exception for it, so the widget can read fresh data even
+    /// when copying into the widget container is blocked by macOS.
+    static var appDirectoryURL: URL {
+        let identifier = Bundle.main.bundleIdentifier.map {
+            $0.hasSuffix(".widget3") ? String($0.dropLast(".widget3".count)) : $0
+        }
+        return dataDirectoryURL(bundleIdentifier: identifier, homeDirectory: homeDirectoryURL)
+    }
+
     static func dataDirectoryURL(bundleIdentifier: String?, homeDirectory: URL) -> URL {
         if let bundleIdentifier, bundleIdentifier.hasSuffix(".widget3") {
             return homeDirectory
