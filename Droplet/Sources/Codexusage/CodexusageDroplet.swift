@@ -171,26 +171,43 @@ private struct TokenSparkline: View {
     var points: [MonitorSnapshot.Point]
     var accent: Color
 
+    /// Tokens used in each slice of the session. A running total looks flat with a
+    /// cliff wherever the session went quiet; bars show when work actually happened.
+    private var buckets: [Double] {
+        guard points.count > 1, let first = points.first?.date, let last = points.last?.date,
+              last > first else { return [] }
+        let count = 24
+        let span = last.timeIntervalSince(first)
+        var values = Array(repeating: 0.0, count: count)
+        for (previous, point) in zip(points, points.dropFirst()) {
+            let delta = Double(max(0, point.totalTokens - previous.totalTokens))
+            let index = min(count - 1, Int(point.date.timeIntervalSince(first) / span * Double(count)))
+            values[index] += delta
+        }
+        return values
+    }
+
     var body: some View {
+        let values = buckets
+        let peak = values.max() ?? 0
         Group {
-            if points.count > 1, let first = points.first, let last = points.last {
-                Chart(points, id: \.date) { point in
-                    LineMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens))
-                        .interpolationMethod(.monotone)
-                        .lineStyle(StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-                        .foregroundStyle(accent)
+            if peak > 0 {
+                HStack(alignment: .bottom, spacing: 2) {
+                    ForEach(values.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(values[index] > 0 ? accent : accent.opacity(0.18))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: values[index] > 0 ? max(3, values[index] / peak * 30) : 2)
+                    }
                 }
-                .chartXScale(domain: first.date...last.date)
-                .chartYScale(domain: 0...max(last.totalTokens, 1))
-                .chartXAxis(.hidden)
-                .chartYAxis(.hidden)
+                .frame(maxHeight: .infinity, alignment: .bottom)
             } else {
-                Text(points.isEmpty ? "Awaiting token events" : "1 recorded token event")
+                Text(points.isEmpty ? "Awaiting token events" : "No token activity yet")
                     .font(.system(size: 9)).foregroundStyle(AdaptiveColors.notchSurfaceSecondaryText)
             }
         }
         .accessibilityElement()
-        .accessibilityLabel("Recorded session token history")
+        .accessibilityLabel("Session token activity")
         .accessibilityValue(points.last.map { "\($0.totalTokens) tokens" } ?? "No recorded events")
     }
 }

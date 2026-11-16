@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.1] - 2026-11-16
+
+- Show session activity as bars instead of a running total that looked flat.
+
 ## [1.1.0] - 2026-11-15
 
 - Rename to Runway and open the Runway app.
