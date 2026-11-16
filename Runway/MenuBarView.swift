@@ -69,7 +69,7 @@ struct CodexMenuBarLabel: View {
     var body: some View {
         let stale = model.health.kind != .freshComplete && model.health.kind != .freshPartial
         let lines = labelLines
-        let image = Self.labelImage(lines: lines)
+        let image = Self.labelImage(lines: lines, fractions: labelFractions, mode: settingsModel.settings.menuBarDisplayMode)
         Image(nsImage: image)
             .resizable()
             .frame(width: image.size.width, height: image.size.height)
@@ -79,24 +79,67 @@ struct CodexMenuBarLabel: View {
             .accessibilityValue(lines.joined(separator: ", "))
     }
 
-    private static func labelImage(lines: [String]) -> NSImage {
+    /// Draws the status item at the real menu bar height (taller on notched displays)
+    /// and at a fixed width per mode, so neighbouring items do not shift as values change.
+    private static func labelImage(lines: [String], fractions: [Double?], mode: MenuBarDisplayMode) -> NSImage {
+        let barHeight = max(22, NSStatusBar.system.thickness)
         let singleLine = lines.count == 1
-        let font = NSFont.monospacedDigitSystemFont(ofSize: singleLine ? 13 : 9, weight: .medium)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.white,
-        ]
-        let sizes = lines.map { ($0 as NSString).size(withAttributes: attributes) }
-        let size = NSSize(width: ceil(sizes.map(\.width).max() ?? 1), height: 22)
-        let image = NSImage(size: size, flipped: true) { _ in
+        let fontSize = singleLine ? (barHeight * 0.56).rounded() : (barHeight * 0.42).rounded()
+        let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
+        let lineHeight = singleLine ? barHeight : barHeight / 2
+        let prefixes = lines.map { String($0.split(separator: " ").first ?? "") }
+
+        if mode == .meter {
+            let prefixWidth = ceil(("5H" as NSString).size(withAttributes: attributes).width)
+            let meterWidth: CGFloat = singleLine ? 34 : 28
+            let size = NSSize(width: prefixWidth + 4 + meterWidth, height: barHeight)
+            let image = NSImage(size: size, flipped: true) { _ in
+                for index in lines.indices {
+                    let top = CGFloat(index) * lineHeight
+                    let textHeight = (prefixes[index] as NSString).size(withAttributes: attributes).height
+                    (prefixes[index] as NSString).draw(at: NSPoint(x: 0, y: top + (lineHeight - textHeight) / 2), withAttributes: attributes)
+                    let thickness: CGFloat = singleLine ? 5 : 4
+                    let track = NSRect(x: prefixWidth + 4, y: top + (lineHeight - thickness) / 2, width: meterWidth, height: thickness)
+                    NSColor.white.withAlphaComponent(0.35).setFill()
+                    NSBezierPath(roundedRect: track, xRadius: thickness / 2, yRadius: thickness / 2).fill()
+                    if let fraction = fractions[index] {
+                        var fill = track
+                        fill.size.width = max(thickness, track.width * CGFloat(min(1, max(0, fraction))))
+                        NSColor.white.setFill()
+                        NSBezierPath(roundedRect: fill, xRadius: thickness / 2, yRadius: thickness / 2).fill()
+                    }
+                }
+                return true
+            }
+            image.isTemplate = true
+            return image
+        }
+
+        // Reserve the widest value this mode can show so the item never changes width.
+        let widest: String = switch mode {
+        case .reset: "5H 12:59 PM"
+        default: "5H 100%"
+        }
+        let width = ceil(max((widest as NSString).size(withAttributes: attributes).width,
+                             lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 1))
+        let image = NSImage(size: NSSize(width: width, height: barHeight), flipped: true) { _ in
             for (index, line) in lines.enumerated() {
-                let y = singleLine ? (22 - sizes[index].height) / 2 : CGFloat(index * 11)
-                (line as NSString).draw(at: NSPoint(x: 0, y: y), withAttributes: attributes)
+                let textSize = (line as NSString).size(withAttributes: attributes)
+                let top = CGFloat(index) * lineHeight + (lineHeight - textSize.height) / 2
+                (line as NSString).draw(at: NSPoint(x: width - textSize.width, y: top), withAttributes: attributes)
             }
             return true
         }
         image.isTemplate = true
         return image
+    }
+
+    private var labelFractions: [Double?] {
+        let limits = model.snapshot.rateLimits
+        var values = [limits?.weekly.map { $0.remainingPercent / 100 }]
+        if limits?.showsFiveHour == true { values.insert(limits?.fiveHour.map { $0.remainingPercent / 100 }, at: 0) }
+        return values
     }
 
     private var labelLines: [String] {
