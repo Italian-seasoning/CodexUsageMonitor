@@ -349,10 +349,8 @@ struct ContentView: View {
                             .font(.system(size: AppTypeScale.label)).monospacedDigit().foregroundStyle(.secondary)
                     }
                     if let points = activity?.usageHistory, !points.isEmpty {
-                        WidgetSparkline(chart: WidgetChartContent(
-                            points: points.map { WidgetChartPoint(date: $0.date, value: Double($0.totalTokens)) },
-                            accessibilitySummary: "Session token history, latest \(usage.total.compactTokenString) tokens"
-                        ), palette: activityPalette)
+                        SessionUsageChart(points: points, accent: settingsModel.settings.appTheme.accent,
+                                          highlight: activityPalette.highlight)
                         .frame(minHeight: 40, maxHeight: .infinity)
                     } else {
                         Spacer(minLength: 0)
@@ -559,63 +557,82 @@ struct ContentView: View {
     }
 }
 
+/// Session activity: bars show when tokens were spent, a faint line shows the running total.
+/// Hover reads out one bucket; nothing else is labelled, so the card stays quiet.
 struct SessionUsageChart: View {
     var points: [CodexTokenPoint]
     var accent: Color
-    var showsCaption = true
+    var highlight: Color
     @State private var selectedDate: Date?
 
-    private var selectedPoint: CodexTokenPoint? {
-        guard let selectedDate else { return nil }
-        return points.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
+    private struct Bucket: Identifiable {
+        var start: Date
+        var end: Date
+        var tokens: Int
+        var cumulative: Int
+        var id: Date { start }
+        var mid: Date { start.addingTimeInterval(end.timeIntervalSince(start) / 2) }
+    }
+
+    private var buckets: [Bucket] {
+        let sorted = points.sorted { $0.date < $1.date }
+        guard let first = sorted.first, let last = sorted.last else { return [] }
+        let span = max(last.date.timeIntervalSince(first.date), 60)
+        let count = min(32, max(8, sorted.count))
+        let width = span / Double(count)
+        var result = (0..<count).map { index in
+            Bucket(start: first.date.addingTimeInterval(Double(index) * width),
+                   end: first.date.addingTimeInterval(Double(index + 1) * width), tokens: 0, cumulative: 0)
+        }
+        var previous = 0
+        for point in sorted {
+            let index = min(count - 1, Int(point.date.timeIntervalSince(first.date) / width))
+            result[index].tokens += max(0, point.totalTokens - previous)
+            previous = max(previous, point.totalTokens)
+            result[index].cumulative = previous
+        }
+        var running = 0
+        for index in result.indices {
+            running = max(running, result[index].cumulative)
+            result[index].cumulative = running
+        }
+        return result
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            if showsCaption {
-                HStack {
-                    Text("SESSION ACTIVITY").tracking(1.2)
-                    Spacer()
-                    if let point = selectedPoint {
-                        Text(point.totalTokens.compactTokenString).monospacedDigit()
-                    } else {
-                        Text("\(points.count) recorded events")
-                    }
-                }
-                .font(.system(size: AppTypeScale.micro, weight: .medium)).foregroundStyle(.secondary)
+        let buckets = buckets
+        let peak = Double(max(1, buckets.map(\.tokens).max() ?? 1))
+        let total = Double(max(1, buckets.last?.cumulative ?? 1))
+        let selected = selectedDate.flatMap { date in buckets.first { $0.start <= date && date < $0.end } }
+        Chart {
+            ForEach(buckets) { bucket in
+                BarMark(x: .value("Time", bucket.mid), y: .value("Tokens", Double(bucket.tokens) / peak), width: .ratio(0.62))
+                    .foregroundStyle(selected == nil || selected?.id == bucket.id ? accent : accent.opacity(0.35))
+                    .clipShape(RoundedRectangle(cornerRadius: 2))
+                LineMark(x: .value("Time", bucket.mid), y: .value("Running total", Double(bucket.cumulative) / total))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(highlight.opacity(0.55))
+                    .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round))
             }
-            if points.isEmpty {
-                Text("Waiting for recorded token events")
-                    .font(.system(size: AppTypeScale.caption)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                Chart {
-                    ForEach(points) { point in
-                        AreaMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens))
-                            .interpolationMethod(.monotone)
-                            .foregroundStyle(LinearGradient(colors: [accent.opacity(0.22), accent.opacity(0.01)], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens))
-                            .interpolationMethod(.monotone).foregroundStyle(accent).lineStyle(StrokeStyle(lineWidth: 1.8))
-                        if points.count == 1 {
-                            PointMark(x: .value("Time", point.date), y: .value("Tokens", point.totalTokens)).foregroundStyle(accent)
+            if let selected {
+                RuleMark(x: .value("Selected", selected.mid))
+                    .foregroundStyle(.secondary.opacity(0.35))
+                    .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("+\(selected.tokens.compactTokenString)").font(.system(size: AppTypeScale.label, weight: .semibold)).monospacedDigit()
+                            Text("\(selected.start.formatted(date: .omitted, time: .shortened)) · \(selected.cumulative.compactTokenString) total")
+                                .font(.system(size: AppTypeScale.micro)).foregroundStyle(.secondary).monospacedDigit()
                         }
+                        .padding(.horizontal, AppSpacing.xs).padding(.vertical, AppSpacing.xxs)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.small))
                     }
-                    if let point = selectedPoint {
-                        RuleMark(x: .value("Selected event", point.date))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                    }
-                }
-                .chartXSelection(value: $selectedDate)
-                .chartYAxis(.hidden)
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 3)) { _ in
-                        AxisValueLabel(format: .dateTime.hour().minute()).font(.system(size: AppTypeScale.micro))
-                    }
-                }
-                .accessibilityLabel("Recorded cumulative session tokens")
-                .accessibilityValue(points.last.map { "\($0.totalTokens.formatted()) tokens across \(points.count) events" } ?? "No events")
             }
         }
+        .chartYScale(domain: 0...1.08)
+        .chartXAxis(.hidden).chartYAxis(.hidden).chartLegend(.hidden)
+        .chartXSelection(value: $selectedDate)
+        .accessibilityLabel("Session token activity")
+        .accessibilityValue(buckets.last.map { "\($0.cumulative.compactTokenString) tokens over \(buckets.count) intervals, busiest interval \(Int(peak).compactTokenString)" } ?? "No events")
     }
 }
 
